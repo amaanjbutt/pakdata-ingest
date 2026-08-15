@@ -159,6 +159,9 @@ class EasyDataSyncJob(IngestionJob):
         url = DATASET_META_URL.format(code=code) + f"?api_key={self.api_key}&format=json"
         content = self.http_get(url)
         entries = parse_dataset_meta(content.decode("utf-8", errors="replace"), code)
+        # Pace the meta scan too (not just data pulls) — 200+ back-to-back meta
+        # calls otherwise burst past EasyData's rate limit and get 429'd.
+        time.sleep(CALL_SPACING_SECONDS)
         return {e["easydata_key"]: e["easydata_last_refresh"] for e in entries}
 
     def _update_refresh(self, series_id: str, refresh: str | None) -> None:
