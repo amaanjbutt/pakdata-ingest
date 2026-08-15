@@ -1,0 +1,45 @@
+name: ingest
+# EasyData + SBP ingestion from GitHub's Azure runners (which reach easydata.sbp.org.pk
+# and sbp.org.pk, unlike the VPS/WARP). Writes to the VPS Postgres over a restricted
+# SSH tunnel. MUFAP + PBS keep running on the VPS.
+on:
+  schedule:
+    - cron: '30 19 * * *'   # ~00:30 PKT nightly
+  workflow_dispatch:
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: install deps
+        run: pip install -q -r requirements.txt
+      - name: open DB tunnel to VPS
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_TUNNEL_KEY }}" > ~/.ssh/tunnel_key
+          chmod 600 ~/.ssh/tunnel_key
+          ssh -i ~/.ssh/tunnel_key -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes \
+            -f -N -L 5432:127.0.0.1:5432 root@${{ secrets.VPS_HOST }}
+          echo "tunnel up"
+      - name: run EasyData + SBP jobs
+        env:
+          DATABASE_URL: postgresql://pakdata:${{ secrets.DB_PASSWORD }}@127.0.0.1:5432/pakdata
+          EASYDATA_API_KEY: ${{ secrets.EASYDATA_API_KEY }}
+          RAW_ARCHIVE_DIR: /tmp/raw
+          EASYDATA_QUOTA_PATH: /tmp/raw/quota.json
+        run: |
+          mkdir -p /tmp/raw
+          set +e
+          for job in easydata_sync sbp_kibor sbp_policy_rate sbp_auctions; do
+            echo "::group::$job"
+            python -m ingestion.run "$job" --force
+            echo "exit=$? for $job"
+            echo "::endgroup::"
+          done
