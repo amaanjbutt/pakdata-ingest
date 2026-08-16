@@ -25,7 +25,11 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.SSH_TUNNEL_KEY }}" > ~/.ssh/tunnel_key
           chmod 600 ~/.ssh/tunnel_key
+          # Keepalives so the tunnel survives the multi-minute EasyData run —
+          # without them the forward was torn down mid-run (Connection refused),
+          # leaving syncs unable to write and runs stuck 'running'.
           ssh -i ~/.ssh/tunnel_key -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes \
+            -o ServerAliveInterval=15 -o ServerAliveCountMax=8 -o TCPKeepAlive=yes \
             -f -N -L 5432:127.0.0.1:5432 root@${{ secrets.VPS_HOST }}
           echo "tunnel up"
       - name: run EasyData + SBP jobs
