@@ -75,12 +75,19 @@ class QuotaCounter:
 
     def allow(self) -> bool:
         """True if another call may be made now. May sleep to respect the hourly
-        window. Returns False when the daily budget is exhausted."""
+        window. Returns False when the daily budget is exhausted.
+
+        Set EASYDATA_QUOTA_NOSLEEP=1 (e.g. on a time-boxed CI runner) to stop
+        cleanly at the hourly cap instead of sleeping ~1h — the caller marks the
+        run 'partial' and the next scheduled run resumes in the fresh hour window.
+        """
         now = self._now()
         self._prune(now)
         if self._daily_exhausted(now):
             return False
         if self.count_1h(now) >= self.hourly_limit * self.hourly_frac:
+            if os.getenv("EASYDATA_QUOTA_NOSLEEP"):
+                return False
             hour_ts = [t for t in self.timestamps if t > now - 3600]
             sleep_for = 3600 - (now - min(hour_ts)) + 1
             if sleep_for > 0:

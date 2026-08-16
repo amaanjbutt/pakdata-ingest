@@ -4,7 +4,7 @@ name: ingest
 # SSH tunnel. MUFAP + PBS keep running on the VPS.
 on:
   schedule:
-    - cron: '30 19 * * *'   # ~00:30 PKT nightly
+    - cron: '0 */3 * * *'   # every 3h — ~8 runs/day × ~225 calls ≈ 1800/day (under EasyData's 2000/day cap)
   workflow_dispatch:
 concurrency:
   group: ingest
@@ -34,6 +34,9 @@ jobs:
           EASYDATA_API_KEY: ${{ secrets.EASYDATA_API_KEY }}
           RAW_ARCHIVE_DIR: /tmp/raw
           EASYDATA_QUOTA_PATH: /tmp/raw/quota.json
+          # Time-boxed runner: stop cleanly at the hourly cap (mark run 'partial')
+          # instead of sleeping ~1h and getting killed by timeout-minutes.
+          EASYDATA_QUOTA_NOSLEEP: '1'
         run: |
           mkdir -p /tmp/raw
           set +e
