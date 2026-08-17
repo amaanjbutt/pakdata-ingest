@@ -1,0 +1,48 @@
+name: mufap
+# MUFAP ingestion from GitHub's Azure runners. MUFAP's Cloudflare 403s the VPS
+# datacenter IP (even via WARP, intermittently), but Azure IPs reach it — same
+# trick as EasyData/SBP. Crucially: NO INGEST_PROXY_MAP here, so requests egress
+# DIRECT from the Azure runner instead of the (blocked) WARP proxy.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 15 * * 1-5'   # ~20:00 PKT, weekdays (after MUFAP publishes)
+concurrency:
+  group: mufap
+  cancel-in-progress: false
+jobs:
+  mufap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: install deps
+        run: pip install -q -r requirements.txt
+      - name: open DB tunnel to VPS
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_TUNNEL_KEY }}" > ~/.ssh/tunnel_key
+          chmod 600 ~/.ssh/tunnel_key
+          ssh -i ~/.ssh/tunnel_key -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes \
+            -o ServerAliveInterval=15 -o ServerAliveCountMax=8 -o TCPKeepAlive=yes \
+            -f -N -L 5432:127.0.0.1:5432 root@${{ secrets.VPS_HOST }}
+          echo "tunnel up"
+      - name: run MUFAP jobs (direct Azure egress — no WARP proxy)
+        env:
+          DATABASE_URL: postgresql://pakdata:${{ secrets.DB_PASSWORD }}@127.0.0.1:5432/pakdata
+          RAW_ARCHIVE_DIR: /tmp/raw
+          # NOTE: INGEST_PROXY_MAP intentionally unset -> MUFAP egresses direct.
+        run: |
+          mkdir -p /tmp/raw
+          set +e
+          for job in mufap_fund_portfolio mufap_pkrv mufap_fund_navs \
+                     mufap_fund_returns mufap_fund_stats mufap_tfc_valuations \
+                     mufap_debt_prices mufap_debt_trades; do
+            echo "::group::$job"
+            python -m ingestion.run "$job" --force
+            echo "exit=$? for $job"
+            echo "::endgroup::"
+          done

@@ -43,8 +43,13 @@ ASSET_CLASSES: dict[str, str] = {
 
 
 def _num(v) -> float | None:
+    # MUFAP sometimes returns percents as strings with a "%" sign or thousands
+    # separators (e.g. "85%", "1,234"). float() throws on those, silently
+    # dropping the fund's biggest holding — strip them first.
+    if v is None:
+        return None
     try:
-        return float(v)
+        return float(str(v).replace("%", "").replace(",", "").strip())
     except (TypeError, ValueError):
         return None
 
@@ -73,8 +78,18 @@ def parse_portfolio(json_text: str) -> tuple[date | None, list[tuple[str, float]
     out: list[tuple[str, float]] = []
     for field, label in ASSET_CLASSES.items():
         pct = _num(r.get(field))
-        if pct is not None and abs(pct) > 0.0:
-            out.append((label, pct))
+        if pct is None or abs(pct) <= 0.0:
+            continue
+        # A handful of funds return broken values (absolute amounts, not %);
+        # a real allocation line is within ~±110%. Drop the garbage rather than
+        # storing nonsense that never nets to 100%.
+        if abs(pct) > 110:
+            continue
+        # Liabilities reduce net assets, so they net out — store them negative
+        # so a fund's allocation sums to ~100%.
+        if label == "Liabilities":
+            pct = -abs(pct)
+        out.append((label, pct))
     return as_of, out
 
 

@@ -52,6 +52,33 @@ def _parse_map(raw: str) -> list[tuple[str, str]]:
 _PROXY_MAP = _parse_map(os.getenv("INGEST_PROXY_MAP", ""))
 
 
+# A persistent curl_cffi Session so the Cloudflare `cf_clearance` cookie (and the
+# connection) survive across the many requests a single job makes. The first
+# request that clears Cloudflare unblocks the rest of the run — far fewer 403s
+# than one-off requests, which each re-run the challenge from scratch. Jobs run
+# single-flight (scheduler lock), so one shared session is safe.
+_session = None
+
+
+def _sess():
+    global _session
+    if _session is None and _HAVE_CFFI:
+        _session = _cr.Session(impersonate=_IMPERSONATE)
+    return _session
+
+
+def reset_session() -> None:
+    """Drop the cached session (fresh cookies/handshake) — e.g. after egress IP
+    rotation or a run of 403s."""
+    global _session
+    try:
+        if _session is not None:
+            _session.close()
+    except Exception:  # noqa: BLE001
+        pass
+    _session = None
+
+
 def _proxies_for(url: str):
     host = urlsplit(url).hostname or ""
     for host_substr, proxy in _PROXY_MAP:
@@ -74,16 +101,22 @@ def get(url: str, timeout: int = 30):
 
     Backs off on 429 (source rate-limit) rather than failing the run — official
     sources throttle bursty callers, so we honour Retry-After and retry twice."""
-    for attempt in range(3):
+    for attempt in range(4):
         if _HAVE_CFFI:
-            resp = _cr.get(url, impersonate=_IMPERSONATE, proxies=_proxies_for(url), timeout=timeout)
+            resp = _sess().get(url, proxies=_proxies_for(url), timeout=timeout)
         else:
             resp = httpx.get(
                 url, headers={"User-Agent": settings.user_agent}, timeout=timeout,
                 follow_redirects=True,
             )
-        if resp.status_code == 429 and attempt < 2:
+        if resp.status_code == 429 and attempt < 3:
             time.sleep(_retry_after(resp, 10))
+            continue
+        # Cloudflare 403: drop the session (fresh handshake/cookies) and retry a
+        # couple of times — often clears once a challenge cookie is issued.
+        if resp.status_code == 403 and attempt < 3 and _HAVE_CFFI:
+            reset_session()
+            time.sleep(2 + attempt * 3)
             continue
         resp.raise_for_status()
         return resp
@@ -93,14 +126,23 @@ def get(url: str, timeout: int = 30):
 
 def post(url: str, json=None, timeout: int = 60):
     """POST JSON returning a response with `.text` / `.json()` / `.status_code`."""
-    if _HAVE_CFFI:
-        resp = _cr.post(
-            url, json=json, impersonate=_IMPERSONATE, proxies=_proxies_for(url), timeout=timeout
-        )
+    for attempt in range(4):
+        if _HAVE_CFFI:
+            resp = _sess().post(url, json=json, proxies=_proxies_for(url), timeout=timeout)
+        else:
+            resp = httpx.post(
+                url, json=json, headers={"User-Agent": settings.user_agent}, timeout=timeout
+            )
+            resp.raise_for_status()
+            return resp
+        if resp.status_code == 429 and attempt < 3:
+            time.sleep(_retry_after(resp, 10))
+            continue
+        if resp.status_code == 403 and attempt < 3:
+            reset_session()
+            time.sleep(2 + attempt * 3)
+            continue
         resp.raise_for_status()
         return resp
-    resp = httpx.post(
-        url, json=json, headers={"User-Agent": settings.user_agent}, timeout=timeout
-    )
     resp.raise_for_status()
     return resp
