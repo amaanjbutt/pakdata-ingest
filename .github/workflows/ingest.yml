@@ -35,6 +35,10 @@ jobs:
       - name: run EasyData + SBP jobs
         env:
           DATABASE_URL: postgresql://pakdata:${{ secrets.DB_PASSWORD }}@127.0.0.1:5432/pakdata
+          # Multi-key rotation (comma-separated) so the ~226 dataset meta-checks
+          # don't starve data pulls of the single-key 250/hour budget. Falls back
+          # to the single EASYDATA_API_KEY if the list secret is unset.
+          EASYDATA_API_KEYS: ${{ secrets.EASYDATA_API_KEYS }}
           EASYDATA_API_KEY: ${{ secrets.EASYDATA_API_KEY }}
           RAW_ARCHIVE_DIR: /tmp/raw
           EASYDATA_QUOTA_PATH: /tmp/raw/quota.json

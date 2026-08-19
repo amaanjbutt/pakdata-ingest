@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 from collections import defaultdict
 from datetime import date, datetime, timedelta
@@ -36,13 +37,28 @@ from ingestion import alerting, storage
 from ingestion.discover_easydata import parse_dataset_meta
 from ingestion.easydata_config import EasyDataSeries, by_easydata_key, load_series
 from ingestion.framework import IngestionJob, Record
-from ingestion.quota import QuotaCounter
+from ingestion.quota import QuotaCounter, QuotaPool
 
 API_BASE = "https://easydata.sbp.org.pk/api/v1/series"
 DATASET_META_URL = "https://easydata.sbp.org.pk/api/v1/dataset/{code}/meta"
 INCREMENTAL_OVERLAP_DAYS = 40
 CALL_SPACING_SECONDS = 0.4
 DEFAULT_QUOTA_PATH = os.getenv("EASYDATA_QUOTA_PATH", "./data/easydata_quota.json")
+
+
+def _load_api_keys() -> list[str]:
+    """EasyData API keys in rotation order. Prefer EASYDATA_API_KEYS (comma- or
+    whitespace-separated) for multi-key rotation; fall back to the single
+    EASYDATA_API_KEY. Blanks and duplicates removed, order preserved."""
+    raw = os.getenv("EASYDATA_API_KEYS") or os.getenv("EASYDATA_API_KEY") or ""
+    seen: set[str] = set()
+    keys: list[str] = []
+    for k in re.split(r"[,\s]+", raw.strip()):
+        k = k.strip()
+        if k and k not in seen:
+            seen.add(k)
+            keys.append(k)
+    return keys
 
 
 # ---- pure parsing (unchanged) -----------------------------------------------
@@ -92,10 +108,12 @@ def parse_easydata_json(text: str) -> list[Record]:
 
 class EasyDataSyncJob(IngestionJob):
     name = "easydata_sync"
-    source = "SBP-EasyData"
+    source = "SBP"
 
     def __init__(self, quota_path: str | None = DEFAULT_QUOTA_PATH) -> None:
-        self.api_key = os.getenv("EASYDATA_API_KEY")
+        self.api_keys = _load_api_keys()
+        # First key is the default/fallback for single-counter paths and redaction.
+        self.api_key = self.api_keys[0] if self.api_keys else None
         self.quota_path = quota_path
 
     # ---- helpers ------------------------------------------------------------
@@ -142,13 +160,13 @@ class EasyDataSyncJob(IngestionJob):
             stale_present.append(s)
         return no_data + stale_present
 
-    def _data_url(self, s: EasyDataSeries, backfill: bool) -> str:
+    def _data_url(self, s: EasyDataSeries, backfill: bool, api_key: str | None = None) -> str:
         start = self._start_date(s, backfill)
         # Some series codes carry reserved characters (e.g. 'S&NWALR0010'); the
         # key is one path segment and must be percent-encoded or EasyData 500s.
         key = quote(s.easydata_key, safe="")
         return (
-            f"{API_BASE}/{key}/data?api_key={self.api_key}"
+            f"{API_BASE}/{key}/data?api_key={api_key or self.api_key}"
             f"&start_date={start}&end_date={date.today().isoformat()}&format=json"
         )
 
@@ -156,7 +174,8 @@ class EasyDataSyncJob(IngestionJob):
         """dataset/{code}/meta -> {series_key: last_refresh_date}. One call covers
         every series in the dataset."""
         quota.record()
-        url = DATASET_META_URL.format(code=code) + f"?api_key={self.api_key}&format=json"
+        key = getattr(quota, "api_key", None) or self.api_key
+        url = DATASET_META_URL.format(code=code) + f"?api_key={key}&format=json"
         content = self.http_get(url)
         entries = parse_dataset_meta(content.decode("utf-8", errors="replace"), code)
         # Pace the meta scan too (not just data pulls) — 200+ back-to-back meta
@@ -196,7 +215,8 @@ class EasyDataSyncJob(IngestionJob):
     ) -> int:
         """Fetch + archive + parse + validate + upsert a single series."""
         quota.record()
-        content = self.http_get(self._data_url(s, backfill))
+        active_key = getattr(quota, "api_key", None) or self.api_key
+        content = self.http_get(self._data_url(s, backfill, active_key))
         storage.archive(self.source, self.name, date.today(), f"{s.id}.json", content)
         records = parse_easydata_json(content.decode("utf-8", errors="replace"))
         n = self.upsert(self.validate(records))
@@ -246,9 +266,13 @@ class EasyDataSyncJob(IngestionJob):
     def run(self, backfill: bool = False, limit: int | None = None) -> dict:
         run_id = self._start_run()
         try:
-            if not self.api_key:
-                raise RuntimeError("EASYDATA_API_KEY is not set")
-            quota = QuotaCounter(self.quota_path)
+            if not self.api_keys:
+                raise RuntimeError("EASYDATA_API_KEY(S) is not set")
+            quota = (
+                QuotaPool(self.api_keys, base_path=self.quota_path)
+                if len(self.api_keys) > 1
+                else QuotaCounter(self.quota_path)
+            )
             series = load_series()
 
             if backfill:
@@ -276,4 +300,6 @@ class EasyDataSyncJob(IngestionJob):
             raise
 
     def redact(self, text: str) -> str:
-        return text.replace(self.api_key, "***REDACTED***") if self.api_key else text
+        for k in self.api_keys:
+            text = text.replace(k, "***REDACTED***")
+        return text

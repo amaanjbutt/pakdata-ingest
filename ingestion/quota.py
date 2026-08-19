@@ -101,3 +101,85 @@ class QuotaCounter:
     def record(self) -> None:
         self.timestamps.append(self._now())
         self._persist()
+
+
+class QuotaPool:
+    """Rotate across several EasyData API keys, each with its own QuotaCounter.
+
+    The effective hourly/daily budget scales with the number of keys, which is
+    what breaks the meta-check starvation: a single key's 250/hour cap is smaller
+    than the ~226 dataset freshness meta-calls a run makes, so with one key the
+    meta sweep consumes the whole hourly budget before any data is pulled. With N
+    keys the pool hands each call to whichever key still has room, so the sweep
+    spreads out and data pulls keep budget.
+
+    Drop-in for the single-counter interface the job uses: ``allow()`` /
+    ``record()`` plus ``api_key`` for the currently-selected key.
+    """
+
+    def __init__(
+        self,
+        keys: list[str],
+        base_path: str | None = None,
+        daily_limit: int = 2000,
+        hourly_limit: int = 250,
+        daily_frac: float = 0.9,
+        hourly_frac: float = 0.9,
+    ) -> None:
+        if not keys:
+            raise ValueError("QuotaPool needs at least one key")
+        self.keys = list(keys)
+        self._counters: list[QuotaCounter] = []
+        for i, _ in enumerate(self.keys):
+            path = None
+            if base_path:
+                root, ext = os.path.splitext(base_path)
+                path = f"{root}.{i}{ext or '.json'}"
+            self._counters.append(
+                QuotaCounter(path, daily_limit, hourly_limit, daily_frac, hourly_frac)
+            )
+        self._active = 0
+
+    @property
+    def api_key(self) -> str:
+        return self.keys[self._active]
+
+    def allow(self) -> bool:
+        """True if any key can serve a call now; selects that key as active.
+
+        Honours EASYDATA_QUOTA_NOSLEEP exactly like QuotaCounter: on a time-boxed
+        CI runner, return False instead of sleeping when every key is momentarily
+        hour-capped (the run marks 'partial' and the next run resumes)."""
+        now = time.time()
+        # Fast path: a key that is under both its daily and hourly caps right now.
+        for i, c in enumerate(self._counters):
+            c._prune(now)
+            if c._daily_exhausted(now):
+                continue
+            if c.count_1h(now) < c.hourly_limit * c.hourly_frac:
+                self._active = i
+                return True
+        if os.getenv("EASYDATA_QUOTA_NOSLEEP"):
+            return False
+        # Every key with daily budget is hour-capped: sleep until the one that
+        # frees soonest opens up, then re-check its daily cap.
+        best: tuple[int, float] | None = None
+        for i, c in enumerate(self._counters):
+            if c._daily_exhausted(now):
+                continue
+            hour_ts = [t for t in c.timestamps if t > now - 3600]
+            free_at = (min(hour_ts) + 3600 + 1) if hour_ts else now
+            if best is None or free_at < best[1]:
+                best = (i, free_at)
+        if best is None:
+            return False  # all keys daily-exhausted
+        sleep_for = best[1] - now
+        if sleep_for > 0:
+            time.sleep(sleep_for)
+        self._active = best[0]
+        now = time.time()
+        self._counters[self._active]._prune(now)
+        return not self._counters[self._active]._daily_exhausted(now)
+
+    def record(self) -> None:
+        self._counters[self._active].record()
