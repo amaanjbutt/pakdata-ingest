@@ -192,50 +192,100 @@ def _find_col(columns: list[str], *names: str) -> int:
     raise ValueError(f"dataset/meta response missing any of {names}; got {columns}")
 
 
-# SBP's "Reference Dataset Name" often carries publication scaffolding we don't
-# want in a display label ("... - Summary", "of Pakistan" — everything is Pakistan).
+# Words that don't count toward leaf/dataset overlap or word-count heuristics.
+_STOP = {
+    "of", "the", "and", "by", "to", "in", "for", "a", "an", "all", "as", "per",
+    "on", "with", "from", "other", "than", "at", "or", "its", "s",
+}
 _DATASET_LABEL_STRIPS = (" - Summary", " - Detail", " - Details", " - Overall", " (Summary)")
 
 
+def _strip_html(s: str | None) -> str:
+    return re.sub(r"\s{2,}", " ", re.sub(r"<[^>]+>", "", s or "").strip())
+
+
+def _strip_jargon(s: str) -> str:
+    """Remove SBP's methodology codes/prefixes that mean nothing to a reader:
+    BOP4/BOP5 (presentation versions), YIIP-, and BPM5/BPM6 (IMF manual editions)."""
+    s = re.sub(r"^(?:YIIP-|BOP-?)?(?:BPM[56]-)+\s*", "", s, flags=re.I)
+    s = re.sub(r"^(?:BOP[45]|YIIP)-\s*", "", s, flags=re.I)
+    s = re.sub(r"\s*\(BPM[56]\)", "", s)
+    s = re.sub(r"\s*(?:as\s+)?per\s+BPM[56]\b", "", s, flags=re.I)
+    s = re.sub(r"\bBPM[56]\b", "", s)
+    return re.sub(r"\s{2,}", " ", s).strip(" -–—;,")
+
+
 def clean_dataset_label(raw: str | None) -> str:
-    """A short, human dataset context from EasyData's 'Reference Dataset Name'."""
-    s = re.sub(r"<[^>]+>", "", raw or "").strip()
+    """A SHORT, human dataset category from EasyData's 'Reference Dataset Name' —
+    jargon, 'Survey', frequency words, base-years and vintage ranges removed."""
+    s = _strip_jargon(_strip_html(raw))
     if not s:
         return ""
+    s = re.sub(r"\bSurvey\b", "", s, flags=re.I)
+    s = re.sub(r"\s*\(?\s*(?:FY\s*)?[12][0-9]{3}\s*[-–]\s*(?:[0-9]{2,4}|Onwards)\s*\)?", "", s, flags=re.I)
+    s = re.sub(r"\s*Base\s*Year\s*:?.*$", "", s, flags=re.I)
+    s = re.sub(r"\s*:\s*[12][0-9]{3}\s*[-–].*$", "", s)
+    s = re.sub(r"^(?:Monthly|Quarterly|Annual|Yearly|Weekly|Daily|Half-yearly|Bi-annual)\s+", "", s, flags=re.I)
+    s = re.sub(r"^Summary\s+of\s+", "", s, flags=re.I)
     for suf in _DATASET_LABEL_STRIPS:
-        if s.endswith(suf):
+        if s.lower().endswith(suf.lower()):
             s = s[: -len(suf)].strip()
-    s = re.sub(r"\s+(?:of|in|for)\s+Pakistan\b", "", s, flags=re.I).strip()
-    return re.sub(r"\s{2,}", " ", s)
+    s = re.sub(r"\s+(?:of|in|for)\s+Pakistan\b", "", s, flags=re.I)
+    s = re.sub(r"\bby\s+all\s+Countries\b", "by Country", s, flags=re.I)
+    return re.sub(r"\s{2,}", " ", s).strip(" -–—")
+
+
+def clean_leaf(leaf: str | None) -> str:
+    """Clean SBP's series leaf: strip methodology codes, and shorten the very long
+    compound leaves to their first clause (the rest lives in the description)."""
+    s = _strip_jargon(_strip_html(leaf))
+    if len(s) > 80:
+        for sep in (";", " - ", " — "):
+            if sep in s:
+                s = s.split(sep)[0].strip()
+                break
+    s = re.sub(r"\s+Sector$", "", s)
+    if len(s) > 100:
+        s = s[:100].rsplit(" ", 1)[0].rstrip(" ,-–—") + "…"
+    return re.sub(r"\s{2,}", " ", s).strip(" -–—;,")
+
+
+def _sig_tokens(s: str) -> set[str]:
+    return {t for t in re.findall(r"[a-z0-9]+", s.lower()) if t not in _STOP and len(t) > 2}
 
 
 def compose_name(leaf: str | None, dataset_label: str | None) -> str:
-    """Self-describing catalog name: the specific leaf first, dataset context
-    after — so a bare 'Between fellow enterprises' reads as
-    'Between fellow enterprises — International Investment Position (BPM6)'.
-    Falls back cleanly when either piece is missing or already redundant."""
-    leaf = re.sub(r"\s{2,}", " ", (leaf or "").strip())
+    """A short, clear name: the cleaned leaf, plus a short dataset category ONLY
+    when the leaf is brief/generic and the category adds genuinely new words —
+    so 'Nigeria' becomes 'Nigeria — Import Payments by Country' but a already-
+    descriptive leaf stays as-is (no verbose, redundant tails)."""
+    lf = clean_leaf(leaf)
     ds = clean_dataset_label(dataset_label)
-    if not ds:
-        return leaf
-    if not leaf:
+    if not lf:
         return ds
-    if ds.lower() in leaf.lower() or leaf.lower() in ds.lower():
-        return leaf
-    return f"{leaf} — {ds}"
+    if not ds:
+        return lf
+    lft, dst = _sig_tokens(lf), _sig_tokens(ds)
+    redundant = (not dst) or dst <= lft or (len(dst & lft) / max(len(dst), 1)) >= 0.5
+    words = len(re.findall(r"\S+", lf))
+    if words <= 5 and not redundant:
+        cand = f"{lf} — {ds}"
+        if len(cand) <= 90:
+            return cand
+    return lf
 
 
 def compose_description(raw_desc: str | None, leaf: str | None, dataset_label: str | None) -> str:
-    """Prefer SBP's own description; when blank (common for BOP/IIP), synthesise
-    context from the leaf + dataset so the page isn't left unexplained."""
-    d = re.sub(r"\s{2,}", " ", re.sub(r"<[^>]+>", "", raw_desc or "").strip())
+    """Prefer SBP's own description; else synthesise from the FULL (un-simplified)
+    leaf + dataset name, so the methodology/vintage/survey context we strip from
+    the name is preserved here for anyone who needs it."""
+    d = _strip_html(raw_desc)
     if d:
         return d
-    ds = clean_dataset_label(dataset_label)
-    leaf = (leaf or "").strip()
-    if ds and leaf:
-        return f"{leaf}, from the State Bank of Pakistan’s “{ds}” dataset."
-    return d
+    raw_leaf, raw_ds = _strip_html(leaf), _strip_html(dataset_label)
+    if raw_ds and raw_leaf:
+        return f"{raw_leaf} — from the State Bank of Pakistan’s “{raw_ds}” dataset."
+    return raw_leaf or d
 
 
 def parse_dataset_meta(text: str, dataset_code: str) -> list[dict]:
