@@ -1,0 +1,16 @@
+name: probe-meta
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: fetch sample SBP dataset metas
+        env:
+          K: ${{ secrets.EASYDATA_API_KEY }}
+        run: |
+          for ds in TS_GP_BOP_MRECCOU_M TS_GP_BOP_IIPBPM6_Q TS_GP_BAM_M2_M TS_GP_BS_NDAND_HY; do
+            echo "::group::$ds"
+            curl -s "https://easydata.sbp.org.pk/api/v1/dataset/$ds/meta?api_key=$K&format=json" | head -c 2500
+            echo
+            echo "::endgroup::"
+          done
