@@ -1,0 +1,29 @@
+name: refresh-meta
+on: workflow_dispatch
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install -q -r requirements.txt
+      - name: open DB tunnel to VPS
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_TUNNEL_KEY }}" > ~/.ssh/tunnel_key
+          chmod 600 ~/.ssh/tunnel_key
+          ssh -i ~/.ssh/tunnel_key -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes \
+            -o ServerAliveInterval=15 -o ServerAliveCountMax=8 -o TCPKeepAlive=yes \
+            -f -N -L 5432:127.0.0.1:5432 root@${{ secrets.VPS_HOST }}
+          echo "tunnel up"
+      - name: refresh EasyData metadata into staging
+        env:
+          DATABASE_URL: postgresql://pakdata:${{ secrets.DB_PASSWORD }}@127.0.0.1:5432/pakdata
+          EASYDATA_API_KEYS: ${{ secrets.EASYDATA_API_KEYS }}
+          EASYDATA_API_KEY: ${{ secrets.EASYDATA_API_KEY }}
+        run: python -m scripts.refresh_easydata_metadata

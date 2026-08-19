@@ -192,6 +192,52 @@ def _find_col(columns: list[str], *names: str) -> int:
     raise ValueError(f"dataset/meta response missing any of {names}; got {columns}")
 
 
+# SBP's "Reference Dataset Name" often carries publication scaffolding we don't
+# want in a display label ("... - Summary", "of Pakistan" — everything is Pakistan).
+_DATASET_LABEL_STRIPS = (" - Summary", " - Detail", " - Details", " - Overall", " (Summary)")
+
+
+def clean_dataset_label(raw: str | None) -> str:
+    """A short, human dataset context from EasyData's 'Reference Dataset Name'."""
+    s = re.sub(r"<[^>]+>", "", raw or "").strip()
+    if not s:
+        return ""
+    for suf in _DATASET_LABEL_STRIPS:
+        if s.endswith(suf):
+            s = s[: -len(suf)].strip()
+    s = re.sub(r"\s+(?:of|in|for)\s+Pakistan\b", "", s, flags=re.I).strip()
+    return re.sub(r"\s{2,}", " ", s)
+
+
+def compose_name(leaf: str | None, dataset_label: str | None) -> str:
+    """Self-describing catalog name: the specific leaf first, dataset context
+    after — so a bare 'Between fellow enterprises' reads as
+    'Between fellow enterprises — International Investment Position (BPM6)'.
+    Falls back cleanly when either piece is missing or already redundant."""
+    leaf = re.sub(r"\s{2,}", " ", (leaf or "").strip())
+    ds = clean_dataset_label(dataset_label)
+    if not ds:
+        return leaf
+    if not leaf:
+        return ds
+    if ds.lower() in leaf.lower() or leaf.lower() in ds.lower():
+        return leaf
+    return f"{leaf} — {ds}"
+
+
+def compose_description(raw_desc: str | None, leaf: str | None, dataset_label: str | None) -> str:
+    """Prefer SBP's own description; when blank (common for BOP/IIP), synthesise
+    context from the leaf + dataset so the page isn't left unexplained."""
+    d = re.sub(r"\s{2,}", " ", re.sub(r"<[^>]+>", "", raw_desc or "").strip())
+    if d:
+        return d
+    ds = clean_dataset_label(dataset_label)
+    leaf = (leaf or "").strip()
+    if ds and leaf:
+        return f"{leaf}, from the State Bank of Pakistan’s “{ds}” dataset."
+    return d
+
+
 def parse_dataset_meta(text: str, dataset_code: str) -> list[dict]:
     """Turn a dataset/meta JSON payload into catalog entry dicts. Pure — no IO."""
     payload = json.loads(text, strict=False)
@@ -205,6 +251,10 @@ def parse_dataset_meta(text: str, dataset_code: str) -> list[dict]:
     c_unit = _find_col(columns, "Unit")
     c_since = _find_col(columns, "Available Since", "Available From")
     try:
+        c_refdataset = _find_col(columns, "Reference Dataset Name", "Dataset Name")
+    except ValueError:
+        c_refdataset = None
+    try:
         c_refresh = _find_col(columns, "Last Refresh Date", "Last Refresh")
     except ValueError:
         c_refresh = None
@@ -214,17 +264,20 @@ def parse_dataset_meta(text: str, dataset_code: str) -> list[dict]:
         series_code = str(row[c_code]).strip()
         if not series_code:
             continue
-        name = str(row[c_name]).strip()
+        leaf = str(row[c_name]).strip()
+        dataset_label = str(row[c_refdataset]).strip() if c_refdataset is not None else ""
         entries.append(
             {
                 "easydata_key": series_code,
-                "id": derive_id(dataset_code, series_code, name),
+                # id derives from the raw LEAF (unchanged) so existing ids stay stable.
+                "id": derive_id(dataset_code, series_code, leaf),
                 "module": "economic",
-                "name": name,
-                "description": strip_html(row[c_desc]),
-                "unit": map_unit(row[c_unit], name),
+                "name": compose_name(leaf, dataset_label),
+                "description": compose_description(row[c_desc], leaf, dataset_label),
+                "reference_dataset": clean_dataset_label(dataset_label),
+                "unit": map_unit(row[c_unit], leaf),
                 "frequency": map_frequency(row[c_freq]),
-                "source": "SBP-EasyData",
+                "source": "SBP",
                 "tier": "basic",
                 "min_value": None,
                 "max_value": None,
