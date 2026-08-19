@@ -236,17 +236,14 @@ def clean_dataset_label(raw: str | None) -> str:
 
 
 def clean_leaf(leaf: str | None) -> str:
-    """Clean SBP's series leaf: strip methodology codes, and shorten the very long
-    compound leaves to their first clause (the rest lives in the description)."""
+    """Clean SBP's series leaf: strip methodology codes and a trailing redundant
+    ' Sector'. We deliberately do NOT truncate or drop later clauses — SBP encodes
+    a distinguishing hierarchy after ';' (e.g. two telecom-services series differ
+    only in a later clause), so shortening would silently collapse distinct series
+    into one. Verbose-but-unique beats short-but-wrong; length is trimmed only by
+    stripping jargon and not appending a redundant dataset label."""
     s = _strip_jargon(_strip_html(leaf))
-    if len(s) > 80:
-        for sep in (";", " - ", " — "):
-            if sep in s:
-                s = s.split(sep)[0].strip()
-                break
     s = re.sub(r"\s+Sector$", "", s)
-    if len(s) > 100:
-        s = s[:100].rsplit(" ", 1)[0].rstrip(" ,-–—") + "…"
     return re.sub(r"\s{2,}", " ", s).strip(" -–—;,")
 
 
