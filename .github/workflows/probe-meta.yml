@@ -4,13 +4,21 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: fetch sample SBP dataset metas
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install curl_cffi
+      - name: fetch sample SBP dataset metas (browser-TLS)
         env:
           K: ${{ secrets.EASYDATA_API_KEY }}
         run: |
-          for ds in TS_GP_BOP_MRECCOU_M TS_GP_BOP_IIPBPM6_Q TS_GP_BAM_M2_M TS_GP_BS_NDAND_HY; do
-            echo "::group::$ds"
-            curl -s "https://easydata.sbp.org.pk/api/v1/dataset/$ds/meta?api_key=$K&format=json" | head -c 2500
-            echo
-            echo "::endgroup::"
-          done
+          python - <<'PY'
+          import os
+          from curl_cffi import requests as cr
+          key=os.environ['K']
+          for ds in ['TS_GP_BOP_MRECCOU_M','TS_GP_BOP_IIPBPM6_Q','TS_GP_BS_NDAND_HY']:
+              url=f'https://easydata.sbp.org.pk/api/v1/dataset/{ds}/meta?api_key={key}&format=json'
+              r=cr.get(url, impersonate='chrome', timeout=45)
+              print('====',ds,'status',r.status_code)
+              print(r.text[:1800])
+              print()
+          PY
