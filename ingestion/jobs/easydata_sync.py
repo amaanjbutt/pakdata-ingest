@@ -61,6 +61,17 @@ def _load_api_keys() -> list[str]:
     return keys
 
 
+class QuotaExhausted(Exception):
+    """Every EasyData key is rate-limited (429) or out of budget. Raised so the
+    run stops cleanly and is marked 'partial' — never crashing the whole job (which
+    used to happen when a 429 during the dataset meta-check sweep went uncaught)."""
+
+
+def _is_rate_limited(exc: Exception) -> bool:
+    """True for an EasyData HTTP 429 (curl_cffi raises 'HTTP Error 429: ')."""
+    return "429" in str(exc)
+
+
 # ---- pure parsing (unchanged) -----------------------------------------------
 
 def _col_index(columns: list[str], name: str) -> int:
@@ -170,13 +181,37 @@ class EasyDataSyncJob(IngestionJob):
             f"&start_date={start}&end_date={date.today().isoformat()}&format=json"
         )
 
-    def _fetch_dataset_meta(self, code: str, quota: QuotaCounter) -> dict[str, str | None]:
+    def _http_get_rotating(self, quota, build_url: Callable[[str], str]) -> bytes:
+        """GET build_url(active_key), rotating keys on a 429. On a rate-limit the
+        active key is penalized (skipped until its cooldown) and the call retried on
+        the next key that still has budget. Raises QuotaExhausted when no key can
+        serve it, so the caller stops cleanly (partial) instead of crashing.
+
+        Non-429 errors propagate unchanged (the per-series/per-dataset handlers skip
+        them). Each attempt is one recorded quota call."""
+        last_exc: Exception | None = None
+        for _ in range(max(1, len(self.api_keys))):
+            key = getattr(quota, "api_key", None) or self.api_key
+            quota.record()
+            try:
+                return self.http_get(build_url(key))
+            except Exception as exc:  # noqa: BLE001
+                if not _is_rate_limited(exc):
+                    raise
+                last_exc = exc
+                penalize = getattr(quota, "penalize", None)
+                if penalize:
+                    penalize()  # retire this key for the hour; rotate below
+                if not quota.allow():  # no other key has budget -> stop cleanly
+                    raise QuotaExhausted(self.redact(str(exc))) from exc
+        raise QuotaExhausted(self.redact(str(last_exc)) if last_exc else "quota exhausted")
+
+    def _fetch_dataset_meta(self, code: str, quota) -> dict[str, str | None]:
         """dataset/{code}/meta -> {series_key: last_refresh_date}. One call covers
-        every series in the dataset."""
-        quota.record()
-        key = getattr(quota, "api_key", None) or self.api_key
-        url = DATASET_META_URL.format(code=code) + f"?api_key={key}&format=json"
-        content = self.http_get(url)
+        every series in the dataset. Rotates keys on a 429."""
+        content = self._http_get_rotating(
+            quota, lambda key: DATASET_META_URL.format(code=code) + f"?api_key={key}&format=json"
+        )
         entries = parse_dataset_meta(content.decode("utf-8", errors="replace"), code)
         # Pace the meta scan too (not just data pulls) — 200+ back-to-back meta
         # calls otherwise burst past EasyData's rate limit and get 429'd.
@@ -201,7 +236,16 @@ class EasyDataSyncJob(IngestionJob):
         for code, members in by_code.items():
             if not quota.allow():
                 break  # out of budget for meta checks; pull what we already have
-            meta = self._fetch_dataset_meta(code, quota)
+            try:
+                meta = self._fetch_dataset_meta(code, quota)
+            except QuotaExhausted:
+                break  # every key is 429'd — stop the sweep, pull what we found
+            except Exception as exc:  # one dataset's meta failing must not abort the sweep
+                logging.getLogger("pakdata.ingest").warning(
+                    "%s: meta check failed for dataset %s (%s)",
+                    self.name, code, self.redact(str(exc)),
+                )
+                continue
             for s in members:
                 latest = meta.get(s.easydata_key)
                 refresh_map[s.easydata_key] = latest
@@ -213,10 +257,8 @@ class EasyDataSyncJob(IngestionJob):
     def _pull_one(
         self, s: EasyDataSeries, quota: QuotaCounter, backfill: bool, latest_refresh: str | None
     ) -> int:
-        """Fetch + archive + parse + validate + upsert a single series."""
-        quota.record()
-        active_key = getattr(quota, "api_key", None) or self.api_key
-        content = self.http_get(self._data_url(s, backfill, active_key))
+        """Fetch + archive + parse + validate + upsert a single series. Rotates keys on a 429."""
+        content = self._http_get_rotating(quota, lambda key: self._data_url(s, backfill, key))
         storage.archive(self.source, self.name, date.today(), f"{s.id}.json", content)
         records = parse_easydata_json(content.decode("utf-8", errors="replace"))
         n = self.upsert(self.validate(records))
@@ -245,6 +287,9 @@ class EasyDataSyncJob(IngestionJob):
             try:
                 total += process_one(s)
                 processed += 1
+            except QuotaExhausted:
+                partial = True
+                break  # every key is 429'd — stop cleanly and resume next run
             except Exception as exc:  # noqa: BLE001
                 failed += 1
                 logging.getLogger("pakdata.ingest").warning(

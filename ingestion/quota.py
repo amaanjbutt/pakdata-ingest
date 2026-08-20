@@ -139,6 +139,11 @@ class QuotaPool:
                 QuotaCounter(path, daily_limit, hourly_limit, daily_frac, hourly_frac)
             )
         self._active = 0
+        # Per-key cooldown: when a key returns a real 429 from EasyData (its
+        # server-side quota is spent — which the local counter can't see, since the
+        # CI counter file is ephemeral), penalize() blocks that key here so allow()
+        # rotates to another key instead of hammering the exhausted one.
+        self._blocked_until = [0.0] * len(self.keys)
 
     @property
     def api_key(self) -> str:
@@ -154,6 +159,8 @@ class QuotaPool:
         # Fast path: a key that is under both its daily and hourly caps right now.
         for i, c in enumerate(self._counters):
             c._prune(now)
+            if now < self._blocked_until[i]:
+                continue  # key got a 429 recently — skip until its cooldown passes
             if c._daily_exhausted(now):
                 continue
             if c.count_1h(now) < c.hourly_limit * c.hourly_frac:
@@ -169,6 +176,7 @@ class QuotaPool:
                 continue
             hour_ts = [t for t in c.timestamps if t > now - 3600]
             free_at = (min(hour_ts) + 3600 + 1) if hour_ts else now
+            free_at = max(free_at, self._blocked_until[i])  # respect 429 cooldown
             if best is None or free_at < best[1]:
                 best = (i, free_at)
         if best is None:
@@ -183,3 +191,10 @@ class QuotaPool:
 
     def record(self) -> None:
         self._counters[self._active].record()
+
+    def penalize(self, seconds: float = 3600.0) -> None:
+        """Mark the active key as server-side rate-limited (it returned a 429) so
+        allow() skips it for `seconds` and rotates to another key. One hour matches
+        EasyData's hourly window and effectively retires a spent key for the rest of
+        a time-boxed CI run."""
+        self._blocked_until[self._active] = time.time() + seconds
