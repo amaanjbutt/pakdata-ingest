@@ -28,10 +28,20 @@ jobs:
           # Keepalives so the tunnel survives the multi-minute EasyData run —
           # without them the forward was torn down mid-run (Connection refused),
           # leaving syncs unable to write and runs stuck 'running'.
-          ssh -i ~/.ssh/tunnel_key -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes \
-            -o ServerAliveInterval=15 -o ServerAliveCountMax=8 -o TCPKeepAlive=yes \
-            -f -N -L 5432:127.0.0.1:5432 root@${{ secrets.VPS_HOST }}
-          echo "tunnel up"
+          # Retry: the VPS can briefly be unreachable (a transient SSH timeout),
+          # which used to fail the whole run and send a false-alarm alert email.
+          # Fail fast per attempt (ConnectTimeout) and retry a few times so only a
+          # sustained outage fails the run.
+          ok=""
+          for i in 1 2 3 4 5; do
+            if ssh -i ~/.ssh/tunnel_key -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes \
+                 -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 \
+                 -o TCPKeepAlive=yes -f -N -L 5432:127.0.0.1:5432 root@${{ secrets.VPS_HOST }}; then
+              ok=1; echo "tunnel up (attempt $i)"; break
+            fi
+            echo "tunnel attempt $i failed; retrying in 20s"; sleep 20
+          done
+          [ -n "$ok" ] || { echo "tunnel failed after 5 attempts"; exit 1; }
       - name: run EasyData + SBP jobs
         env:
           DATABASE_URL: postgresql://pakdata:${{ secrets.DB_PASSWORD }}@127.0.0.1:5432/pakdata
