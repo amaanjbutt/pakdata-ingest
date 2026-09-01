@@ -106,13 +106,17 @@ class IngestionJob:
         )
         return {r["id"]: r for r in rows}
 
-    def _prev_value(self, series_id: str, dims: dict) -> float | None:
+    def _prev_value(self, series_id: str, dims: dict) -> tuple[float | None, date | None]:
+        """The latest stored (value, date) for a series — the baseline the large-step
+        gate compares a genuinely-new observation against."""
         row = db.query_one(
-            "SELECT value FROM observations WHERE series_id=%(sid)s AND dims @> %(dims)s::jsonb "
+            "SELECT value, obs_date FROM observations WHERE series_id=%(sid)s AND dims @> %(dims)s::jsonb "
             "ORDER BY obs_date DESC LIMIT 1",
             {"sid": series_id, "dims": json.dumps(dims)},
         )
-        return float(row["value"]) if row and row["value"] is not None else None
+        if not row or row["value"] is None:
+            return None, None
+        return float(row["value"]), row["obs_date"]
 
     def validate(self, records: list[Record]) -> list[tuple[Record, bool]]:
         """Return (record, flagged) pairs for the records that pass the gates.
@@ -132,6 +136,7 @@ class IngestionJob:
         today = date.today()
         out: list[tuple[Record, bool]] = []
         rejects: list[str] = []
+        large_steps: list[str] = []
         for r in records:
             if r.obs_date > today:
                 rejects.append(f"{r.series_id}: date in the future {r.obs_date}")
@@ -151,14 +156,27 @@ class IngestionJob:
             flagged = False
             step = b.get("max_step")
             if step is not None and r.value is not None:
-                prev = self._prev_value(r.series_id, r.dims)
-                if prev is not None and abs(r.value - prev) > float(step):
+                prev, prev_date = self._prev_value(r.series_id, r.dims)
+                # Only flag a large step for records that EXTEND the series past its
+                # current latest date. Comparing RE-INGESTED history against the newest
+                # stored value (e.g. 2017 CPI 107 vs 2026 CPI 293) is a false positive,
+                # and a backfill/full-history re-parse otherwise fires one alert per
+                # historical month.
+                if (prev is not None and prev_date is not None
+                        and r.obs_date > prev_date and abs(r.value - prev) > float(step)):
                     flagged = True
-                    alerting.alert(
-                        f"{self.name}: large step in {r.series_id}",
-                        f"{prev} → {r.value} on {r.obs_date} (max_step={step})",
-                    )
+                    large_steps.append(f"{r.series_id}: {prev} → {r.value} on {r.obs_date}")
             out.append((r, flagged))
+
+        # One summary email per run, not one per flagged record.
+        if large_steps:
+            log.warning("%s: %d large step(s) flagged (first: %s)",
+                        self.name, len(large_steps), large_steps[0])
+            more = f"; …+{len(large_steps) - 5} more" if len(large_steps) > 5 else ""
+            alerting.alert(
+                f"{self.name}: {len(large_steps)} large step(s) flagged",
+                "; ".join(large_steps[:5]) + more,
+            )
 
         if rejects:
             if not out:
