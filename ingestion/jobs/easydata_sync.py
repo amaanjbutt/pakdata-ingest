@@ -45,6 +45,19 @@ INCREMENTAL_OVERLAP_DAYS = 40
 CALL_SPACING_SECONDS = 0.4
 DEFAULT_QUOTA_PATH = os.getenv("EASYDATA_QUOTA_PATH", "./data/easydata_quota.json")
 
+# Flagship-first: a run is quota-/time-capped and usually stops 'partial' long
+# before the ~22.6k-series backlog is drained. Pull the economically-visible
+# modules FIRST so forex/monetary/CPI (the series users and the landing tape see)
+# refresh every run, even while the long tail drains behind them over days. Lower
+# number = higher priority; everything unlisted sorts last (9).
+_MODULE_PRIORITY = {
+    "forex": 0, "monetary": 1, "prices": 2, "external": 3, "real": 4,
+}
+
+
+def _module_priority(s: EasyDataSeries) -> int:
+    return _MODULE_PRIORITY.get(s.module, 9)
+
 
 def _load_api_keys() -> list[str]:
     """EasyData API keys in rotation order. Prefer EASYDATA_API_KEYS (comma- or
@@ -233,7 +246,11 @@ class EasyDataSyncJob(IngestionJob):
         for s in series:
             (by_code[s.easydata_dataset_code].append(s)
              if s.easydata_dataset_code else to_pull.append(s))
-        for code, members in by_code.items():
+        # Meta-check flagship datasets first, so their series enter `to_pull` even if
+        # the sweep is cut short by the quota gate.
+        ordered = sorted(by_code.items(),
+                         key=lambda kv: min(_module_priority(s) for s in kv[1]))
+        for code, members in ordered:
             if not quota.allow():
                 break  # out of budget for meta checks; pull what we already have
             try:
@@ -252,6 +269,8 @@ class EasyDataSyncJob(IngestionJob):
                 stored = s.easydata_last_refresh
                 if latest is None or stored is None or str(latest) > str(stored):
                     to_pull.append(s)
+        # Flagship modules (forex/monetary/CPI) pulled before the quota cap is hit.
+        to_pull.sort(key=_module_priority)  # stable: preserves order within a priority
         return to_pull, refresh_map
 
     def _pull_one(
