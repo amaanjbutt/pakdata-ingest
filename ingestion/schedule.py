@@ -32,11 +32,12 @@ class Schedule:
 DAY = timedelta(days=1)
 
 SCHEDULES: list[Schedule] = [
-    # Nightly incremental EasyData sync (cheap dataset/meta freshness check).
-    Schedule("easydata_sync", {"hour": 20, "minute": 0}, expected_interval=2 * DAY),
-    # KIBOR — page updates midday; check thrice on weekdays.
-    Schedule("sbp_kibor", {"hour": "13,17,19", "day_of_week": "mon-fri"},
-             expected_interval=timedelta(days=4)),
+    # NOTE: easydata_sync + the SBP jobs (sbp_kibor / sbp_policy_rate / sbp_auctions)
+    # are NOT scheduled here — their sources (easydata.sbp.org.pk, sbp.org.pk) block
+    # the VPS/WARP datacenter IP, so they run on GitHub Actions (Azure IPs reach them)
+    # writing to this DB over an SSH tunnel. See the pakdata-ingest repo. They remain
+    # registered so a manual `python -m ingestion.run <job> --force` still works as a
+    # fallback via the residential tunnel.
     # FX now flows through easydata_sync (monthly EasyData exchange-rate series);
     # the daily SBP M2M scrape was retired when SBP removed the source page.
     # Weekly SPI: Friday release + Saturday retry.
@@ -44,30 +45,19 @@ SCHEDULES: list[Schedule] = [
              expected_interval=timedelta(days=9)),
     Schedule("pbs_spi_weekly", {"hour": 11, "minute": 0, "day_of_week": "sat"},
              expected_interval=timedelta(days=9)),
-    # ---- declared ahead of implementation (skipped until registered) ----------
-    Schedule("sbp_policy_rate", {"hour": 18, "minute": 0},
-             expected_interval=timedelta(days=60), stale_on_run=True),
-    Schedule("mufap_pkrv", {"hour": 18, "minute": 0, "day_of_week": "mon-fri"},
-             expected_interval=timedelta(days=4)),
-    # Daily NAV snapshot for every mutual fund (published each evening).
-    Schedule("mufap_fund_navs", {"hour": 19, "minute": 0, "day_of_week": "mon-fri"},
-             expected_interval=timedelta(days=4)),
-    Schedule("mufap_fund_returns", {"hour": 19, "minute": 30, "day_of_week": "mon-fri"},
-             expected_interval=timedelta(days=4)),
-    Schedule("mufap_fund_stats", {"hour": 20, "minute": 30, "day_of_week": "mon-fri"},
-             expected_interval=timedelta(days=4)),
-    # Portfolio/asset-allocation is a monthly snapshot (~540 per-fund calls) — run
-    # weekly to catch month-end updates without hammering the source.
-    Schedule("mufap_fund_portfolio", {"day_of_week": "sat", "hour": 6, "minute": 0},
-             expected_interval=timedelta(days=10)),
-    Schedule("mufap_debt_prices", {"hour": 18, "minute": 30, "day_of_week": "mon-fri"},
-             expected_interval=timedelta(days=4)),
-    Schedule("mufap_debt_trades", {"hour": 21, "minute": 0, "day_of_week": "mon-fri"},
-             expected_interval=timedelta(days=4)),
-    Schedule("mufap_tfc_valuations", {"hour": 18, "minute": 45, "day_of_week": "mon-fri"},
-             expected_interval=timedelta(days=4)),
-    Schedule("sbp_auctions", {"hour": 16, "minute": 0, "day_of_week": "mon-fri"},
+    # Derived per-city cost-of-living index — recompute shortly after each SPI
+    # ingest (reads the DB, no external fetch).
+    Schedule("cost_of_living", {"hour": 15, "minute": 30, "day_of_week": "fri"},
              expected_interval=timedelta(days=9)),
+    Schedule("cost_of_living", {"hour": 11, "minute": 30, "day_of_week": "sat"},
+             expected_interval=timedelta(days=9)),
+    # MUFAP jobs are NO LONGER scheduled on the VPS. MUFAP's Cloudflare hard-blocks the
+    # VPS WARP egress (the whole 104.28.x WARP range → "you have been blocked"; rotation
+    # can't escape it), so they now run on GitHub Actions from Azure runner IPs (see
+    # `mufap.yml` in the pakdata-ingest repo — an IP-retry matrix, ~1/5 Azure IPs reach
+    # MUFAP). They remain REGISTERED (for a manual `--force` fallback) and are MONITORED
+    # for staleness below in MONITORED_EXTERNAL.
+    # ---- declared ahead of implementation (skipped until registered) ----------
     Schedule("ecap_open_market", {"hour": "12,18"},
              expected_interval=timedelta(days=2)),
     # PBS external trade: monthly release, published mid-month.
@@ -91,10 +81,33 @@ SCHEDULES: list[Schedule] = [
 ]
 
 
+# Jobs scheduled EXTERNALLY on GitHub Actions (easydata_sync + SBP — see §10),
+# NOT run by this scheduler, but still MONITORED here so their staleness surfaces
+# and alerts. Without this, the biggest source (EasyData) fails invisibly.
+MONITORED_EXTERNAL: list[Schedule] = [
+    Schedule("easydata_sync", {}, expected_interval=timedelta(days=3)),
+    Schedule("sbp_kibor", {}, expected_interval=timedelta(days=4), stale_on_run=True),
+    Schedule("sbp_policy_rate", {}, expected_interval=timedelta(days=14), stale_on_run=True),
+    Schedule("sbp_auctions", {}, expected_interval=timedelta(days=14), stale_on_run=True),
+    # MUFAP now runs on GitHub Actions (Azure IPs) — see mufap.yml in pakdata-ingest.
+    # Not scheduled here; monitored so a persistent GHA/MUFAP outage still surfaces via
+    # the hourly staleness_check. Intervals match the old VPS cadence.
+    Schedule("mufap_fund_navs", {}, expected_interval=timedelta(days=4)),
+    Schedule("mufap_fund_returns", {}, expected_interval=timedelta(days=4)),
+    Schedule("mufap_fund_stats", {}, expected_interval=timedelta(days=4)),
+    Schedule("mufap_pkrv", {}, expected_interval=timedelta(days=4)),
+    Schedule("mufap_debt_prices", {}, expected_interval=timedelta(days=4)),
+    Schedule("mufap_debt_trades", {}, expected_interval=timedelta(days=4)),
+    Schedule("mufap_tfc_valuations", {}, expected_interval=timedelta(days=4)),
+    Schedule("mufap_fund_portfolio", {}, expected_interval=timedelta(days=10)),
+]
+
+
 def expected_intervals() -> dict[str, timedelta]:
-    """Tightest expected_interval per job (used by the staleness checker)."""
+    """Tightest expected_interval per job (used by the staleness checker). Covers
+    both VPS-scheduled jobs and the externally-scheduled GHA jobs we monitor."""
     out: dict[str, timedelta] = {}
-    for s in SCHEDULES:
+    for s in [*SCHEDULES, *MONITORED_EXTERNAL]:
         cur = out.get(s.job)
         if cur is None or s.expected_interval < cur:
             out[s.job] = s.expected_interval
@@ -102,4 +115,4 @@ def expected_intervals() -> dict[str, timedelta]:
 
 
 def stale_on_run_jobs() -> set[str]:
-    return {s.job for s in SCHEDULES if s.stale_on_run}
+    return {s.job for s in [*SCHEDULES, *MONITORED_EXTERNAL] if s.stale_on_run}
