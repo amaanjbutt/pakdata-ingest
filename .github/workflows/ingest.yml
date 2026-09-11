@@ -55,6 +55,11 @@ jobs:
           # Time-boxed runner: stop cleanly at the hourly cap (mark run 'partial')
           # instead of sleeping ~1h and getting killed by timeout-minutes.
           EASYDATA_QUOTA_NOSLEEP: '1'
+          # Fetch this many series in parallel. Each call is ~3s and a run is
+          # hour-capped, so serial runs idle ~35 min; parallelism cuts that to a few
+          # minutes (quota bookkeeping is lock-serialized, so the per-key rate cap is
+          # still honoured). Requires NOSLEEP (above). 1 = serial fallback.
+          EASYDATA_CONCURRENCY: '4'
         run: |
           mkdir -p /tmp/raw
           set +e
