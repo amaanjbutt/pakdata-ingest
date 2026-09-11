@@ -1,20 +1,20 @@
 name: mufap
 # MUFAP ingestion from GitHub's Azure runners.
 #
-# MUFAP's Cloudflare hard-blocks the VPS's WARP egress — the entire 104.28.x WARP range
-# returns "Sorry, you have been blocked" (a WAF/IP block, not a solvable challenge), and
-# warp-cli rotation/re-registration stays inside that blocked range. But ~1 in 5 GitHub
-# Azure runner IPs get a clean 200 (empirically: 1/5 sampled returned the full page). So
-# we run a fail-fast:false MATRIX of attempts; whichever runner lands an unblocked IP
-# ingests, and the ~4/5 that draw a blocked IP fail silently on 403. Upserts are
-# idempotent, so redundant successes across runners are safe.
+# MUFAP's Cloudflare hard-blocks the VPS WARP egress (the whole 104.28.x WARP range →
+# "you have been blocked"; rotation can't escape it). But ~1 in 5 GitHub Azure runner IPs
+# get a clean 200. So we run a fail-fast:false MATRIX of attempts; whichever runner lands
+# an unblocked IP ingests (idempotent upserts make redundant successes safe).
 #
-# Egress is DIRECT (NO INGEST_PROXY_MAP → no WARP) with curl_cffi browser-TLS
-# impersonation. Writes to the VPS Postgres over the restricted SSH tunnel, exactly like
-# ingest.yml (EasyData/SBP). The VPS no longer schedules MUFAP (schedule.py moved these
-# to MONITORED_EXTERNAL) — it only monitors their staleness. No alert emails fire from
-# here (RESEND/ALERT_EMAIL are unset on GHA); persistent staleness surfaces via the VPS
-# hourly staleness_check.
+# IMPORTANT: each runner FIRST does a fast IP-probe. A blocked runner exits in seconds
+# WITHOUT opening the DB tunnel or running the jobs — otherwise the first real fetch hangs
+# to the 20-min job timeout, burning ~160 CI-min/dispatch and stressing the 1-vCPU VPS DB.
+# Only an unblocked runner opens the tunnel and ingests. Per-job `timeout` caps any stall.
+#
+# Egress is DIRECT (no INGEST_PROXY_MAP → no WARP) with curl_cffi browser-TLS
+# impersonation. Writes to the VPS Postgres over the restricted SSH tunnel (like
+# ingest.yml). The VPS no longer schedules MUFAP (schedule.py → MONITORED_EXTERNAL); it
+# only monitors staleness. No alert emails fire from here (RESEND/ALERT unset on GHA).
 on:
   schedule:
     - cron: '0 14,17 * * 1-5'   # light fund/debt jobs — weekdays 19:00 & 22:00 PKT
@@ -29,13 +29,15 @@ on:
 concurrency:
   group: mufap
   cancel-in-progress: false
+env:
+  MUFAP_PROBE_URL: https://www.mufap.com.pk/Industry/IndustryStatDaily?tab=1
 jobs:
   daily:
     if: >-
       (github.event_name == 'schedule' && github.event.schedule == '0 14,17 * * 1-5') ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.set == 'daily')
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -46,41 +48,47 @@ jobs:
         with: { python-version: '3.12' }
       - name: install deps
         run: pip install -q -r requirements.txt
-      - name: open DB tunnel to VPS
+      - name: probe IP, then (if unblocked) tunnel + ingest
+        env:
+          DATABASE_URL: postgresql://pakdata:${{ secrets.DB_PASSWORD }}@127.0.0.1:5432/pakdata
+          RAW_ARCHIVE_DIR: /tmp/raw
+          SSH_TUNNEL_KEY: ${{ secrets.SSH_TUNNEL_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
         run: |
+          mkdir -p /tmp/raw
+          # 1) Fast IP gate. A 403 returns a status (no raise); a connection stall raises
+          #    -> non-zero exit -> empty STATUS; either way a non-200 means "skip cheaply".
+          STATUS=$(timeout 45 python -c "from curl_cffi import requests as r; print(r.get('${MUFAP_PROBE_URL}', impersonate='chrome', timeout=25).status_code)" 2>/dev/null)
+          echo "MUFAP probe status: ${STATUS:-<none/blocked>}"
+          if [ "$STATUS" != "200" ]; then
+            echo "::notice::IP blocked (probe=${STATUS:-none}) — skipping this runner (no tunnel, no DB)"
+            exit 0
+          fi
+          echo "::notice::IP reaches MUFAP — opening tunnel and ingesting"
+          # 2) Restricted DB tunnel to the VPS (retry transient SSH timeouts).
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.SSH_TUNNEL_KEY }}" > ~/.ssh/tunnel_key
+          printf '%s\n' "$SSH_TUNNEL_KEY" > ~/.ssh/tunnel_key
           chmod 600 ~/.ssh/tunnel_key
           ok=""
           for i in 1 2 3 4 5; do
             if ssh -i ~/.ssh/tunnel_key -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes \
                  -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 \
-                 -o TCPKeepAlive=yes -f -N -L 5432:127.0.0.1:5432 root@${{ secrets.VPS_HOST }}; then
+                 -o TCPKeepAlive=yes -f -N -L 5432:127.0.0.1:5432 root@"$VPS_HOST"; then
               ok=1; echo "tunnel up (attempt $i)"; break
             fi
             echo "tunnel attempt $i failed; retrying in 20s"; sleep 20
           done
           [ -n "$ok" ] || { echo "tunnel failed after 5 attempts"; exit 1; }
-      - name: run MUFAP light jobs (direct egress + curl_cffi)
-        env:
-          DATABASE_URL: postgresql://pakdata:${{ secrets.DB_PASSWORD }}@127.0.0.1:5432/pakdata
-          RAW_ARCHIVE_DIR: /tmp/raw
-        run: |
-          mkdir -p /tmp/raw
+          # 3) Ingest. Per-job hard timeout so a mid-run stall can't eat the budget.
           set +e
-          ok=0
           for job in mufap_fund_navs mufap_fund_returns mufap_fund_stats \
                      mufap_pkrv mufap_debt_prices mufap_tfc_valuations mufap_debt_trades; do
             echo "::group::$job"
-            python -m ingestion.run "$job" --force
-            rc=$?; echo "exit=$rc for $job"; [ $rc -eq 0 ] && ok=1
+            timeout 300 python -m ingestion.run "$job" --force
+            echo "exit=$? for $job"
             echo "::endgroup::"
           done
-          if [ $ok -eq 1 ]; then
-            echo "::notice::this runner reached MUFAP and ingested"
-          else
-            echo "::notice::this runner's IP was blocked (403) — expected for ~4/5 attempts"
-          fi
+          echo "::notice::this runner reached MUFAP and ingested"
   weekly:
     if: >-
       (github.event_name == 'schedule' && github.event.schedule == '0 3 * * 6') ||
@@ -97,25 +105,32 @@ jobs:
         with: { python-version: '3.12' }
       - name: install deps
         run: pip install -q -r requirements.txt
-      - name: open DB tunnel to VPS
+      - name: probe IP, then (if unblocked) tunnel + ingest portfolio
+        env:
+          DATABASE_URL: postgresql://pakdata:${{ secrets.DB_PASSWORD }}@127.0.0.1:5432/pakdata
+          RAW_ARCHIVE_DIR: /tmp/raw
+          SSH_TUNNEL_KEY: ${{ secrets.SSH_TUNNEL_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
         run: |
+          mkdir -p /tmp/raw
+          STATUS=$(timeout 45 python -c "from curl_cffi import requests as r; print(r.get('${MUFAP_PROBE_URL}', impersonate='chrome', timeout=25).status_code)" 2>/dev/null)
+          echo "MUFAP probe status: ${STATUS:-<none/blocked>}"
+          if [ "$STATUS" != "200" ]; then
+            echo "::notice::IP blocked (probe=${STATUS:-none}) — skipping this runner"
+            exit 0
+          fi
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.SSH_TUNNEL_KEY }}" > ~/.ssh/tunnel_key
+          printf '%s\n' "$SSH_TUNNEL_KEY" > ~/.ssh/tunnel_key
           chmod 600 ~/.ssh/tunnel_key
           ok=""
           for i in 1 2 3 4 5; do
             if ssh -i ~/.ssh/tunnel_key -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes \
                  -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 \
-                 -o TCPKeepAlive=yes -f -N -L 5432:127.0.0.1:5432 root@${{ secrets.VPS_HOST }}; then
+                 -o TCPKeepAlive=yes -f -N -L 5432:127.0.0.1:5432 root@"$VPS_HOST"; then
               ok=1; echo "tunnel up (attempt $i)"; break
             fi
             echo "tunnel attempt $i failed; retrying in 20s"; sleep 20
           done
           [ -n "$ok" ] || { echo "tunnel failed after 5 attempts"; exit 1; }
-      - name: run MUFAP portfolio (heavy monthly snapshot)
-        env:
-          DATABASE_URL: postgresql://pakdata:${{ secrets.DB_PASSWORD }}@127.0.0.1:5432/pakdata
-          RAW_ARCHIVE_DIR: /tmp/raw
-        run: |
-          mkdir -p /tmp/raw
-          python -m ingestion.run mufap_fund_portfolio --force || echo "portfolio: blocked IP or error (exit $?)"
+          timeout 2400 python -m ingestion.run mufap_fund_portfolio --force
+          echo "exit=$? for mufap_fund_portfolio"
