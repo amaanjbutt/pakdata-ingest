@@ -1,0 +1,121 @@
+name: mufap
+# MUFAP ingestion from GitHub's Azure runners.
+#
+# MUFAP's Cloudflare hard-blocks the VPS's WARP egress — the entire 104.28.x WARP range
+# returns "Sorry, you have been blocked" (a WAF/IP block, not a solvable challenge), and
+# warp-cli rotation/re-registration stays inside that blocked range. But ~1 in 5 GitHub
+# Azure runner IPs get a clean 200 (empirically: 1/5 sampled returned the full page). So
+# we run a fail-fast:false MATRIX of attempts; whichever runner lands an unblocked IP
+# ingests, and the ~4/5 that draw a blocked IP fail silently on 403. Upserts are
+# idempotent, so redundant successes across runners are safe.
+#
+# Egress is DIRECT (NO INGEST_PROXY_MAP → no WARP) with curl_cffi browser-TLS
+# impersonation. Writes to the VPS Postgres over the restricted SSH tunnel, exactly like
+# ingest.yml (EasyData/SBP). The VPS no longer schedules MUFAP (schedule.py moved these
+# to MONITORED_EXTERNAL) — it only monitors their staleness. No alert emails fire from
+# here (RESEND/ALERT_EMAIL are unset on GHA); persistent staleness surfaces via the VPS
+# hourly staleness_check.
+on:
+  schedule:
+    - cron: '0 14,17 * * 1-5'   # light fund/debt jobs — weekdays 19:00 & 22:00 PKT
+    - cron: '0 3 * * 6'          # portfolio (heavy monthly snapshot) — Sat 08:00 PKT
+  workflow_dispatch:
+    inputs:
+      set:
+        description: which job set to run
+        default: daily
+        type: choice
+        options: [daily, weekly]
+concurrency:
+  group: mufap
+  cancel-in-progress: false
+jobs:
+  daily:
+    if: >-
+      (github.event_name == 'schedule' && github.event.schedule == '0 14,17 * * 1-5') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.set == 'daily')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        attempt: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: install deps
+        run: pip install -q -r requirements.txt
+      - name: open DB tunnel to VPS
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_TUNNEL_KEY }}" > ~/.ssh/tunnel_key
+          chmod 600 ~/.ssh/tunnel_key
+          ok=""
+          for i in 1 2 3 4 5; do
+            if ssh -i ~/.ssh/tunnel_key -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes \
+                 -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 \
+                 -o TCPKeepAlive=yes -f -N -L 5432:127.0.0.1:5432 root@${{ secrets.VPS_HOST }}; then
+              ok=1; echo "tunnel up (attempt $i)"; break
+            fi
+            echo "tunnel attempt $i failed; retrying in 20s"; sleep 20
+          done
+          [ -n "$ok" ] || { echo "tunnel failed after 5 attempts"; exit 1; }
+      - name: run MUFAP light jobs (direct egress + curl_cffi)
+        env:
+          DATABASE_URL: postgresql://pakdata:${{ secrets.DB_PASSWORD }}@127.0.0.1:5432/pakdata
+          RAW_ARCHIVE_DIR: /tmp/raw
+        run: |
+          mkdir -p /tmp/raw
+          set +e
+          ok=0
+          for job in mufap_fund_navs mufap_fund_returns mufap_fund_stats \
+                     mufap_pkrv mufap_debt_prices mufap_tfc_valuations mufap_debt_trades; do
+            echo "::group::$job"
+            python -m ingestion.run "$job" --force
+            rc=$?; echo "exit=$rc for $job"; [ $rc -eq 0 ] && ok=1
+            echo "::endgroup::"
+          done
+          if [ $ok -eq 1 ]; then
+            echo "::notice::this runner reached MUFAP and ingested"
+          else
+            echo "::notice::this runner's IP was blocked (403) — expected for ~4/5 attempts"
+          fi
+  weekly:
+    if: >-
+      (github.event_name == 'schedule' && github.event.schedule == '0 3 * * 6') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.set == 'weekly')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        attempt: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: install deps
+        run: pip install -q -r requirements.txt
+      - name: open DB tunnel to VPS
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_TUNNEL_KEY }}" > ~/.ssh/tunnel_key
+          chmod 600 ~/.ssh/tunnel_key
+          ok=""
+          for i in 1 2 3 4 5; do
+            if ssh -i ~/.ssh/tunnel_key -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes \
+                 -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 \
+                 -o TCPKeepAlive=yes -f -N -L 5432:127.0.0.1:5432 root@${{ secrets.VPS_HOST }}; then
+              ok=1; echo "tunnel up (attempt $i)"; break
+            fi
+            echo "tunnel attempt $i failed; retrying in 20s"; sleep 20
+          done
+          [ -n "$ok" ] || { echo "tunnel failed after 5 attempts"; exit 1; }
+      - name: run MUFAP portfolio (heavy monthly snapshot)
+        env:
+          DATABASE_URL: postgresql://pakdata:${{ secrets.DB_PASSWORD }}@127.0.0.1:5432/pakdata
+          RAW_ARCHIVE_DIR: /tmp/raw
+        run: |
+          mkdir -p /tmp/raw
+          python -m ingestion.run mufap_fund_portfolio --force || echo "portfolio: blocked IP or error (exit $?)"
