@@ -26,8 +26,10 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 from collections import defaultdict
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import date, datetime, timedelta
 from typing import Callable
 from urllib.parse import quote
@@ -44,6 +46,15 @@ DATASET_META_URL = "https://easydata.sbp.org.pk/api/v1/dataset/{code}/meta"
 INCREMENTAL_OVERLAP_DAYS = 40
 CALL_SPACING_SECONDS = 0.4
 DEFAULT_QUOTA_PATH = os.getenv("EASYDATA_QUOTA_PATH", "./data/easydata_quota.json")
+
+# Each EasyData call is ~3s (slow upstream), and a run is hour-capped at ~675 calls,
+# so a SERIAL run takes ~35 min — the binding constraint is wall-clock/CI-minutes, not
+# the daily quota (we use ~22% of it). Fetching a few series in parallel cuts a run to
+# minutes, so we can run more often and actually spend the quota. Default 1 = the proven
+# serial path; the workflow opts into >1. The per-key rate cap is still enforced (the
+# quota gate is serialized under a lock), so concurrency never exceeds the rate limit —
+# it just stops idling between calls.
+EASYDATA_CONCURRENCY = max(1, int(os.getenv("EASYDATA_CONCURRENCY", "1")))
 
 # Flagship-first: a run is quota-/time-capped and usually stops 'partial' long
 # before the ~22.6k-series backlog is drained. Pull the economically-visible
@@ -325,6 +336,100 @@ class EasyDataSyncJob(IngestionJob):
             status = "no_new_data"
         return status, total, processed
 
+    def _process_series_concurrent(
+        self,
+        series_list: list[EasyDataSeries],
+        quota,
+        backfill: bool,
+        refresh_map: dict[str, str | None],
+        workers: int,
+    ) -> tuple[str, int, int]:
+        """Same contract as _process_series, but fetches up to `workers` series in
+        parallel. The slow part is the ~3s HTTP round-trip; parse/upsert are fast and
+        the psycopg pool (max_size=10) is thread-safe, so only the quota bookkeeping
+        needs a lock. The per-key rate cap is therefore still honoured — concurrency
+        just removes the idle time between sequential calls.
+
+        Relies on EASYDATA_QUOTA_NOSLEEP (set on the runner) so a capped quota returns
+        False instead of sleeping while holding the lock."""
+        qlock = threading.Lock()
+        stop = threading.Event()
+        agg = {"rows": 0, "processed": 0, "failed": 0, "stopped": False}
+        alock = threading.Lock()
+        log = logging.getLogger("pakdata.ingest")
+
+        def claim_key(rotate: bool = False) -> str | None:
+            """Atomically take one quota slot and return the key to use (None = no
+            budget). `rotate` first penalizes the current key after a 429."""
+            with qlock:
+                if rotate:
+                    penalize = getattr(quota, "penalize", None)
+                    if penalize:
+                        penalize()
+                if not quota.allow():
+                    return None
+                key = getattr(quota, "api_key", None) or self.api_key
+                quota.record()
+                return key
+
+        def work(s: EasyDataSeries) -> None:
+            if stop.is_set():
+                return
+            key = claim_key()
+            if key is None:
+                stop.set(); agg["stopped"] = True
+                return
+            content = None
+            for _ in range(max(1, len(self.api_keys))):
+                try:
+                    content = self.http_get(self._data_url(s, backfill, key))
+                    break
+                except Exception as exc:  # noqa: BLE001
+                    if not _is_rate_limited(exc):
+                        with alock:
+                            agg["failed"] += 1
+                        log.warning("%s: skipping series %s (%s)", self.name, s.id, self.redact(str(exc)))
+                        return
+                    key = claim_key(rotate=True)  # 429 → penalize + rotate to another key
+                    if key is None:
+                        stop.set(); agg["stopped"] = True
+                        return
+            if content is None:
+                return
+            try:
+                storage.archive(self.source, self.name, date.today(), f"{s.id}.json", content)
+                records = parse_easydata_json(content.decode("utf-8", errors="replace"))
+                n = self.upsert(self.validate(records))
+                self._update_refresh(s.id, refresh_map.get(s.easydata_key))
+            except Exception as exc:  # noqa: BLE001 — one bad series must not abort the run
+                with alock:
+                    agg["failed"] += 1
+                log.warning("%s: skipping series %s (%s)", self.name, s.id, self.redact(str(exc)))
+                return
+            with alock:
+                agg["rows"] += n
+                agg["processed"] += 1
+
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            inflight: set = set()
+            for s in series_list:
+                if stop.is_set():
+                    break
+                inflight.add(ex.submit(work, s))
+                if len(inflight) >= workers * 2:  # bounded queue: don't submit all 22k at once
+                    _, inflight = wait(inflight, return_when=FIRST_COMPLETED)
+            wait(inflight)
+
+        if agg["failed"] and not agg["processed"]:
+            status = "partial" if agg["stopped"] else "failed"
+        elif agg["stopped"]:
+            status = "partial"
+        elif agg["processed"]:
+            status = "success"
+        else:
+            status = "no_new_data"
+        return status, agg["rows"], agg["processed"]
+
     # ---- orchestration ------------------------------------------------------
 
     def run(self, backfill: bool = False, limit: int | None = None) -> dict:
@@ -346,10 +451,15 @@ class EasyDataSyncJob(IngestionJob):
             if limit is not None:
                 selected = selected[:limit]
 
-            def process_one(s: EasyDataSeries) -> int:
-                return self._pull_one(s, quota, backfill, refresh_map.get(s.easydata_key))
+            if EASYDATA_CONCURRENCY > 1:
+                status, total, processed = self._process_series_concurrent(
+                    selected, quota, backfill, refresh_map, EASYDATA_CONCURRENCY
+                )
+            else:
+                def process_one(s: EasyDataSeries) -> int:
+                    return self._pull_one(s, quota, backfill, refresh_map.get(s.easydata_key))
 
-            status, total, processed = self._process_series(selected, quota, process_one)
+                status, total, processed = self._process_series(selected, quota, process_one)
             self._finish(run_id, status, total, None, None)
             if status == "partial":
                 alerting.alert(
