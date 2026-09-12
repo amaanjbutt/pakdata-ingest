@@ -11,6 +11,11 @@ We record each cut-off as a series (`auction.<type>.<tenor>.cutoff_yield`, or
 sanctioned exception to the generic model). Offered/accepted amounts and
 bid-to-cover are left NULL for now: the 2026 SBP site redesign dropped the
 structured DMMD result tables that carried them, so they await a stable source.
+
+NOTE (2026-09-12): kibor.asp's T-Bill/PIB auction tables went stale after the
+redesign, so T-Bill & PIB cut-offs are now sourced from EasyData via the
+`derive_auctions` job (reliable pipeline + years of history). This job now keeps
+ONLY GIS / Ijara Sukuk cut-offs, which EasyData does not carry (see `parse`).
 """
 from __future__ import annotations
 
@@ -136,7 +141,16 @@ class SbpAuctionsJob(IngestionJob):
         return [FetchedFile(filename="auctions.html", content=content, when=date.today())]
 
     def parse(self, f: FetchedFile) -> list[Record]:
-        return parse_auctions_html(f.content.decode("utf-8", errors="replace"), f.when)
+        # T-Bill & PIB cut-offs are now sourced from EasyData via the `derive_auctions`
+        # job (reliable pipeline + deep history) — kibor.asp's auction tables stopped
+        # updating after the 2026 redesign. This job keeps ONLY GIS / Ijara Sukuk, which
+        # EasyData doesn't carry. If the page has tables but no GIS rows, return nothing
+        # (no_new_data) rather than raise — the scrape being stale must not alert.
+        try:
+            recs = parse_auctions_html(f.content.decode("utf-8", errors="replace"), f.when)
+        except ValueError:
+            return []
+        return [r for r in recs if ".gis." in r.series_id]
 
     def upsert(self, validated: list[tuple[Record, bool]]) -> int:
         """Write the cut-off series to observations (via the base class) and mirror
