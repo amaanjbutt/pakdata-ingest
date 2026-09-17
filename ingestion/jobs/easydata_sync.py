@@ -62,7 +62,14 @@ EASYDATA_CONCURRENCY = max(1, int(os.getenv("EASYDATA_CONCURRENCY", "1")))
 # refresh every run, even while the long tail drains behind them over days. Lower
 # number = higher priority; everything unlisted sorts last (9).
 _MODULE_PRIORITY = {
-    "forex": 0, "monetary": 1, "prices": 2, "external": 3, "real": 4,
+    # The visible flagships first, then the modules that are currently stale AND still
+    # have a source backlog to pull (debt/social/public-finance) — ahead of external's
+    # huge long-tail, whose module is already fresh (its newest series are current; the
+    # ~10k behind ones are low-value deep history). This drains the stale-module
+    # backlogs (small: ~1.4k series) within a run or two instead of weeks behind external.
+    "forex": 0, "monetary": 1, "prices": 2,
+    "debt": 3, "social": 4, "public-finance": 5,
+    "external": 6, "real": 7,
 }
 
 
