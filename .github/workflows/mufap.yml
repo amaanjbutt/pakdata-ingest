@@ -39,6 +39,10 @@ jobs:
       (github.event_name == 'schedule' && github.event.schedule == '0 14,17 * * 1-5') ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.set == 'daily')
     runs-on: ubuntu-latest
+    # One runner's blip (a transient VPS tunnel timeout, a single 403) must NOT fail the
+    # whole matrix run and email a false "run failed" — most runners probe-skip or ingest
+    # fine. The VPS hourly staleness_check is the real "MUFAP data is stale" alert.
+    continue-on-error: true
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -104,6 +108,7 @@ jobs:
       (github.event_name == 'schedule' && github.event.schedule == '0 3 * * 6') ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.set == 'weekly')
     runs-on: ubuntu-latest
+    continue-on-error: true  # see daily: a single runner's failure must not email a false alarm
     timeout-minutes: 45
     strategy:
       fail-fast: false
