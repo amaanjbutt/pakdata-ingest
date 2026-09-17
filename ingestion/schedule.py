@@ -51,6 +51,11 @@ SCHEDULES: list[Schedule] = [
              expected_interval=timedelta(days=9)),
     Schedule("cost_of_living", {"hour": 11, "minute": 30, "day_of_week": "sat"},
              expected_interval=timedelta(days=9)),
+    # Derived auction cut-offs (T-Bill/PIB) from the EasyData SIRTBIL/SIRPIBS series —
+    # reliable + deep history vs the stuck kibor.asp scrape. Pure DB derivation; run
+    # daily after the EasyData syncs land (GHA 01/13 + 07/19 UTC).
+    Schedule("derive_auctions", {"hour": 9, "minute": 0},
+             expected_interval=timedelta(days=14)),
     # MUFAP jobs are NO LONGER scheduled on the VPS. MUFAP's Cloudflare hard-blocks the
     # VPS WARP egress (the whole 104.28.x WARP range → "you have been blocked"; rotation
     # can't escape it), so they now run on GitHub Actions from Azure runner IPs (see
@@ -92,13 +97,18 @@ MONITORED_EXTERNAL: list[Schedule] = [
     # MUFAP now runs on GitHub Actions (Azure IPs) — see mufap.yml in pakdata-ingest.
     # Not scheduled here; monitored so a persistent GHA/MUFAP outage still surfaces via
     # the hourly staleness_check. Intervals match the old VPS cadence.
-    Schedule("mufap_fund_navs", {}, expected_interval=timedelta(days=4)),
-    Schedule("mufap_fund_returns", {}, expected_interval=timedelta(days=4)),
-    Schedule("mufap_fund_stats", {}, expected_interval=timedelta(days=4)),
-    Schedule("mufap_pkrv", {}, expected_interval=timedelta(days=4)),
-    Schedule("mufap_debt_prices", {}, expected_interval=timedelta(days=4)),
-    Schedule("mufap_debt_trades", {}, expected_interval=timedelta(days=4)),
-    Schedule("mufap_tfc_valuations", {}, expected_interval=timedelta(days=4)),
+    # MUFAP runs on the GHA IP-retry matrix — only ~1/5 Azure IPs reach MUFAP, so
+    # ingestion lands probabilistically and a normal unlucky stretch can span several
+    # days (weekday-only cron + IP luck). 7 days tolerates that variance so staleness
+    # only fires on a genuinely concerning gap, not routine bad luck. (Was 4 → false
+    # staleness alerts on self-healing gaps.)
+    Schedule("mufap_fund_navs", {}, expected_interval=timedelta(days=7)),
+    Schedule("mufap_fund_returns", {}, expected_interval=timedelta(days=7)),
+    Schedule("mufap_fund_stats", {}, expected_interval=timedelta(days=7)),
+    Schedule("mufap_pkrv", {}, expected_interval=timedelta(days=7)),
+    Schedule("mufap_debt_prices", {}, expected_interval=timedelta(days=7)),
+    Schedule("mufap_debt_trades", {}, expected_interval=timedelta(days=7)),
+    Schedule("mufap_tfc_valuations", {}, expected_interval=timedelta(days=7)),
     Schedule("mufap_fund_portfolio", {}, expected_interval=timedelta(days=10)),
 ]
 
