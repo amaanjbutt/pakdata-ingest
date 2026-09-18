@@ -56,6 +56,15 @@ DEFAULT_QUOTA_PATH = os.getenv("EASYDATA_QUOTA_PATH", "./data/easydata_quota.jso
 # it just stops idling between calls.
 EASYDATA_CONCURRENCY = max(1, int(os.getenv("EASYDATA_CONCURRENCY", "1")))
 
+# Wall-clock budget for one run. If EasyData's server is slow/erroring (503s + 30s
+# timeouts, which it periodically is), the ~226-dataset meta sweep can grind for hours
+# and blow past the GHA job timeout — the run then gets KILLED mid-sweep, never writes a
+# terminal status, and leaves a zombie 'running' row that stuck_run_check reaps 12h later
+# (with an alert). This deadline makes the run stop CLEANLY as 'partial' well before the
+# runner timeout, so it always finishes with a terminal status. Default 20 min (GHA job
+# timeout is 30/60 min → comfortable headroom).
+RUN_BUDGET_SECONDS = int(os.getenv("EASYDATA_RUN_BUDGET_SECONDS", "1200"))
+
 # Flagship-first: a run is quota-/time-capped and usually stops 'partial' long
 # before the ~22.6k-series backlog is drained. Pull the economically-visible
 # modules FIRST so forex/monetary/CPI (the series users and the landing tape see)
@@ -254,10 +263,14 @@ class EasyDataSyncJob(IngestionJob):
             db.execute("UPDATE series SET easydata_last_refresh=%s WHERE id=%s", (refresh, series_id))
 
     def _select_incremental(
-        self, series: list[EasyDataSeries], quota: QuotaCounter
+        self, series: list[EasyDataSeries], quota: QuotaCounter,
+        deadline: float | None = None,
     ) -> tuple[list[EasyDataSeries], dict[str, str | None]]:
         """Pick only series whose source Last Refresh Date advanced. Series without
-        a known dataset code can't be cheap-checked and are always included."""
+        a known dataset code can't be cheap-checked and are always included.
+
+        Stops the meta sweep at `deadline` (wall-clock) so a slow/erroring EasyData
+        server can't hang the whole run — we pull whatever advanced datasets we found."""
         to_pull: list[EasyDataSeries] = []
         refresh_map: dict[str, str | None] = {}
         by_code: dict[str, list[EasyDataSeries]] = defaultdict(list)
@@ -269,6 +282,10 @@ class EasyDataSyncJob(IngestionJob):
         ordered = sorted(by_code.items(),
                          key=lambda kv: min(_module_priority(s) for s in kv[1]))
         for code, members in ordered:
+            if deadline is not None and time.time() > deadline:
+                logging.getLogger("pakdata.ingest").warning(
+                    "%s: meta sweep hit time budget — pulling what advanced so far", self.name)
+                break  # slow/erroring source; don't hang past the runner timeout
             if not quota.allow():
                 break  # out of budget for meta checks; pull what we already have
             try:
@@ -308,6 +325,7 @@ class EasyDataSyncJob(IngestionJob):
         series_list: list[EasyDataSeries],
         quota: QuotaCounter,
         process_one: Callable[[EasyDataSeries], int],
+        deadline: float | None = None,
     ) -> tuple[str, int, int]:
         """Loop series honoring the quota gate. Returns (status, rows, processed).
         Pure control flow — process_one does the IO — so it is unit-testable.
@@ -318,6 +336,9 @@ class EasyDataSyncJob(IngestionJob):
         total = processed = failed = 0
         partial = False
         for s in series_list:
+            if deadline is not None and time.time() > deadline:
+                partial = True
+                break  # stop cleanly at the time budget (don't hang past runner timeout)
             if not quota.allow():
                 partial = True
                 break
@@ -350,6 +371,7 @@ class EasyDataSyncJob(IngestionJob):
         backfill: bool,
         refresh_map: dict[str, str | None],
         workers: int,
+        deadline: float | None = None,
     ) -> tuple[str, int, int]:
         """Same contract as _process_series, but fetches up to `workers` series in
         parallel. The slow part is the ~3s HTTP round-trip; parse/upsert are fast and
@@ -422,6 +444,9 @@ class EasyDataSyncJob(IngestionJob):
             for s in series_list:
                 if stop.is_set():
                     break
+                if deadline is not None and time.time() > deadline:
+                    agg["stopped"] = True  # time budget hit → stop cleanly as partial
+                    break
                 inflight.add(ex.submit(work, s))
                 if len(inflight) >= workers * 2:  # bounded queue: don't submit all 22k at once
                     _, inflight = wait(inflight, return_when=FIRST_COMPLETED)
@@ -450,23 +475,27 @@ class EasyDataSyncJob(IngestionJob):
                 else QuotaCounter(self.quota_path)
             )
             series = load_series()
+            # Wall-clock deadline so the run always finishes with a terminal status
+            # (partial) even if EasyData is slow/erroring — never hangs to the runner
+            # timeout and leaves a zombie 'running' row.
+            deadline = time.time() + RUN_BUDGET_SECONDS
 
             if backfill:
                 selected, refresh_map = self._select_backfill(series), {}
             else:
-                selected, refresh_map = self._select_incremental(series, quota)
+                selected, refresh_map = self._select_incremental(series, quota, deadline)
             if limit is not None:
                 selected = selected[:limit]
 
             if EASYDATA_CONCURRENCY > 1:
                 status, total, processed = self._process_series_concurrent(
-                    selected, quota, backfill, refresh_map, EASYDATA_CONCURRENCY
+                    selected, quota, backfill, refresh_map, EASYDATA_CONCURRENCY, deadline
                 )
             else:
                 def process_one(s: EasyDataSeries) -> int:
                     return self._pull_one(s, quota, backfill, refresh_map.get(s.easydata_key))
 
-                status, total, processed = self._process_series(selected, quota, process_one)
+                status, total, processed = self._process_series(selected, quota, process_one, deadline)
             self._finish(run_id, status, total, None, None)
             if status == "partial":
                 alerting.alert(
