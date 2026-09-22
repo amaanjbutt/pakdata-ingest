@@ -112,6 +112,12 @@ def _is_rate_limited(exc: Exception) -> bool:
     return "429" in str(exc)
 
 
+def _is_unauthorized(exc: Exception) -> bool:
+    """True for an EasyData HTTP 401 — an expired or invalid API key. When this
+    happens ingestion silently degrades to 0 rows, so we surface it as an alert."""
+    return "401" in str(exc)
+
+
 # ---- pure parsing (unchanged) -----------------------------------------------
 
 def _col_index(columns: list[str], name: str) -> int:
@@ -166,6 +172,9 @@ class EasyDataSyncJob(IngestionJob):
         # First key is the default/fallback for single-counter paths and redaction.
         self.api_key = self.api_keys[0] if self.api_keys else None
         self.quota_path = quota_path
+        # Dedup the "API key rejected (401)" alert to once per run (a fresh
+        # process/run resets it) so an expired key can't email per series.
+        self._alerted_401 = False
 
     # ---- helpers ------------------------------------------------------------
 
@@ -236,6 +245,15 @@ class EasyDataSyncJob(IngestionJob):
             try:
                 return self.http_get(build_url(key))
             except Exception as exc:  # noqa: BLE001
+                if _is_unauthorized(exc) and not self._alerted_401:
+                    self._alerted_401 = True
+                    alerting.alert(
+                        f"{self.name}: EasyData API key rejected (401)",
+                        "An EasyData API key returned 401 — it is expired or invalid, "
+                        "so EasyData ingestion is degrading. Mint a replacement key and "
+                        "update EASYDATA_API_KEYS in BOTH GHA repos (amaanjbutt + amaanu01) "
+                        "and the VPS .env. " + self.redact(str(exc)),
+                    )
                 if not _is_rate_limited(exc):
                     raise
                 last_exc = exc
