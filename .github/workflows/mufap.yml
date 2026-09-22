@@ -21,6 +21,7 @@ on:
   schedule:
     - cron: '0 14,17 * * 1-5'   # light fund/debt jobs — weekdays 19:00 & 22:00 PKT
     - cron: '0 3 * * 6'          # portfolio (heavy monthly snapshot) — Sat 08:00 PKT
+    - cron: '0 3 * * 3'          # portfolio retry — Wed 08:00 PKT (probabilistic MUFAP IP-luck insurance)
   workflow_dispatch:
     inputs:
       set:
@@ -105,7 +106,7 @@ jobs:
           echo "::notice::this runner ingested MUFAP"
   weekly:
     if: >-
-      (github.event_name == 'schedule' && github.event.schedule == '0 3 * * 6') ||
+      (github.event_name == 'schedule' && startsWith(github.event.schedule, '0 3 ')) ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.set == 'weekly')
     runs-on: ubuntu-latest
     continue-on-error: true  # see daily: a single runner's failure must not email a false alarm
@@ -114,7 +115,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        attempt: [1, 2, 3, 4, 5, 6, 7, 8]
+        attempt: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
