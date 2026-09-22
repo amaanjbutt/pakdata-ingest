@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from bs4 import BeautifulSoup
 
@@ -22,9 +22,27 @@ from app import db
 from ingestion import alerting, storage
 from ingestion.framework import IngestionJob
 
-PAYOUTS_URL = "https://www.mufap.com.pk/Industry/IndustryStatDaily?tab=4"
+# The payouts report is date-ranged: with datefrom/datetill it returns every
+# payout event in the window (not just the latest per fund). We fetch a rolling
+# recent window each run so ongoing capture stays deep; deep history is seeded
+# once by scripts/backfill_payouts.py.
+PAYOUTS_BASE = "https://www.mufap.com.pk/Industry/IndustryStatDaily?tab=4"
+PAYOUTS_WINDOW_DAYS = 150
 EXPENSES_URL = "https://www.mufap.com.pk/Industry/IndustryStatDaily?tab=5"
 _FUNDID_RE = re.compile(r"FundID=(\d+)")
+
+
+# TER above this (%) is a new-fund artifact (fixed costs / tiny or near-zero
+# assets, or an early-fiscal-year annualization), not a real ongoing expense
+# ratio — nulled rather than published. Real open-end fund TERs top out ~14.5%,
+# so 15 is a safe ceiling: it drops the artifacts (a govt-securities plan at 17%,
+# pension funds at 78-88%, a Rs-billions MTD glitch) without touching legit funds.
+_MAX_TER_PCT = 15.0
+
+
+def payouts_url(datefrom: date, datetill: date) -> str:
+    return (f"{PAYOUTS_BASE}&AMCId=null&fundId=null"
+            f"&datefrom={datefrom.isoformat()}&datetill={datetill.isoformat()}")
 
 
 @dataclass
@@ -123,7 +141,8 @@ class MufapFundStatsJob(IngestionJob):
         run_id = self._start_run()
         try:
             today = date.today()
-            pay_html = self.http_get(PAYOUTS_URL)
+            pay_url = payouts_url(today - timedelta(days=PAYOUTS_WINDOW_DAYS), today)
+            pay_html = self.http_get(pay_url)
             storage.archive(self.source, self.name, today, "payouts.html", pay_html)
             exp_html = self.http_get(EXPENSES_URL)
             raw = storage.archive(self.source, self.name, today, "expenses.html", exp_html)
@@ -138,7 +157,7 @@ class MufapFundStatsJob(IngestionJob):
                     "payouts": n_pay, "expenses": n_exp}
         except Exception as exc:
             self._finish(run_id, "failed", 0, str(exc), None)
-            alerting.alert(f"{self.name}: job failed", str(exc))
+            alerting.alert_unless_403(f"{self.name}: job failed", str(exc))
             raise
 
     def _known_fund_ids(self, cur, ids: list[int]) -> set[int]:
@@ -174,6 +193,15 @@ class MufapFundStatsJob(IngestionJob):
                 for r in rows:
                     if r.obs_date is None or r.fund_id not in known:
                         continue
+                    # A brand-new fund with tiny assets has an astronomical
+                    # annualized TER (fixed costs / near-zero NAV) — real but
+                    # meaningless. Null TERs above a sane cap so we never publish
+                    # a "59% expense ratio"; keep the row for its MF/S&M.
+                    ter_mtd = r.ter_mtd if (r.ter_mtd is None or r.ter_mtd <= _MAX_TER_PCT) else None
+                    ter_ytd = r.ter_ytd if (r.ter_ytd is None or r.ter_ytd <= _MAX_TER_PCT) else None
+                    # Skip rows with no usable expense data at all (0 = falsy).
+                    if not any((ter_mtd, ter_ytd, r.mf, r.sm)):
+                        continue
                     cur.execute(
                         """
                         INSERT INTO fund_expenses (fund_id, obs_date, ter_mtd, ter_ytd, mf, sm, revised_at)
@@ -182,7 +210,7 @@ class MufapFundStatsJob(IngestionJob):
                             ter_mtd=EXCLUDED.ter_mtd, ter_ytd=EXCLUDED.ter_ytd,
                             mf=EXCLUDED.mf, sm=EXCLUDED.sm, revised_at=now()
                         """,
-                        (r.fund_id, r.obs_date, r.ter_mtd, r.ter_ytd, r.mf, r.sm),
+                        (r.fund_id, r.obs_date, ter_mtd, ter_ytd, r.mf, r.sm),
                     )
                     n += 1
         return n
