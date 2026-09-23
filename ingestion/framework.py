@@ -159,9 +159,9 @@ class IngestionJob:
                 prev, prev_date = self._prev_value(r.series_id, r.dims)
                 # Only flag a large step for records that EXTEND the series past its
                 # current latest date. Comparing RE-INGESTED history against the newest
-                # stored value (e.g. 2017 CPI 107 vs 2026 CPI 293) is a false positive,
-                # and a backfill/full-history re-parse otherwise fires one alert per
-                # historical month.
+                # stored value (e.g. 2017 CPI 107 vs 2026 CPI 293) is a false positive —
+                # not an anomaly — and jobs like pbs_cpi_monthly re-parse full history
+                # every run, which otherwise fires one alert per historical month.
                 if (prev is not None and prev_date is not None
                         and r.obs_date > prev_date and abs(r.value - prev) > float(step)):
                     flagged = True
@@ -198,6 +198,7 @@ class IngestionJob:
         if not validated:
             return 0
         n = 0
+        nonzero_series: set[str] = set()
         with db.connection() as conn:
             with conn.cursor() as cur:
                 for r, flagged in validated:
@@ -219,6 +220,8 @@ class IngestionJob:
                         ),
                     )
                     n += 1
+                    if r.value is not None and r.value != 0:
+                        nonzero_series.add(r.series_id)
                 # Keep series.first_date/last_date fresh for /status and meta.
                 bounds_by_series: dict[str, tuple[date, date]] = {}
                 for r, _ in validated:
@@ -232,6 +235,14 @@ class IngestionJob:
                         "UPDATE series SET last_date = GREATEST(COALESCE(last_date, %s), %s), "
                         "first_date = LEAST(COALESCE(first_date, %s), %s) WHERE id = %s",
                         (maxd, maxd, mind, mind, sid),
+                    )
+                # Self-heal: a series auto-hidden for being all-zero (information-free)
+                # comes back the moment it publishes a real, non-zero value.
+                if nonzero_series:
+                    cur.execute(
+                        "UPDATE series SET is_active = true "
+                        "WHERE id = ANY(%s) AND is_active = false",
+                        (list(nonzero_series),),
                     )
         return n
 
@@ -301,7 +312,12 @@ class IngestionJob:
         except Exception as exc:
             msg = self.redact(str(exc))
             self._finish(run_id, "failed", 0, msg, raw_path)
-            alerting.alert(f"{self.name}: job failed", msg)
+            # A transient Cloudflare 403 (MUFAP via WARP) self-heals: the host-side
+            # watchdog scripts/mufap_403_autoheal.sh rotates WARP + re-runs within
+            # ~20 min, and the staleness checker alerts if it ever fails to recover.
+            # So skip the immediate per-run email for a 403 — it's noise on a failure
+            # that fixes itself. All other failures still alert right away.
+            alerting.alert_unless_403(f"{self.name}: job failed", msg)
             raise
 
     def _finish(self, run_id: int, status: str, rows: int, error: str | None, raw: str | None):
