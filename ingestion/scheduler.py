@@ -19,7 +19,7 @@ import os
 import random
 import socket
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import redis
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -39,6 +39,9 @@ STALENESS_CHECK_HOURS = 1
 # A run still 'running' after this long is presumed dead (killed process, crashed
 # container). Long backfills legitimately run for hours, so keep this generous.
 STUCK_RUN_HOURS = int(os.getenv("STUCK_RUN_HOURS", "12"))
+# staleness_check runs hourly; without a throttle a stale job would email every
+# hour until it recovers. Alert once per job per window, re-arm on recovery.
+STALE_ALERT_TTL = int(os.getenv("STALE_ALERT_TTL", str(24 * 3600)))
 
 _redis: redis.Redis | None = None
 
@@ -128,11 +131,15 @@ def _last_run_rows() -> dict[str, dict]:
 
 
 def _last_success_at() -> dict[str, datetime]:
+    # A 'partial' run only counts as fresh if it actually made progress
+    # (rows_upserted > 0). A partial that ingested nothing — e.g. an EasyData run
+    # that 429'd on an exhausted quota and stopped clean — must NOT mask staleness.
     rows = db.query(
         """
         SELECT DISTINCT ON (job_name) job_name, started_at
         FROM ingestion_runs
-        WHERE status IN ('success', 'no_new_data', 'partial')
+        WHERE status IN ('success', 'no_new_data')
+           OR (status = 'partial' AND rows_upserted > 0)
         ORDER BY job_name, started_at DESC
         """
     )
@@ -175,6 +182,32 @@ def stuck_run_check() -> list[int]:
     return reaped
 
 
+def _stale_alert_key(job_name: str) -> str:
+    return f"pakdata:stalealert:{job_name}"
+
+
+def _alert_stale(job_name: str, title: str, msg: str) -> None:
+    """Alert on a stale job at most once per STALE_ALERT_TTL. Fails OPEN: if Redis
+    is unreachable we alert anyway (a missed alert is worse than a duplicate)."""
+    try:
+        first = get_redis().set(_stale_alert_key(job_name), "1", nx=True, ex=STALE_ALERT_TTL)
+    except Exception as exc:
+        log.warning("stale-alert throttle unavailable (%s); alerting anyway", exc)
+        first = True
+    if first:
+        alerting.alert(title, msg)
+    else:
+        log.info("staleness: %s still stale (alert throttled)", job_name)
+
+
+def _clear_stale_alert(job_name: str) -> None:
+    """Re-arm the alert once a job is fresh again, so the next lapse alerts at once."""
+    try:
+        get_redis().delete(_stale_alert_key(job_name))
+    except Exception:
+        pass
+
+
 def staleness_check() -> list[str]:
     """Alert on jobs whose freshness has lapsed. Returns the list of stale job
     names (also useful for tests). Only checks jobs that are actually
@@ -194,7 +227,8 @@ def staleness_check() -> list[str]:
             else last_success.get(job_name)
         if ref is None:
             stale.append(job_name)
-            alerting.alert(
+            _alert_stale(
+                job_name,
                 f"staleness: {job_name} has never succeeded",
                 f"No successful run on record; expected every {interval}.",
             )
@@ -202,10 +236,13 @@ def staleness_check() -> list[str]:
         age = now - ref
         if age > interval:
             stale.append(job_name)
-            alerting.alert(
+            _alert_stale(
+                job_name,
                 f"staleness: {job_name} is stale",
                 f"Last fresh run {age} ago (> expected {interval}).",
             )
+        else:
+            _clear_stale_alert(job_name)
     if not stale:
         log.info("staleness check: all %d registered scheduled jobs fresh", len(intervals))
     return stale
@@ -217,6 +254,58 @@ def health_check() -> dict:
     reaped = stuck_run_check()
     stale = staleness_check()
     return {"reaped": reaped, "stale": stale}
+
+
+# EasyData API keys expire and must be rotated by hand (no auto-provision). When
+# one lapses, ingestion silently degrades to 0 rows (a 401 per call). This surfaces
+# it ahead of time from known expiry DATES — never key values.
+_KEY_EXPIRY_WARN_DAYS = (21, 14, 7, 3, 1)
+
+
+def key_expiry_check() -> list[str]:
+    """Daily: warn ahead of an EasyData API key expiry, then daily once it lapses.
+
+    Reads `EASYDATA_KEY_EXPIRIES` = comma-separated `label:YYYY-MM-DD` (expiry
+    dates only, no secrets). Alerts at 21/14/7/3/1 days out and every day once
+    expired. Returns the labels warned (also useful for tests)."""
+    raw = os.getenv("EASYDATA_KEY_EXPIRIES", "").strip()
+    if not raw:
+        return []
+    today = datetime.now(timezone.utc).date()
+    warned: list[str] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        label, sep, datestr = part.rpartition(":")
+        try:
+            exp = date.fromisoformat((datestr if sep else label).strip())
+        except ValueError:
+            log.warning("key_expiry_check: bad entry %r (want label:YYYY-MM-DD)", part)
+            continue
+        name = label.strip() if sep and label.strip() else exp.isoformat()
+        days = (exp - today).days
+        if days < 0:
+            warned.append(name)
+            alerting.alert(
+                f"EasyData key EXPIRED: {name}",
+                f"Key '{name}' expired {-days}d ago ({exp}); EasyData ingestion is "
+                "degrading. Mint a replacement and update EASYDATA_API_KEYS in BOTH "
+                "GHA repos (amaanjbutt + amaanu01) and the VPS .env, plus "
+                "EASYDATA_KEY_EXPIRIES here.",
+            )
+        elif days in _KEY_EXPIRY_WARN_DAYS:
+            warned.append(name)
+            alerting.alert(
+                f"EasyData key expiring in {days}d: {name}",
+                f"Key '{name}' expires {exp} ({days}d away). Mint a replacement "
+                "before then and update EASYDATA_API_KEYS in both GHA repos + the "
+                "VPS .env, plus EASYDATA_KEY_EXPIRIES here.",
+            )
+    if not warned:
+        log.info("key_expiry_check: no EasyData key within %dd of expiry",
+                 max(_KEY_EXPIRY_WARN_DAYS))
+    return warned
 
 
 # ---- wiring ------------------------------------------------------------------
@@ -247,6 +336,15 @@ def build_scheduler() -> BlockingScheduler:
         name="health_check",
     )
     log.info("scheduled %-22s cron=hourly (stuck-run reap + staleness)", "health_check")
+
+    sched.add_job(
+        key_expiry_check,
+        trigger=CronTrigger(hour=8, minute=5, timezone=settings.timezone),  # daily
+        id="key_expiry_check",
+        name="key_expiry_check",
+    )
+    log.info("scheduled %-22s cron=daily 08:05 (EasyData key-expiry warning)",
+             "key_expiry_check")
     return sched
 
 
