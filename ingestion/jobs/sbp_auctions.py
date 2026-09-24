@@ -129,7 +129,26 @@ def parse_auctions_html(html: str, fallback_date: date | None = None) -> list[Re
     return records
 
 
-_SID_RE = re.compile(r"^auction\.(tbill|pib|gis)\.([0-9]+[wmy])\.(cutoff_yield|cutoff_price)$")
+_SID_RE = re.compile(
+    r"^(?:rates\.)?auction\.(tbill|pib|gis)\.([0-9]+[wmy])\.(cutoff_yield|cutoff_price)$"
+)
+
+
+def drop_unchanged_undated(
+    recs: list[Record], fetch_day: date, last_values: dict[str, float]
+) -> list[Record]:
+    """kibor.asp's GIS tables carry no auction date, so those rows fall back to the
+    fetch day. Re-emitting them every run stamped the SAME stale cut-off onto every
+    calendar day (52 daily copies of two auctions, 2026-07/09). Like sbp_policy_rate,
+    only emit an undated row when its value differs from the last stored one, so the
+    series gets one point per actual auction (dated the day we first saw it). Rows
+    with a real date parsed from the page are kept as-is (idempotent upsert)."""
+    out: list[Record] = []
+    for r in recs:
+        if r.obs_date == fetch_day and last_values.get(r.series_id) == r.value:
+            continue
+        out.append(r)
+    return out
 
 
 class SbpAuctionsJob(IngestionJob):
@@ -150,7 +169,21 @@ class SbpAuctionsJob(IngestionJob):
             recs = parse_auctions_html(f.content.decode("utf-8", errors="replace"), f.when)
         except ValueError:
             return []
-        return [r for r in recs if ".gis." in r.series_id]
+        recs = [r for r in recs if ".gis." in r.series_id]
+        return drop_unchanged_undated(recs, f.when, self._last_values([r.series_id for r in recs]))
+
+    @staticmethod
+    def _last_values(series_ids: list[str]) -> dict[str, float]:
+        if not series_ids:
+            return {}
+        rows = db.query(
+            """
+            SELECT DISTINCT ON (series_id) series_id, value FROM observations
+            WHERE series_id = ANY(%s) ORDER BY series_id, obs_date DESC
+            """,
+            (series_ids,),
+        )
+        return {r["series_id"]: float(r["value"]) for r in rows if r["value"] is not None}
 
     def upsert(self, validated: list[tuple[Record, bool]]) -> int:
         """Write the cut-off series to observations (via the base class) and mirror
