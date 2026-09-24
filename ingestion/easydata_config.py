@@ -41,7 +41,7 @@ def load_series() -> list[EasyDataSeries]:
                 description=s.get("description", ""),
                 unit=s.get("unit", ""),
                 frequency=s["frequency"],
-                source=s.get("source", "SBP-EasyData"),
+                source=s.get("source", "SBP"),
                 tier=s.get("tier", "basic"),
                 min_value=s.get("min_value"),
                 max_value=s.get("max_value"),
