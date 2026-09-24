@@ -62,9 +62,6 @@ SCHEDULES: list[Schedule] = [
     # `mufap.yml` in the pakdata-ingest repo — an IP-retry matrix, ~1/5 Azure IPs reach
     # MUFAP). They remain REGISTERED (for a manual `--force` fallback) and are MONITORED
     # for staleness below in MONITORED_EXTERNAL.
-    # ---- declared ahead of implementation (skipped until registered) ----------
-    Schedule("ecap_open_market", {"hour": "12,18"},
-             expected_interval=timedelta(days=2)),
     # PBS external trade: monthly release, published mid-month.
     Schedule("pbs_external_trade", {"hour": 14, "minute": 0, "day": "10-20"},
              expected_interval=timedelta(days=40)),
