@@ -108,6 +108,26 @@ def _find_header(tables: list[list[list]], cities: dict[str, str]) -> list[str] 
     return None
 
 
+# A city price this far from the same week's cross-city median is a PDF column
+# misread, not a real price (seen 2025-26: Bannu/Islamabad/Multan picked up 15.0
+# for loose ghee ~Rs 590/kg and 2.0 for 5-litre cooking oil ~Rs 2,865). Real
+# regional dispersion in the SPI stays well inside this band.
+OUTLIER_LOW, OUTLIER_HIGH = 0.3, 3.0
+
+
+def drop_city_outliers(city_vals: dict[str, float]) -> dict[str, float]:
+    """Drop city values implausibly far from the item's cross-city median for the
+    week, so a misparsed cell can't be stored or skew the derived national mean."""
+    if len(city_vals) < 5:
+        return city_vals
+    vals = sorted(city_vals.values())
+    mid = len(vals) // 2
+    med = vals[mid] if len(vals) % 2 else (vals[mid - 1] + vals[mid]) / 2
+    if med <= 0:
+        return city_vals
+    return {c: v for c, v in city_vals.items() if OUTLIER_LOW * med <= v <= OUTLIER_HIGH * med}
+
+
 def parse_spi_pdf(pdf_bytes: bytes, fallback_date: date | None = None) -> tuple[date, list[Record]]:
     """Parse an SPI Annexure PDF into (week_ended_date, records).
 
@@ -161,6 +181,7 @@ def parse_spi_pdf(pdf_bytes: bytes, fallback_date: date | None = None) -> tuple[
 
     records: list[Record] = []
     for item_id, city_vals in by_item.items():
+        city_vals = drop_city_outliers(city_vals)
         for city_key, val in city_vals.items():
             records.append(Record(item_id, obs_date, val, {"city": city_key}))
         if city_vals:  # derived unweighted national average across reporting cities
