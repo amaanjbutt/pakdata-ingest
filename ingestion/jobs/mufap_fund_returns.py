@@ -104,11 +104,10 @@ class MufapFundReturnsJob(IngestionJob):
             return {"status": "success", "rows": n, "funds": len(rows)}
         except Exception as exc:
             self._finish(run_id, "failed", 0, str(exc), None)
-            alerting.alert(f"{self.name}: job failed", str(exc))
+            alerting.alert_unless_403(f"{self.name}: job failed", str(exc))
             raise
 
     def _upsert(self, rows: list[ReturnRow]) -> int:
-        n = 0
         # A fund can appear in the returns feed before it exists in `funds` (the
         # NAV snapshot registers funds). Skip returns for funds we don't yet know,
         # rather than let one FK violation abort the whole batch.
@@ -116,27 +115,28 @@ class MufapFundReturnsJob(IngestionJob):
             row["fund_id"]
             for row in db.query("SELECT fund_id FROM funds")
         }
+        params = [
+            (r.fund_id, r.obs_date, r.rating, r.benchmark,
+             r.returns["ytd"], r.returns["mtd"], r.returns["d1"], r.returns["d15"],
+             r.returns["d30"], r.returns["d90"], r.returns["d180"], r.returns["d270"],
+             r.returns["d365"])
+            for r in rows if r.obs_date is not None and r.fund_id in known
+        ]
+        # Batched: written over the GHA->VPS SSH tunnel, where per-row RTT dominated.
         with db.connection() as conn:
             with conn.cursor() as cur:
-                for r in rows:
-                    if r.obs_date is None or r.fund_id not in known:
-                        continue
-                    rt = r.returns
-                    cur.execute(
-                        """
-                        INSERT INTO fund_returns (fund_id, obs_date, rating, benchmark,
-                            ytd, mtd, d1, d15, d30, d90, d180, d270, d365, revised_at)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now())
-                        ON CONFLICT (fund_id, obs_date) DO UPDATE SET
-                            rating=EXCLUDED.rating, benchmark=EXCLUDED.benchmark,
-                            ytd=EXCLUDED.ytd, mtd=EXCLUDED.mtd, d1=EXCLUDED.d1,
-                            d15=EXCLUDED.d15, d30=EXCLUDED.d30, d90=EXCLUDED.d90,
-                            d180=EXCLUDED.d180, d270=EXCLUDED.d270, d365=EXCLUDED.d365,
-                            revised_at=now()
-                        """,
-                        (r.fund_id, r.obs_date, r.rating, r.benchmark,
-                         rt["ytd"], rt["mtd"], rt["d1"], rt["d15"], rt["d30"],
-                         rt["d90"], rt["d180"], rt["d270"], rt["d365"]),
-                    )
-                    n += 1
-        return n
+                cur.executemany(
+                    """
+                    INSERT INTO fund_returns (fund_id, obs_date, rating, benchmark,
+                        ytd, mtd, d1, d15, d30, d90, d180, d270, d365, revised_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now())
+                    ON CONFLICT (fund_id, obs_date) DO UPDATE SET
+                        rating=EXCLUDED.rating, benchmark=EXCLUDED.benchmark,
+                        ytd=EXCLUDED.ytd, mtd=EXCLUDED.mtd, d1=EXCLUDED.d1,
+                        d15=EXCLUDED.d15, d30=EXCLUDED.d30, d90=EXCLUDED.d90,
+                        d180=EXCLUDED.d180, d270=EXCLUDED.d270, d365=EXCLUDED.d365,
+                        revised_at=now()
+                    """,
+                    params,
+                )
+        return len(params)
