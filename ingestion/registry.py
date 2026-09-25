@@ -7,6 +7,9 @@ Add every new job here once it subclasses `IngestionJob`.
 from __future__ import annotations
 
 from ingestion.framework import IngestionJob
+from ingestion.jobs.cost_of_living import CostOfLivingJob
+from ingestion.jobs.data_quality import DataQualityJob
+from ingestion.jobs.derive_auctions import DeriveAuctionsJob
 from ingestion.jobs.easydata_sync import EasyDataSyncJob
 from ingestion.jobs.mufap_fund_navs import MufapFundNavsJob
 from ingestion.jobs.mufap_fund_returns import MufapFundReturnsJob
@@ -31,6 +34,9 @@ from ingestion.jobs.sbp_sme_finance import SbpSmeFinanceJob
 JOBS: dict[str, type[IngestionJob]] = {
     SbpKiborJob.name: SbpKiborJob,
     PbsSpiWeeklyJob.name: PbsSpiWeeklyJob,
+    CostOfLivingJob.name: CostOfLivingJob,
+    DeriveAuctionsJob.name: DeriveAuctionsJob,
+    DataQualityJob.name: DataQualityJob,
     EasyDataSyncJob.name: EasyDataSyncJob,
     SbpPolicyRateJob.name: SbpPolicyRateJob,
     MufapPkrvJob.name: MufapPkrvJob,
