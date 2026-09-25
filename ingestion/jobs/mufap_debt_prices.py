@@ -112,6 +112,9 @@ def _rows(text: str) -> list[list[str]]:
     return [r for r in csv.reader(io.StringIO(text)) if any((c or "").strip() for c in r)]
 
 
+PRICE_MIN, PRICE_MAX = 50.0, 150.0
+
+
 # ---- floating-rate PIBs ------------------------------------------------------
 
 def parse_pkfrv_csv(text: str) -> list[PriceRow]:
@@ -121,8 +124,13 @@ def parse_pkfrv_csv(text: str) -> list[PriceRow]:
         code = (row[0] or "").strip()
         if not code or not re.match(r"^PIB", code, re.I):
             continue
+        price = _num(row[1]) if len(row) > 1 else None
+        # Prices are per 100 of face value. 11 files (2023-08..2024-07) carried an extra
+        # column and put Excel date serials (43251 = 2018-05-31) where the price sits.
+        if price is None or not (PRICE_MIN <= price <= PRICE_MAX):
+            continue
         out.append(PriceRow(code=code, security_type="pib_floating", sbp_code=None,
-                            price=_num(row[1]) if len(row) > 1 else None,
+                            price=price,
                             net_change=_num(row[2]) if len(row) > 2 else None))
     if not out:
         raise ValueError("no PIB floating-rate rows parsed from PKFRV CSV")
