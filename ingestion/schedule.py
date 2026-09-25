@@ -56,6 +56,12 @@ SCHEDULES: list[Schedule] = [
     # daily after the EasyData syncs land (GHA 01/13 + 07/19 UTC).
     Schedule("derive_auctions", {"hour": 9, "minute": 0},
              expected_interval=timedelta(days=14)),
+    # Nightly data-quality sweep (quarantine NAV spikes / impossible prices & yields,
+    # correct unambiguous SBP unit slips) after the MUFAP (19/22 PKT) + EasyData runs.
+    Schedule("data_quality", {"hour": 5, "minute": 30},
+             expected_interval=timedelta(days=3)),
+    Schedule("data_quality", {"hour": 12, "minute": 30},
+             expected_interval=timedelta(days=3)),
     # MUFAP jobs are NO LONGER scheduled on the VPS. MUFAP's Cloudflare hard-blocks the
     # VPS WARP egress (the whole 104.28.x WARP range → "you have been blocked"; rotation
     # can't escape it), so they now run on GitHub Actions from Azure runner IPs (see
