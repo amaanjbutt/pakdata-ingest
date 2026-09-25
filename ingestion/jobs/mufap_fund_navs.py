@@ -131,7 +131,22 @@ def parse_nav_history(json_text: str) -> list[tuple[date, float]]:
             out.append((d, float(v)))
         except (TypeError, ValueError):
             continue
-    return out
+    return clean_nav_series(out)
+
+
+def clean_nav_series(pts: list[tuple[date, float]]) -> list[tuple[date, float]]:
+    """Drop NAV points that can't be real: non-positive NAVs, and isolated spikes — a
+    point >40% away from BOTH neighbours while the neighbours agree within 10%
+    (MUFAP history has e.g. 1173.29 -> 1.00 -> 1187.88). Pure."""
+    pts = sorted((d, v) for d, v in pts if v is not None and v > 0)
+    keep: list[tuple[date, float]] = []
+    for i, (d, v) in enumerate(pts):
+        if 0 < i < len(pts) - 1:
+            pv, nv = pts[i - 1][1], pts[i + 1][1]
+            if abs(pv / nv - 1) < 0.10 and (v / pv > 1.4 or v / pv < 0.6):
+                continue
+        keep.append((d, v))
+    return keep
 
 
 class MufapFundNavsJob(IngestionJob):
@@ -218,7 +233,8 @@ class MufapFundNavsJob(IngestionJob):
         fund_params = [(r.fund_id, r.name, r.amc, r.sector, r.category,
                         r.inception_date, r.trustee) for r in rows]
         nav_params = [(r.fund_id, r.obs_date, r.nav, r.offer, r.repurchase,
-                       r.front_end, r.back_end) for r in rows if r.obs_date is not None]
+                       r.front_end, r.back_end) for r in rows
+                      if r.obs_date is not None and r.nav is not None and r.nav > 0]
         with db.connection() as conn:
             with conn.cursor() as cur:
                 cur.executemany(
