@@ -27,7 +27,10 @@ from ingestion.framework import IngestionJob
 # recent window each run so ongoing capture stays deep; deep history is seeded
 # once by scripts/backfill_payouts.py.
 PAYOUTS_BASE = "https://www.mufap.com.pk/Industry/IndustryStatDaily?tab=4"
-PAYOUTS_WINDOW_DAYS = 150
+# Runs daily, so 45 days of overlap is plenty (deep history: scripts/backfill_payouts.py).
+# Was 150: daily-dividend funds make that window thousands of rows, and the job
+# started blowing the 300s GHA per-job timeout (2026-09-19 -> 09-24, payouts+TER stale).
+PAYOUTS_WINDOW_DAYS = 45
 EXPENSES_URL = "https://www.mufap.com.pk/Industry/IndustryStatDaily?tab=5"
 _FUNDID_RE = re.compile(r"FundID=(\d+)")
 
@@ -141,19 +144,28 @@ class MufapFundStatsJob(IngestionJob):
         run_id = self._start_run()
         try:
             today = date.today()
-            pay_url = payouts_url(today - timedelta(days=PAYOUTS_WINDOW_DAYS), today)
-            pay_html = self.http_get(pay_url)
-            storage.archive(self.source, self.name, today, "payouts.html", pay_html)
+            # Expenses first (one small page) so a slow/blocked payouts report can
+            # never cost us the TER update; payouts failing leaves the run `partial`.
             exp_html = self.http_get(EXPENSES_URL)
             raw = storage.archive(self.source, self.name, today, "expenses.html", exp_html)
-
-            payouts = parse_payouts_html(pay_html.decode("utf-8", errors="replace"))
             expenses = parse_expenses_html(exp_html.decode("utf-8", errors="replace"))
-            n_pay = self._upsert_payouts(payouts)
             n_exp = self._upsert_expenses(expenses)
 
-            self._finish(run_id, "success", n_pay + n_exp, None, raw)
-            return {"status": "success", "rows": n_pay + n_exp,
+            n_pay, pay_err = 0, None
+            try:
+                pay_url = payouts_url(today - timedelta(days=PAYOUTS_WINDOW_DAYS), today)
+                pay_html = self.http_get(pay_url)
+                storage.archive(self.source, self.name, today, "payouts.html", pay_html)
+                payouts = parse_payouts_html(pay_html.decode("utf-8", errors="replace"))
+                n_pay = self._upsert_payouts(payouts)
+            except Exception as exc:  # noqa: BLE001 - keep the expenses we already stored
+                pay_err = f"payouts: {exc}"
+
+            status = "partial" if pay_err else "success"
+            self._finish(run_id, status, n_pay + n_exp, pay_err, raw)
+            if pay_err:
+                alerting.alert_unless_403(f"{self.name}: payouts failed", pay_err)
+            return {"status": status, "rows": n_pay + n_exp,
                     "payouts": n_pay, "expenses": n_exp}
         except Exception as exc:
             self._finish(run_id, "failed", 0, str(exc), None)
@@ -170,19 +182,20 @@ class MufapFundStatsJob(IngestionJob):
         with db.connection() as conn:
             with conn.cursor() as cur:
                 known = self._known_fund_ids(cur, [r.fund_id for r in rows])
-                for r in rows:
-                    if r.payout_date is None or r.fund_id not in known:
-                        continue
-                    cur.execute(
-                        """
-                        INSERT INTO fund_payouts (fund_id, payout_date, per_unit, ex_nav, revised_at)
-                        VALUES (%s,%s,%s,%s, now())
-                        ON CONFLICT (fund_id, payout_date) DO UPDATE SET
-                            per_unit=EXCLUDED.per_unit, ex_nav=EXCLUDED.ex_nav, revised_at=now()
-                        """,
-                        (r.fund_id, r.payout_date, r.per_unit, r.ex_nav),
-                    )
-                    n += 1
+                params = [(r.fund_id, r.payout_date, r.per_unit, r.ex_nav)
+                          for r in rows if r.payout_date is not None and r.fund_id in known]
+                # One pipelined batch, not a round trip per row: this job writes over an
+                # SSH tunnel from GitHub Actions, where per-row RTT dominated the runtime.
+                cur.executemany(
+                    """
+                    INSERT INTO fund_payouts (fund_id, payout_date, per_unit, ex_nav, revised_at)
+                    VALUES (%s,%s,%s,%s, now())
+                    ON CONFLICT (fund_id, payout_date) DO UPDATE SET
+                        per_unit=EXCLUDED.per_unit, ex_nav=EXCLUDED.ex_nav, revised_at=now()
+                    """,
+                    params,
+                )
+                n = len(params)
         return n
 
     def _upsert_expenses(self, rows: list[ExpenseRow]) -> int:
@@ -190,6 +203,7 @@ class MufapFundStatsJob(IngestionJob):
         with db.connection() as conn:
             with conn.cursor() as cur:
                 known = self._known_fund_ids(cur, [r.fund_id for r in rows])
+                params: list[tuple] = []
                 for r in rows:
                     if r.obs_date is None or r.fund_id not in known:
                         continue
@@ -202,15 +216,16 @@ class MufapFundStatsJob(IngestionJob):
                     # Skip rows with no usable expense data at all (0 = falsy).
                     if not any((ter_mtd, ter_ytd, r.mf, r.sm)):
                         continue
-                    cur.execute(
-                        """
-                        INSERT INTO fund_expenses (fund_id, obs_date, ter_mtd, ter_ytd, mf, sm, revised_at)
-                        VALUES (%s,%s,%s,%s,%s,%s, now())
-                        ON CONFLICT (fund_id, obs_date) DO UPDATE SET
-                            ter_mtd=EXCLUDED.ter_mtd, ter_ytd=EXCLUDED.ter_ytd,
-                            mf=EXCLUDED.mf, sm=EXCLUDED.sm, revised_at=now()
-                        """,
-                        (r.fund_id, r.obs_date, ter_mtd, ter_ytd, r.mf, r.sm),
-                    )
-                    n += 1
+                    params.append((r.fund_id, r.obs_date, ter_mtd, ter_ytd, r.mf, r.sm))
+                cur.executemany(
+                    """
+                    INSERT INTO fund_expenses (fund_id, obs_date, ter_mtd, ter_ytd, mf, sm, revised_at)
+                    VALUES (%s,%s,%s,%s,%s,%s, now())
+                    ON CONFLICT (fund_id, obs_date) DO UPDATE SET
+                        ter_mtd=EXCLUDED.ter_mtd, ter_ytd=EXCLUDED.ter_ytd,
+                        mf=EXCLUDED.mf, sm=EXCLUDED.sm, revised_at=now()
+                    """,
+                    params,
+                )
+                n = len(params)
         return n
