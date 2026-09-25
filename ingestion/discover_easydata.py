@@ -251,31 +251,128 @@ def _sig_tokens(s: str) -> set[str]:
     return {t for t in re.findall(r"[a-z0-9]+", s.lower()) if t not in _STOP and len(t) > 2}
 
 
+# SBP-IBA Consumer Confidence Survey. SBP publishes per-question response shares as
+# "Q<n> ..." with NO question text (the description only links an Urdu questionnaire),
+# so 2,000+ series read as nonsense ("Q1 Bhakkar Negative Percentage"). The mapping was
+# recovered 2026-09-25 by correlating each question's (positive - negative) share with the
+# NAMED question indices in TS_GP_RL_CCSIND_M: |r| >= 0.9986 for all 18 questions.
+# (Q6 and Q18 are numeric questions and have no share series.)
+CCS_QUESTIONS = {
+    1: "household financial position vs six months ago",
+    2: "household financial position in the next six months",
+    3: "general economic conditions vs six months ago",
+    4: "general economic conditions over the next six months",
+    5: "prices of daily-use items in the next six months",
+    7: "food prices vs six months ago",
+    8: "food prices in the next six months",
+    9: "energy prices vs six months ago",
+    10: "energy prices in the next six months",
+    11: "non-food, non-energy prices vs six months ago",
+    12: "non-food, non-energy prices in the next six months",
+    13: "household income next year vs this year",
+    14: "whether now is a good time to buy durable household goods",
+    15: "buying durable household goods in the next six months",
+    16: "buying a car or motorcycle in the next six months",
+    17: "whether now is a good time to buy or build a house",
+    19: "unemployment in the next six months",
+    20: "interest rates in the next six months",
+}
+_CCS_STRATA_RE = re.compile(r"^Q(\d+)\s+(.+?)\s+(Positive|Negative)\s+Percentage$", re.I)
+_CCS_NATIONAL_RE = re.compile(r"^Q(\d+)\s+Share of (Positive|Negative) Responses$", re.I)
+
+
+def humanize_ccs(leaf: str | None) -> tuple[str, str] | None:
+    """(name, description) for a consumer-confidence question-share series, or None."""
+    lf = _strip_html(leaf)
+    m = _CCS_STRATA_RE.match(lf)
+    where = None
+    if m:
+        qn, where, pol = int(m.group(1)), m.group(2).strip(), m.group(3).lower()
+    else:
+        m = _CCS_NATIONAL_RE.match(lf)
+        if not m:
+            return None
+        qn, pol = int(m.group(1)), m.group(2).lower()
+    q = CCS_QUESTIONS.get(qn)
+    if not q:
+        return None
+    subject = where if where else "Pakistan"
+    name = f"{subject} — consumer confidence: {q} (share of {pol} responses, %)"
+    desc = (f"SBP-IBA Consumer Confidence Survey, question Q{qn} (“{q}”): the share of "
+            f"respondents{' in ' + where if where else ''} giving a {pol} answer, in percent, monthly. "
+            "SBP classes answers as positive (favourable) or negative (unfavourable); for price, "
+            "interest-rate and unemployment questions an unfavourable answer means expecting a rise. "
+            "Net balance = positive share minus negative share.")
+    return name, desc
+
+
+# SBP publishes many leaf names in internal shorthand. Expand the recurring codes so a
+# name is readable on its own (the raw SBP wording stays in the description).
+_APP_DEP_RE = re.compile(
+    r"^App \(\+\)\s*/\s*Dep \(-\)\s*(Average|Month End) Exchange rate of (Pak Rupees|US Dollar) per (.+?)\s*$", re.I)
+
+
+def expand_sbp_jargon(name: str) -> str:
+    s = name
+    m = _APP_DEP_RE.match(s.split(" \u2014 ")[0])
+    if m:
+        basis = "average rate" if m.group(1).lower() == "average" else "month-end rate"
+        base = "Rupee" if m.group(2).lower().startswith("pak") else "US dollar"
+        return (f"{base} vs {m.group(3).strip()}: monthly appreciation (+) / depreciation (-), % "
+                f"({basis})")
+    s = re.sub(r"^BOP Services\s*-\s*", "Services trade: ", s)
+    s = re.sub(r"^BOP\s*-\s*|^BOP\s+(?=[A-Z])", "Balance of payments: ", s)
+    s = s.replace("n.i.e.", "not included elsewhere")
+    # trailing debit / credit / net markers (SBP BOP convention)
+    s = re.sub(r"\s*-\s*(?:dr|Dr|DR)(?=\s*(?:\u2014|$))", " (debit)", s)
+    s = re.sub(r"\s*-\s*(?:cr|Cr|CR)(?=\s*(?:\u2014|$))", " (credit)", s)
+    s = re.sub(r"\s*-\s*Net(?=\s*(?:\u2014|$))", " (net)", s)
+    if re.match(r"^(LCY|FCY) fin\. (assets|liabilities)_", s):
+        s = re.sub(r"^LCY fin\. ", "SBP local-currency financial ", s)
+        s = re.sub(r"^FCY fin\. ", "SBP foreign-currency financial ", s)
+        s = (s.replace("Cr. to", "credit to").replace("Conv. banks", "conventional banks").replace("Isl. banks", "Islamic banks")
+               .replace("& FI", "& financial institutions").replace("_LT_", ", long-term, ")
+               .replace("_ST_", ", short-term, "))
+        s = re.sub(r"\s*_\s*", " \u2014 ", s, count=1)
+        s = s.replace("_", ", ")
+    s = re.sub(r"^CAR\s+", "Capital adequacy ratio (CAR) ", s)
+    s = re.sub(r"^NBFI\s+", "Non-bank financial institutions (NBFI): ", s)
+    s = re.sub(r"^RTOB\s*-\s*", "Real-time online branches (RTOB): ", s)
+    s = s.replace(" ,", ",")
+    return re.sub(r"\s{2,}", " ", s).strip()
+
+
 def compose_name(leaf: str | None, dataset_label: str | None) -> str:
     """A short, clear name: the cleaned leaf, plus a short dataset category ONLY
     when the leaf is brief/generic and the category adds genuinely new words —
     so 'Nigeria' becomes 'Nigeria — Import Payments by Country' but a already-
     descriptive leaf stays as-is (no verbose, redundant tails)."""
+    ccs = humanize_ccs(leaf)
+    if ccs:
+        return ccs[0]
     lf = clean_leaf(leaf)
     ds = clean_dataset_label(dataset_label)
     if not lf:
-        return ds
+        return expand_sbp_jargon(ds)
     if not ds:
-        return lf
+        return expand_sbp_jargon(lf)
     lft, dst = _sig_tokens(lf), _sig_tokens(ds)
     redundant = (not dst) or dst <= lft or (len(dst & lft) / max(len(dst), 1)) >= 0.5
     words = len(re.findall(r"\S+", lf))
     if words <= 5 and not redundant:
         cand = f"{lf} — {ds}"
         if len(cand) <= 90:
-            return cand
-    return lf
+            return expand_sbp_jargon(cand)
+    return expand_sbp_jargon(lf)
 
 
 def compose_description(raw_desc: str | None, leaf: str | None, dataset_label: str | None) -> str:
     """Prefer SBP's own description; else synthesise from the FULL (un-simplified)
     leaf + dataset name, so the methodology/vintage/survey context we strip from
     the name is preserved here for anyone who needs it."""
+    ccs = humanize_ccs(leaf)
+    if ccs:
+        return ccs[1]
     d = _strip_html(raw_desc)
     if d:
         return d
