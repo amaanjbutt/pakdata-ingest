@@ -152,7 +152,7 @@ class MufapFundNavsJob(IngestionJob):
             return {"status": "success", "rows": n, "funds": len(rows), **extra}
         except Exception as exc:
             self._finish(run_id, "failed", 0, str(exc), None)
-            alerting.alert(f"{self.name}: job failed", str(exc))
+            alerting.alert_unless_403(f"{self.name}: job failed", str(exc))
             raise
 
     # ---- historical backfill ------------------------------------------------
@@ -188,7 +188,7 @@ class MufapFundNavsJob(IngestionJob):
             try:
                 series = self._fetch_history(fund_id)
             except Exception as exc:  # skip a bad fund, keep going
-                alerting.alert(f"{self.name}: history fetch failed", f"fund {fund_id}: {exc}")
+                alerting.alert_unless_403(f"{self.name}: history fetch failed", f"fund {fund_id}: {exc}")
                 continue
             hist_rows += self._upsert_history(fund_id, series)
             done += 1
@@ -212,37 +212,37 @@ class MufapFundNavsJob(IngestionJob):
         return len(series)
 
     def _upsert_funds(self, rows: list[FundRow]) -> int:
-        n = 0
+        # Batched (executemany = one pipelined round trip per statement, not per
+        # row): this job writes to the VPS DB over an SSH tunnel from GitHub
+        # Actions, where per-row latency pushed runs toward the 300s job timeout.
+        fund_params = [(r.fund_id, r.name, r.amc, r.sector, r.category,
+                        r.inception_date, r.trustee) for r in rows]
+        nav_params = [(r.fund_id, r.obs_date, r.nav, r.offer, r.repurchase,
+                       r.front_end, r.back_end) for r in rows if r.obs_date is not None]
         with db.connection() as conn:
             with conn.cursor() as cur:
-                for r in rows:
-                    cur.execute(
-                        """
-                        INSERT INTO funds (fund_id, name, amc, sector, category,
-                                           inception_date, trustee, updated_at)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s, now())
-                        ON CONFLICT (fund_id) DO UPDATE SET
-                            name=EXCLUDED.name, amc=EXCLUDED.amc, sector=EXCLUDED.sector,
-                            category=EXCLUDED.category, inception_date=EXCLUDED.inception_date,
-                            trustee=EXCLUDED.trustee, is_active=true, updated_at=now()
-                        """,
-                        (r.fund_id, r.name, r.amc, r.sector, r.category,
-                         r.inception_date, r.trustee),
-                    )
-                    if r.obs_date is None:
-                        continue
-                    cur.execute(
-                        """
-                        INSERT INTO fund_navs (fund_id, obs_date, nav, offer, repurchase,
-                                               front_end, back_end, revised_at)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s, now())
-                        ON CONFLICT (fund_id, obs_date) DO UPDATE SET
-                            nav=EXCLUDED.nav, offer=EXCLUDED.offer,
-                            repurchase=EXCLUDED.repurchase, front_end=EXCLUDED.front_end,
-                            back_end=EXCLUDED.back_end, revised_at=now()
-                        """,
-                        (r.fund_id, r.obs_date, r.nav, r.offer, r.repurchase,
-                         r.front_end, r.back_end),
-                    )
-                    n += 1
-        return n
+                cur.executemany(
+                    """
+                    INSERT INTO funds (fund_id, name, amc, sector, category,
+                                       inception_date, trustee, updated_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s, now())
+                    ON CONFLICT (fund_id) DO UPDATE SET
+                        name=EXCLUDED.name, amc=EXCLUDED.amc, sector=EXCLUDED.sector,
+                        category=EXCLUDED.category, inception_date=EXCLUDED.inception_date,
+                        trustee=EXCLUDED.trustee, is_active=true, updated_at=now()
+                    """,
+                    fund_params,
+                )
+                cur.executemany(
+                    """
+                    INSERT INTO fund_navs (fund_id, obs_date, nav, offer, repurchase,
+                                           front_end, back_end, revised_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s, now())
+                    ON CONFLICT (fund_id, obs_date) DO UPDATE SET
+                        nav=EXCLUDED.nav, offer=EXCLUDED.offer,
+                        repurchase=EXCLUDED.repurchase, front_end=EXCLUDED.front_end,
+                        back_end=EXCLUDED.back_end, revised_at=now()
+                    """,
+                    nav_params,
+                )
+        return len(nav_params)
