@@ -12,11 +12,17 @@ already ingested from EasyData (the `gp_bam_sirkibor_d.*` series). This scraper
 exists only for same-day freshness ahead of EasyData's refresh, so `--backfill`
 is a no-op — there is no live KIBOR archive to walk. bid/offer are carried in the
 `side` dimension, consistent with the rest of the catalog.
+
+The same page also carries SBP's daily market snapshot, parsed here with no extra
+fetch (2026-10-04): the USD/PKR **M2M revaluation rate** and **weighted-average
+interbank bid/offer**, the **weighted-average overnight repo rate**, and the weekly
+**liquid FX reserves** (SBP / banks / total). Each block is dated by its own "As on"
+date and is optional — a layout change in one never costs us KIBOR.
 """
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, datetime
 
 from bs4 import BeautifulSoup
 
@@ -54,14 +60,82 @@ def _to_float(text: str) -> float | None:
         return None
 
 
+_DATE = r"(\d{1,2})\s*-\s*([A-Za-z]{3,9})\s*-\s*(\d{2,4})"
+_NUM = r"([\d,]+(?:\.\d+)?)"
+
+
+def _page_date(day: str, month: str, year: str) -> date | None:
+    """('22', 'Jul', '26') / ('10', 'July', '2026') -> date."""
+    y = int(year) + (2000 if len(year) == 2 else 0)
+    for fmt in ("%b", "%B"):
+        try:
+            return datetime.strptime(f"{int(day)} {month[:3] if fmt == '%b' else month} {y}", f"%d {fmt} %Y").date()
+        except ValueError:
+            continue
+    return None
+
+
+def _page_text(soup: BeautifulSoup) -> str:
+    # One space-collapsed string; curly apostrophes vary (SBP’s / mojibake).
+    return " ".join(soup.get_text(" ").split())
+
+
+def parse_market_snapshot(html: str) -> list[Record]:
+    """SBP's daily market snapshot on kibor.asp -> records, each dated by its own
+    "As on" date. Pure. Missing blocks are skipped (never raises)."""
+    text = _page_text(BeautifulSoup(html, "lxml"))
+    out: list[Record] = []
+
+    m = re.search(
+        r"USD\s*/\s*PKR\s+Rates\s+As\s+on\s+" + _DATE
+        + r"\s+M2M\s+Revaluation\s+Rate\s+" + _NUM
+        + r"\s+Weighted\s+Average\s+Rate\s+BID\s+" + _NUM + r"\s+Offer\s+" + _NUM,
+        text, re.I,
+    )
+    if m and (d := _page_date(*m.group(1, 2, 3))):
+        m2m, bid, offer = (_to_float(m.group(i)) for i in (4, 5, 6))
+        if m2m is not None:
+            out.append(Record("fx.rate.m2m.usd", d, m2m, {}))
+        if bid is not None:
+            out.append(Record("fx.rate.interbank.usd", d, bid, {"side": "bid"}))
+        if offer is not None:
+            out.append(Record("fx.rate.interbank.usd", d, offer, {"side": "offer"}))
+
+    m = re.search(
+        r"Liquid\s+Foreign\s+Exchange\s+Reserves\s*\(USD\s+million\)\s+As\s+on\s+" + _DATE
+        + r"\s+SBP\S*\s+Reserves\s+" + _NUM + r"\s+Bank\S*\s+Reserves\s+" + _NUM
+        + r"\s+Total\s+Reserves\s+" + _NUM,
+        text, re.I,
+    )
+    if m and (d := _page_date(*m.group(1, 2, 3))):
+        for sid, i in (("reserves.liquid.sbp", 4), ("reserves.liquid.banks", 5), ("reserves.liquid.total", 6)):
+            v = _to_float(m.group(i))
+            if v is not None:
+                out.append(Record(sid, d, v, {}))
+
+    m = re.search(
+        r"overnight\s+repo\s+rate\s+As\s+on\s+" + _DATE + r"\s+" + _NUM + r"\s*%",
+        text, re.I,
+    )
+    if m and (d := _page_date(*m.group(1, 2, 3))):
+        v = _to_float(m.group(4))
+        if v is not None:
+            out.append(Record("rates.repo.overnight", d, v, {}))
+    return out
+
+
 def parse_kibor_html(html: str, fallback_date: date | None = None) -> tuple[date, list[Record]]:
     """Parse KIBOR HTML into (observation_date, records). Pure — no DB/network.
 
-    The KIBOR table carries no date of its own (and other 'as on' dates on the
-    page belong to the auction tables), so the observation date is the fetch date.
+    Dated by the page's own "KIBOR As on <date>" line, so a weekend or holiday run
+    doesn't stamp Friday's fixing onto Saturday; falls back to the fetch date when
+    that line is missing.
     """
     soup = BeautifulSoup(html, "lxml")
     obs_date = fallback_date or date.today()
+    m = re.search(r"KIBOR\s+As\s+on\s+" + _DATE, _page_text(soup), re.I)
+    if m and (d := _page_date(*m.group(1, 2, 3))):
+        obs_date = d
 
     # Find the KIBOR table by its BID/Offer header (the auction tables below it
     # are headed 'Cut-off Yield', so they won't match).
@@ -120,5 +194,6 @@ class SbpKiborJob(IngestionJob):
         return [FetchedFile(filename="kibor.html", content=content, when=date.today())]
 
     def parse(self, f: FetchedFile) -> list[Record]:
-        _, records = parse_kibor_html(f.content.decode("utf-8", errors="replace"), f.when)
-        return records
+        html = f.content.decode("utf-8", errors="replace")
+        _, records = parse_kibor_html(html, f.when)
+        return records + parse_market_snapshot(html)
