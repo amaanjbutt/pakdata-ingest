@@ -91,8 +91,11 @@ class IngestionJob:
         # Browser-TLS impersonation (curl_cffi) so Cloudflare-fronted official
         # sources don't fingerprint-block us. Low-frequency polling, bounded
         # timeout; retries handled by caller/scheduler.
-        from ingestion import http_client
+        from ingestion import http_bundle, http_client
 
+        bundled = http_bundle.lookup(url)  # pre-fetched on a good IP (MUFAP)
+        if bundled is not None:
+            return bundled
         return http_client.get(url, timeout=30).content
 
     # ---- validation ----------------------------------------------------------

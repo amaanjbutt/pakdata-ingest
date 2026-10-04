@@ -69,11 +69,13 @@ jobs:
           VPS_HOST: ${{ secrets.VPS_HOST }}
         run: |
           mkdir -p /tmp/raw
-          # 1) Fast IP gate (no DB). 403 returns a status; a stall raises → empty STATUS.
-          STATUS=$(timeout 45 python -c "from curl_cffi import requests as r; print(r.get('${MUFAP_PROBE_URL}', impersonate='chrome', timeout=25).status_code)" 2>/dev/null)
-          echo "MUFAP probe status: ${STATUS:-<none/blocked>}"
-          if [ "$STATUS" != "200" ]; then
-            echo "::notice::IP blocked (probe=${STATUS:-none}) — skipping this runner"
+          # 1) Burst-fetch every IndustryStatDaily page (tab=1/3/4/5) while this IP is
+          #    clean, BEFORE any slow DB work — MUFAP re-blocks a good IP after a few
+          #    requests (navs used to land, then returns 403'd on the probe's own page).
+          #    The first page is the IP probe: exit 2 = blocked → skip this runner.
+          rc=0; timeout 300 python -m scripts.mufap_fetch_bundle /tmp/raw/mufap_bundle || rc=$?
+          if [ "$rc" != "0" ]; then
+            echo "::notice::IP blocked (bundle rc=$rc) — skipping this runner"
             exit 0
           fi
           # 2) Tunnel to the VPS DB (retry transient SSH timeouts).
@@ -90,17 +92,19 @@ jobs:
             echo "tunnel attempt $i failed; retrying in 20s"; sleep 20
           done
           [ -n "$ok" ] || { echo "tunnel failed after 5 attempts"; exit 1; }
-          # 3) Freshness skip: if a prior runner already ingested THIS dispatch (a
-          #    mufap_fund_navs success with rows in the last 30 min), don't redo it.
-          if python -c "from app import db; import sys; sys.exit(0 if db.query(\"SELECT 1 FROM ingestion_runs WHERE job_name='mufap_fund_navs' AND status='success' AND rows_upserted>0 AND started_at > now() - interval '30 minutes'\") else 1)"; then
-            echo "::notice::already ingested this dispatch — skipping"
+          # 3) Per-job freshness skip: run only the jobs that haven't succeeded in this
+          #    slot (last 150 min). Was navs-only, so once navs landed every later
+          #    attempt exited even when returns/stats had 403'd — returns sat stale.
+          TODO=$(python -m scripts.mufap_jobs_todo)
+          if [ -z "$TODO" ]; then
+            echo "::notice::all MUFAP jobs already ingested this slot — skipping"
             exit 0
           fi
-          # 4) Ingest (solo). Per-job hard timeout so a stall can't eat the budget.
-          echo "::notice::IP reaches MUFAP and data is stale — ingesting"
+          # 4) Ingest (solo), reading the bundled pages. Per-job hard timeout.
+          echo "::notice::IP reaches MUFAP — ingesting: $TODO"
+          export INGEST_BUNDLE_DIR=/tmp/raw/mufap_bundle
           set +e
-          for job in mufap_fund_navs mufap_fund_returns mufap_fund_stats \
-                     mufap_pkrv mufap_debt_prices mufap_tfc_valuations mufap_debt_trades; do
+          for job in $TODO; do
             echo "::group::$job"
             timeout 300 python -m ingestion.run "$job" --force
             echo "exit=$? for $job"
@@ -154,8 +158,11 @@ jobs:
             echo "tunnel attempt $i failed; retrying in 20s"; sleep 20
           done
           [ -n "$ok" ] || { echo "tunnel failed after 5 attempts"; exit 1; }
-          if python -c "from app import db; import sys; sys.exit(0 if db.query(\"SELECT 1 FROM ingestion_runs WHERE job_name='mufap_fund_portfolio' AND status='success' AND rows_upserted>0 AND started_at > now() - interval '12 hours'\") else 1)"; then
-            echo "::notice::portfolio already ingested recently — skipping"
+          # The job itself skips funds refreshed in the last 5 days and stops `partial`
+          # on a budget / 403 streak, so later attempts resume it. Skip only once a run
+          # has finished the queue (success / no_new_data) in the last 12h.
+          if python -c "from app import db; import sys; sys.exit(0 if db.query(\"SELECT 1 FROM ingestion_runs WHERE job_name='mufap_fund_portfolio' AND status IN ('success','no_new_data') AND started_at > now() - interval '12 hours'\") else 1)"; then
+            echo "::notice::portfolio already complete recently — skipping"
             exit 0
           fi
           echo "::notice::ingesting portfolio (heavy)"
