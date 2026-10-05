@@ -133,6 +133,32 @@ def yoy_weekly(points: Points, tolerance_days: int = 3) -> Points:
     return out
 
 
+def jevons_yoy(items: dict[str, Points], min_items: int = 15, tolerance_days: int = 3) -> Points:
+    """Weekly year-on-year inflation of a basket: the geometric mean, over items priced in
+    both weeks, of each item's price relative to the week 52 weeks earlier (a Jevons index
+    of 52-week changes). Base-independent, unlike the YoY of a rebased average of relatives."""
+    import math
+
+    offsets = [364] + [364 + s * k for k in range(1, tolerance_days + 1) for s in (-1, 1)]
+    by_item = {it: dict(pts) for it, pts in items.items()}
+    weeks = sorted({d for pts in by_item.values() for d in pts})
+    out = []
+    for d in weeks:
+        logs = []
+        for prices in by_item.values():
+            p = prices.get(d)
+            if not p or p <= 0:
+                continue
+            for back in offsets:
+                q = prices.get(d - timedelta(days=back))
+                if q and q > 0:
+                    logs.append(math.log(p / q))
+                    break
+        if len(logs) >= min_items:
+            out.append((d, (math.exp(sum(logs) / len(logs)) - 1.0) * 100.0))
+    return out
+
+
 def share_pct(part: Points, whole: Points, whole_scale: float = 1.0) -> Points:
     wd = dict(whole)
     return [(d, v / (wd[d] * whole_scale) * 100.0) for d, v in part if wd.get(d)]
@@ -288,27 +314,48 @@ for slug, (cat, col, name, method) in _FUND_CATEGORIES.items():
                       "funds", "percent", "weekly", method, [key],
                       (lambda k: lambda i: weekly_median(i[k]))(key), (-90, 300)))
 
-_CITIES_FROM_DB = "cost_of_living.%"  # expanded at run time: one YoY series per city index
+# cities expanded at run time from the cost-of-living index ids (one per SPI city + national)
+_CITIES_FROM_DB = "cost_of_living.%"
 
 
-def city_specs(index_ids: list[str]) -> list[Spec]:
+def city_specs(cities: list[str]) -> list[Spec]:
     out = []
-    for sid in sorted(index_ids):
-        city = sid.split(".", 1)[1]
+    for city in sorted(cities):
         label = "National" if city == "national" else city.replace("_", " ").title()
+        key = f"spi:{city}"
         out.append(Spec(f"prices.essentials_inflation.{city}", f"Essential-goods inflation (YoY) — {label}",
                         "prices", "percent", "weekly",
-                        f"Year-on-year % change of the weekly cost-of-living index for {label} ({sid}: the "
-                        f"unweighted mean of PBS SPI essential-item price relatives), vs the week 52 weeks earlier.",
-                        [sid], (lambda s: lambda i: yoy_weekly(i[s]))(sid), (-60, 200)))
+                        f"Weekly year-on-year inflation of the PBS SPI essential-items basket for {label}: the "
+                        f"geometric mean, over items priced in both weeks (at least 15), of each item's price vs "
+                        f"52 weeks earlier (a Jevons index of 52-week price changes, base-independent).",
+                        [key], (lambda k: lambda i: jevons_yoy(i[k]))(key), (-60, 200), version=2))
     return out
+
+
+def display_input(key: str) -> str:
+    """Input key -> what the catalog shows: a series id, or a readable label for the
+    non-series inputs ("spi:karachi", "funds:Money Market:d30")."""
+    if key.startswith("spi:"):
+        return f"commodities.* (SPI, {key.split(':', 1)[1]})"
+    if key.startswith("funds:"):
+        _, cat, col = key.split(":")
+        return f"MUFAP fund returns ({cat}, {col})"
+    return key.split("|")[0]
 
 
 # ---- job --------------------------------------------------------------------------------
 
 def load_inputs(keys: set[str]) -> dict[str, Points]:
     out: dict[str, Points] = {}
-    for key in keys:
+    spi_keys = {k for k in keys if k.startswith("spi:")}
+    if spi_keys:
+        spi: dict[str, dict[str, Points]] = defaultdict(lambda: defaultdict(list))
+        for r in db.query("SELECT series_id, obs_date, value, dims->>'city' AS city FROM observations "
+                          "WHERE series_id LIKE 'commodities.%%' AND value IS NOT NULL AND dims ? 'city'"):
+            spi[r["city"]][r["series_id"]].append((r["obs_date"], float(r["value"])))
+        for k in spi_keys:
+            out[k] = dict(spi.get(k.split(":", 1)[1], {}))  # type: ignore[assignment]
+    for key in keys - spi_keys:
         if key.startswith("funds:"):
             _, cat, col = key.split(":")
             if col not in {"ytd", "mtd", "d30", "d90", "d365"}:
@@ -337,7 +384,7 @@ class DeriveIndicatorsJob(IngestionJob):
     def run(self, backfill: bool = False) -> dict:
         run_id = self._start_run()
         try:
-            cities = [r["id"] for r in db.query(
+            cities = [r["id"].split(".", 1)[1] for r in db.query(
                 "SELECT id FROM series WHERE id LIKE %s AND is_active", (_CITIES_FROM_DB,))]
             specs = SPECS + city_specs(cities)
             inputs = load_inputs({k for s in specs for k in s.inputs})
@@ -359,7 +406,7 @@ class DeriveIndicatorsJob(IngestionJob):
             raise
 
     def _ensure_series(self, s: Spec) -> None:
-        derivation = {"method": s.method, "inputs": [k.split("|")[0] for k in s.inputs], "version": s.version}
+        derivation = {"method": s.method, "inputs": [display_input(k) for k in s.inputs], "version": s.version}
         db.execute(
             """INSERT INTO series (id, module, name, description, unit, frequency, source, tier, is_active,
                                    min_value, max_value, derivation)
