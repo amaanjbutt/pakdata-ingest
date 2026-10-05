@@ -63,6 +63,12 @@ SCHEDULES: list[Schedule] = [
     # The PakDataHub derived layer (real rates, spreads, import cover, essentials
     # inflation, fund-category yields...) — recomputed after its inputs land: the
     # morning EasyData/KIBOR derivations, the evening MUFAP runs, and Saturday's SPI.
+    # Punjab AMIS wholesale prices (reachable from the VPS): the ~22 major mandis every
+    # evening once the day's prices are in; every market weekly in the quiet early hours.
+    Schedule("amis_prices", {"hour": 21, "minute": 30},
+             expected_interval=timedelta(days=3)),
+    Schedule("amis_prices_all", {"hour": 3, "minute": 30, "day_of_week": "sun"},
+             expected_interval=timedelta(days=9)),
     Schedule("derive_indicators", {"hour": 9, "minute": 45},
              expected_interval=timedelta(days=3)),
     Schedule("derive_indicators", {"hour": 23, "minute": 30},

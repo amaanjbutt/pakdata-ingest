@@ -7,6 +7,7 @@ Add every new job here once it subclasses `IngestionJob`.
 from __future__ import annotations
 
 from ingestion.framework import IngestionJob
+from ingestion.jobs.amis_prices import AmisPricesAllJob, AmisPricesJob
 from ingestion.jobs.cost_of_living import CostOfLivingJob
 from ingestion.jobs.data_quality import DataQualityJob
 from ingestion.jobs.derive_auctions import DeriveAuctionsJob
@@ -40,6 +41,8 @@ JOBS: dict[str, type[IngestionJob]] = {
     DeriveAuctionsJob.name: DeriveAuctionsJob,
     DeriveKiborJob.name: DeriveKiborJob,
     DeriveIndicatorsJob.name: DeriveIndicatorsJob,
+    AmisPricesJob.name: AmisPricesJob,
+    AmisPricesAllJob.name: AmisPricesAllJob,
     DataQualityJob.name: DataQualityJob,
     EasyDataSyncJob.name: EasyDataSyncJob,
     SbpPolicyRateJob.name: SbpPolicyRateJob,
