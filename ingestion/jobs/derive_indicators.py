@@ -311,7 +311,7 @@ _FUND_CATEGORIES = {
 for slug, (cat, col, name, method) in _FUND_CATEGORIES.items():
     key = f"funds:{cat}:{col}"
     SPECS.append(Spec(f"funds.category.{slug}.{'yield_30d' if col == 'd30' else 'return_1y'}", name,
-                      "funds", "percent", "weekly", method, [key],
+                      "monetary", "percent", "weekly", method, [key],
                       (lambda k: lambda i: weekly_median(i[k]))(key), (-90, 300)))
 
 # cities expanded at run time from the cost-of-living index ids (one per SPI city + national)
