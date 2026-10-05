@@ -149,7 +149,8 @@ def weekly_median(rows: list[tuple[int, date, float]], min_funds: int = 5) -> Po
         cur = latest[week_end].get(fid)
         if cur is None or d > cur[0]:
             latest[week_end][fid] = (d, float(v))
-    return sorted((w, statistics.median(v for _d, v in funds.values()))
+    # dated by the week's latest actual observation (never a future Friday)
+    return sorted((max(d for d, _v in funds.values()), statistics.median(v for _d, v in funds.values()))
                   for w, funds in latest.items() if len(funds) >= min_funds)
 
 
@@ -198,10 +199,10 @@ def cpi_yoy(i: dict) -> Points:
 
 
 SPECS: list[Spec] = [
-    Spec("inflation.cpi.national.yoy.long", "CPI inflation (national, YoY) — long history since 1964",
+    Spec("inflation.cpi.national.yoy.long", "CPI inflation (national, YoY) — long history since 1965",
          "prices", "percent", "monthly",
          "Spliced: PBS national CPI YoY where published (Jul-2017 →), else SBP's base-2015-16 national CPI "
-         "YoY (Jul-2016 →), else SBP's historical general CPI YoY (1964 → Apr-2020). One continuous series; "
+         "YoY (Jul-2016 →), else SBP's historical general CPI YoY (1965 → Apr-2020). One continuous series; "
          "base years differ across the splice points.",
          CPI_YOY, cpi_yoy, (-30, 60)),
     Spec("rates.policy.history", "SBP policy rate — month-end, since 1956",
