@@ -33,6 +33,14 @@ from ingestion.framework import FetchedFile, IngestionJob, Record
 ANNEX_URL = "https://www.pbs.gov.pk/wp-content/uploads/2020/07/Annex_{d:%d.%m.%Y}.pdf"
 # How many weeks of history a --backfill walk reaches back over.
 BACKFILL_WEEKS = 104
+# PBS's price-statistics page embeds its weekly SPI archive as a JS array of
+# {date, annexure, report} entries (Jul-2023 ->) with irregular file names
+# ("SPI20Annex26USCP_07032024.pdf"; some entries even swap the two links), so a
+# backfill reads that list instead of guessing URLs.
+ARCHIVE_PAGE = "https://www.pbs.gov.pk/price-statistics/"
+# A backfill fetches at most this many missing weeks per run (each annexure is ~4 MB
+# and the framework holds a run's files in memory) — re-run until nothing is missing.
+BACKFILL_BATCH = 20
 # How many recent weeks an incremental fetch probes (newest first).
 INCREMENTAL_LOOKBACK_WEEKS = 3
 
@@ -204,6 +212,25 @@ def _recent_thursdays(n: int, ref: date | None = None) -> list[date]:
     return [last_thu - timedelta(weeks=i) for i in range(n)]
 
 
+_ARCHIVE_ENTRY = re.compile(r'\{\s*date:\s*"(\d{2}-\d{2}-\d{4})"\s*,(.*?)\}', re.S)
+
+
+def archive_entries(page_html: str) -> list[tuple[date, str]]:
+    """PBS price-statistics page -> [(week-ended date, annexure PDF url)], oldest first.
+
+    Pure. Of an entry's links, the one whose file name says "Annex" is the annexure
+    (PBS sometimes files it under `report`); relative links are made absolute."""
+    out: dict[date, str] = {}
+    for d, body in _ARCHIVE_ENTRY.findall(page_html):
+        links = re.findall(r'"([^"]+\.pdf)"', body, re.I)
+        annex = [u for u in links if "annex" in u.rsplit("/", 1)[-1].lower()]
+        if not annex:
+            continue
+        url = annex[0] if annex[0].startswith("http") else "https://www.pbs.gov.pk/" + annex[0].lstrip("/")
+        out[datetime.strptime(d, "%d-%m-%Y").date()] = url
+    return sorted(out.items())
+
+
 class PbsSpiWeeklyJob(IngestionJob):
     name = "pbs_spi_weekly"
     source = "PBS"
@@ -228,9 +255,47 @@ class PbsSpiWeeklyJob(IngestionJob):
             return resp.content
         return None
 
+    def _get(self, url: str) -> bytes | None:
+        import httpx
+
+        from app.config import settings
+
+        try:
+            resp = httpx.get(url, headers={"User-Agent": settings.user_agent}, timeout=90,
+                             follow_redirects=True)
+        except httpx.HTTPError:
+            return None
+        if resp.status_code == 200 and resp.content[:4] == b"%PDF":
+            return resp.content
+        return None
+
+    def _held_weeks(self) -> set[date]:
+        from app import db
+
+        return {r["obs_date"] for r in db.query(
+            "SELECT DISTINCT obs_date FROM observations WHERE series_id LIKE 'commodities.%%'")}
+
     def fetch(self, backfill: bool = False) -> list[FetchedFile]:
-        weeks = BACKFILL_WEEKS if backfill else INCREMENTAL_LOOKBACK_WEEKS
         out: list[FetchedFile] = []
+        if backfill:
+            import httpx
+
+            from app.config import settings
+
+            try:
+                page = httpx.get(ARCHIVE_PAGE, headers={"User-Agent": settings.user_agent},
+                                 timeout=60, follow_redirects=True).text
+            except httpx.HTTPError:
+                page = ""
+            held = self._held_weeks()
+            todo = [(d, u) for d, u in archive_entries(page) if d not in held]
+            for d, url in todo[:BACKFILL_BATCH]:  # oldest first
+                content = self._get(url)
+                if content is not None:
+                    out.append(FetchedFile(filename=url.rsplit("/", 1)[-1], content=content, when=d))
+            if out or todo:
+                return out
+        weeks = BACKFILL_WEEKS if backfill else INCREMENTAL_LOOKBACK_WEEKS
         for d in _recent_thursdays(weeks):
             content = self._get_pdf(d)
             if content is None:

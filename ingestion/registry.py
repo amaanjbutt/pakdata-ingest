@@ -10,6 +10,8 @@ from ingestion.framework import IngestionJob
 from ingestion.jobs.cost_of_living import CostOfLivingJob
 from ingestion.jobs.data_quality import DataQualityJob
 from ingestion.jobs.derive_auctions import DeriveAuctionsJob
+from ingestion.jobs.derive_indicators import DeriveIndicatorsJob
+from ingestion.jobs.derive_kibor import DeriveKiborJob
 from ingestion.jobs.easydata_sync import EasyDataSyncJob
 from ingestion.jobs.mufap_fund_navs import MufapFundNavsJob
 from ingestion.jobs.mufap_fund_returns import MufapFundReturnsJob
@@ -36,6 +38,8 @@ JOBS: dict[str, type[IngestionJob]] = {
     PbsSpiWeeklyJob.name: PbsSpiWeeklyJob,
     CostOfLivingJob.name: CostOfLivingJob,
     DeriveAuctionsJob.name: DeriveAuctionsJob,
+    DeriveKiborJob.name: DeriveKiborJob,
+    DeriveIndicatorsJob.name: DeriveIndicatorsJob,
     DataQualityJob.name: DataQualityJob,
     EasyDataSyncJob.name: EasyDataSyncJob,
     SbpPolicyRateJob.name: SbpPolicyRateJob,

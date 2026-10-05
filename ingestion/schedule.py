@@ -56,6 +56,17 @@ SCHEDULES: list[Schedule] = [
     # daily after the EasyData syncs land (GHA 01/13 + 07/19 UTC).
     Schedule("derive_auctions", {"hour": 9, "minute": 0},
              expected_interval=timedelta(days=14)),
+    # Full KIBOR history (2005→) into the flagship rates.kibor.* ids from the EasyData
+    # SIRKIBOR series. Pure DB derivation; the same-day sbp_kibor scrape wins on overlap.
+    Schedule("derive_kibor", {"hour": 9, "minute": 15},
+             expected_interval=timedelta(days=14)),
+    # The PakDataHub derived layer (real rates, spreads, import cover, essentials
+    # inflation, fund-category yields...) — recomputed after its inputs land: the
+    # morning EasyData/KIBOR derivations, the evening MUFAP runs, and Saturday's SPI.
+    Schedule("derive_indicators", {"hour": 9, "minute": 45},
+             expected_interval=timedelta(days=3)),
+    Schedule("derive_indicators", {"hour": 23, "minute": 30},
+             expected_interval=timedelta(days=3)),
     # Nightly data-quality sweep (quarantine NAV spikes / impossible prices & yields,
     # correct unambiguous SBP unit slips) after the MUFAP (19/22 PKT) + EasyData runs.
     Schedule("data_quality", {"hour": 5, "minute": 30},
