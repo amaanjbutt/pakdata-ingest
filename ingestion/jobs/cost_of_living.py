@@ -100,7 +100,8 @@ class CostOfLivingJob(IngestionJob):
                     """INSERT INTO observations (series_id, obs_date, value, dims, flagged, revised_at)
                        VALUES (%s, %s, %s, '{}'::jsonb, false, now())
                        ON CONFLICT (series_id, obs_date, dims)
-                       DO UPDATE SET value = EXCLUDED.value, revised_at = now()""",
+                       DO UPDATE SET value = EXCLUDED.value, revised_at = now()
+                       WHERE observations.value IS DISTINCT FROM EXCLUDED.value""",
                     obs,
                 )
                 sid = obs[0][0]

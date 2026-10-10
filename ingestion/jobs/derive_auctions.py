@@ -23,6 +23,10 @@ from ingestion.framework import IngestionJob
 _DATASET_TYPE = {"TS_GP_BAM_SIRTBIL_AH": "tbill", "TS_GP_BAM_SIRPIBS_AH": "pib"}
 _MIN_YIELD, _MAX_YIELD = 0.5, 40.0
 _TENOR_RE = re.compile(r"(\d+)\s*-?\s*(month|year)", re.I)
+# Both datasets carry a "Cut-off Yield" AND a "Weighted Average Yield" series per tenor;
+# only the cut-off feeds rates.auction.*.cutoff_yield (mapping both made each run write
+# the two values over each other — wrong data plus two fake revisions per point per day).
+_CUTOFF_RE = re.compile(r"cut\s*-?\s*off", re.I)
 
 
 def tenor_from_name(name: str) -> str | None:
@@ -38,10 +42,27 @@ def map_sources(series_rows: list[dict]) -> dict[str, tuple[str, str]]:
     out: dict[str, tuple[str, str]] = {}
     for r in series_rows:
         atype = _DATASET_TYPE.get(r.get("easydata_dataset_code"))
-        tenor = tenor_from_name(r.get("name", "")) if atype else None
-        if atype and tenor:
+        name = r.get("name", "")
+        if not atype or not _CUTOFF_RE.search(name):
+            continue
+        tenor = tenor_from_name(name)
+        if tenor:
             out[r["id"]] = (atype, tenor)
     return out
+
+
+def collect_points(mapping: dict[str, tuple[str, str]], obs: list[dict]) -> dict[tuple[str, str], list[tuple]]:
+    """{(type, tenor): [(date, value), ...]} with ONE value per date (if two sources still
+    map to one tenor, the lowest series id wins, so a run is deterministic). Pure."""
+    best: dict[tuple[str, str], dict] = {}
+    for o in sorted(obs, key=lambda o: o["series_id"], reverse=True):
+        v = float(o["value"])
+        # A T-Bill/PIB cut-off outside 0.5-40% is a source glitch (EasyData has a
+        # 6m T-Bill of 0.1215% on 2007-12-05, when the policy rate was ~10%).
+        if not (_MIN_YIELD <= v <= _MAX_YIELD):
+            continue
+        best.setdefault(mapping[o["series_id"]], {})[o["obs_date"]] = v
+    return {k: sorted(d.items()) for k, d in best.items()}
 
 
 class DeriveAuctionsJob(IngestionJob):
@@ -65,15 +86,7 @@ class DeriveAuctionsJob(IngestionJob):
                 "WHERE series_id = ANY(%(ids)s) AND value IS NOT NULL",
                 {"ids": list(mapping)},
             )
-            points: dict[tuple[str, str], list[tuple]] = {}
-            for o in obs:
-                v = float(o["value"])
-                # A T-Bill/PIB cut-off outside 0.5-40% is a source glitch (EasyData has a
-                # 6m T-Bill of 0.1215% on 2007-12-05, when the policy rate was ~10%).
-                if not (_MIN_YIELD <= v <= _MAX_YIELD):
-                    continue
-                key = mapping[o["series_id"]]
-                points.setdefault(key, []).append((o["obs_date"], v))
+            points = collect_points(mapping, obs)
             total = 0
             for (atype, tenor), pts in points.items():
                 self._ensure_series(atype, tenor)
@@ -112,14 +125,16 @@ class DeriveAuctionsJob(IngestionJob):
                     """INSERT INTO observations (series_id, obs_date, value, dims, flagged, revised_at)
                        VALUES (%s, %s, %s, '{}'::jsonb, false, now())
                        ON CONFLICT (series_id, obs_date, dims)
-                       DO UPDATE SET value = EXCLUDED.value, revised_at = now()""",
+                       DO UPDATE SET value = EXCLUDED.value, revised_at = now()
+                       WHERE observations.value IS DISTINCT FROM EXCLUDED.value""",
                     [(sid, d, v) for d, v in pts],
                 )
                 cur.executemany(
                     """INSERT INTO auctions (auction_type, tenor, auction_date, cutoff_yield, source)
                        VALUES (%s, %s, %s, %s, 'SBP')
                        ON CONFLICT (auction_type, tenor, auction_date)
-                       DO UPDATE SET cutoff_yield = EXCLUDED.cutoff_yield, revised_at = now()""",
+                       DO UPDATE SET cutoff_yield = EXCLUDED.cutoff_yield, revised_at = now()
+                       WHERE auctions.cutoff_yield IS DISTINCT FROM EXCLUDED.cutoff_yield""",
                     [(atype, tenor, d, v) for d, v in pts],
                 )
                 cur.execute(

@@ -362,7 +362,7 @@ def load_inputs(keys: set[str]) -> dict[str, Points]:
                 raise ValueError(f"unknown fund_returns column {col}")
             rows = db.query(
                 f"SELECT r.fund_id, r.obs_date, r.{col} AS v FROM fund_returns r JOIN funds f USING (fund_id) "
-                f"WHERE f.category = %s AND r.{col} IS NOT NULL", (cat,))
+                f"WHERE f.category = %s AND r.{col} IS NOT NULL AND r.obs_date <= current_date", (cat,))
             out[key] = [(r["fund_id"], r["obs_date"], float(r["v"])) for r in rows]  # type: ignore[misc]
             continue
         sid, _, dim = key.partition("|")
