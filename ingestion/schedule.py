@@ -40,11 +40,7 @@ SCHEDULES: list[Schedule] = [
     # fallback via the residential tunnel.
     # FX now flows through easydata_sync (monthly EasyData exchange-rate series);
     # the daily SBP M2M scrape was retired when SBP removed the source page.
-    # Weekly SPI: Friday release + Saturday retry.
-    Schedule("pbs_spi_weekly", {"hour": 15, "minute": 0, "day_of_week": "fri"},
-             expected_interval=timedelta(days=9)),
-    Schedule("pbs_spi_weekly", {"hour": 11, "minute": 0, "day_of_week": "sat"},
-             expected_interval=timedelta(days=9)),
+    # Weekly SPI now runs on GitHub Actions (pbs.yml, Fri + Sat) — see MONITORED_EXTERNAL.
     # Derived per-city cost-of-living index — recompute shortly after each SPI
     # ingest (reads the DB, no external fetch).
     Schedule("cost_of_living", {"hour": 15, "minute": 30, "day_of_week": "fri"},
@@ -85,15 +81,9 @@ SCHEDULES: list[Schedule] = [
     # `mufap.yml` in the pakdata-ingest repo — an IP-retry matrix, ~1/5 Azure IPs reach
     # MUFAP). They remain REGISTERED (for a manual `--force` fallback) and are MONITORED
     # for staleness below in MONITORED_EXTERNAL.
-    # PBS external trade: monthly release, published mid-month.
-    Schedule("pbs_external_trade", {"hour": 14, "minute": 0, "day": "10-20"},
-             expected_interval=timedelta(days=40)),
-    Schedule("pbs_lsm", {"hour": 15, "minute": 0, "day": "10-25"},
-             expected_interval=timedelta(days=40)),
-    Schedule("pbs_cpi_monthly", {"hour": 12, "minute": 0, "day": "1-5"},
-             expected_interval=timedelta(days=35)),
-    Schedule("pbs_cpi_groups", {"hour": 13, "minute": 0, "day": "1-8"},
-             expected_interval=timedelta(days=40)),
+    # PBS (SPI, CPI, CPI groups, LSM, trade): www.pbs.gov.pk has dropped connections
+    # from this VPS since ~2026-10-05, so these run on GitHub Actions (`pbs.yml` in
+    # pakdata-ingest, on the days each release can land) and are monitored below.
     Schedule("pta_telecom", {"hour": 10, "minute": 0, "day_of_week": "mon"},
              expected_interval=timedelta(days=40)),
     # Payment Systems Review: quarterly PDF. Check weekly for a new issue;
@@ -114,6 +104,12 @@ MONITORED_EXTERNAL: list[Schedule] = [
     Schedule("sbp_kibor", {}, expected_interval=timedelta(days=4), stale_on_run=True),
     Schedule("sbp_policy_rate", {}, expected_interval=timedelta(days=14), stale_on_run=True),
     Schedule("sbp_auctions", {}, expected_interval=timedelta(days=14), stale_on_run=True),
+    # PBS on GitHub Actions (pbs.yml) — same intervals as the old VPS cadence.
+    Schedule("pbs_spi_weekly", {}, expected_interval=timedelta(days=9)),
+    Schedule("pbs_cpi_monthly", {}, expected_interval=timedelta(days=35)),
+    Schedule("pbs_cpi_groups", {}, expected_interval=timedelta(days=40)),
+    Schedule("pbs_lsm", {}, expected_interval=timedelta(days=40)),
+    Schedule("pbs_external_trade", {}, expected_interval=timedelta(days=40)),
     # MUFAP now runs on GitHub Actions (Azure IPs) — see mufap.yml in pakdata-ingest.
     # Not scheduled here; monitored so a persistent GHA/MUFAP outage still surfaces via
     # the hourly staleness_check. Intervals match the old VPS cadence.

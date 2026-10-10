@@ -159,6 +159,35 @@ def jevons_yoy(items: dict[str, Points], min_items: int = 15, tolerance_days: in
     return out
 
 
+def basket_cost(items: dict[str, Points], basket: dict[str, float], carry_days: int = 14) -> Points:
+    """Weekly rupee cost of a fixed basket: sum of quantity x price, for weeks where every
+    item has a price that week or within the previous `carry_days` (an item the SPI parser
+    dropped as an outlier for one week carries its last price forward). Pure."""
+    series = {it: sorted(items.get(it, [])) for it in basket}
+    if any(not pts for pts in series.values()):
+        return []
+    weeks = sorted({day for pts in series.values() for day, _ in pts})
+    idx = {it: 0 for it in basket}
+    last: dict[str, tuple[date, float] | None] = {it: None for it in basket}
+    out: Points = []
+    for d in weeks:
+        total, ok = 0.0, True
+        for it, qty in basket.items():
+            pts, i = series[it], idx[it]
+            while i < len(pts) and pts[i][0] <= d:
+                last[it] = pts[i]
+                i += 1
+            idx[it] = i
+            lp = last[it]
+            if lp is None or (d - lp[0]).days > carry_days:
+                ok = False
+                continue
+            total += qty * lp[1]
+        if ok:
+            out.append((d, total))
+    return out
+
+
 def share_pct(part: Points, whole: Points, whole_scale: float = 1.0) -> Points:
     wd = dict(whole)
     return [(d, v / (wd[d] * whole_scale) * 100.0) for d, v in part if wd.get(d)]
@@ -332,6 +361,45 @@ def city_specs(cities: list[str]) -> list[Spec]:
     return out
 
 
+# An illustrative monthly grocery basket for a household, priced with PBS SPI items.
+# Quantities are in each item's SPI unit (wheat flour per 20-kg bag, vegetable ghee per
+# 2.5-kg tin, eggs per dozen, tea per 190-g pack, salt per 800-g pack, else per kg/litre).
+# Only items PBS prices in all 17 cities every week, so cities compare like for like.
+GROCERY_BASKET: dict[str, float] = {
+    "commodities.wheat_flour": 2,     # 2 x 20-kg bags
+    "commodities.rice_basmati": 5,    # broken basmati — the rice SPI prices in every city
+    "commodities.pulse_masoor": 1,
+    "commodities.pulse_gram": 1,
+    "commodities.vegetable_ghee_tin": 2,  # two 2.5-kg tins (SPI's cooking-oil tin is missing in 3 cities)
+    "commodities.sugar": 4,
+    "commodities.milk_fresh": 30,     # litres
+    "commodities.eggs": 2,            # dozen
+    "commodities.chicken": 4,         # live broiler, kg
+    "commodities.potatoes": 5,
+    "commodities.onions": 4,
+    "commodities.tomatoes": 3,
+    "commodities.tea_packet": 2,      # 190-g packs
+    "commodities.salt": 1,            # 800-g pack
+}
+_BASKET_TEXT = ("40 kg wheat flour, 5 kg basmati rice (broken), 1 kg each masoor and gram pulse, two 2.5-kg tins of vegetable ghee, "
+                "4 kg sugar, 30 litres fresh milk, 2 dozen eggs, 4 kg chicken, 5 kg potatoes, 4 kg onions, "
+                "3 kg tomatoes, two 190-g packs of tea and an 800-g pack of salt")
+
+
+def basket_specs(cities: list[str]) -> list[Spec]:
+    out = []
+    for city in sorted(cities):
+        label = "National" if city == "national" else city.replace("_", " ").title()
+        key = f"spi:{city}"
+        out.append(Spec(f"prices.grocery_basket.{city}", f"Monthly grocery basket cost — {label}",
+                        "prices", "pkr", "weekly",
+                        f"Weekly cost in rupees of an illustrative monthly household grocery basket at PBS SPI "
+                        f"prices for {label}: {_BASKET_TEXT}. Sum of quantity x that week's price; an item missing "
+                        f"for a week carries its last price for up to two weeks, otherwise the week is skipped.",
+                        [key], (lambda k: lambda i: basket_cost(i[k], GROCERY_BASKET))(key), (1_000, 10_000_000)))
+    return out
+
+
 def display_input(key: str) -> str:
     """Input key -> what the catalog shows: a series id, or a readable label for the
     non-series inputs ("spi:karachi", "funds:Money Market:d30")."""
@@ -386,7 +454,7 @@ class DeriveIndicatorsJob(IngestionJob):
         try:
             cities = [r["id"].split(".", 1)[1] for r in db.query(
                 "SELECT id FROM series WHERE id LIKE %s AND is_active", (_CITIES_FROM_DB,))]
-            specs = SPECS + city_specs(cities)
+            specs = SPECS + city_specs(cities) + basket_specs(cities)
             inputs = load_inputs({k for s in specs for k in s.inputs})
             total, made, skipped = 0, 0, []
             for spec in specs:
