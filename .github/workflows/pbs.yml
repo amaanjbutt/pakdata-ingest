@@ -1,0 +1,87 @@
+name: pbs
+# PBS (Pakistan Bureau of Statistics) ingestion from GitHub's Azure runners. Since
+# ~2026-10-05 www.pbs.gov.pk drops connections from the VPS (curl: connection timed
+# out), so SPI / CPI / CPI groups / LSM / trade moved here like EasyData + SBP. Same
+# restricted SSH tunnel to the VPS Postgres. Each job runs only on the days its
+# release can land (mirrors the old VPS cadence), so quiet days don't send
+# "no new data" alerts.
+on:
+  schedule:
+    - cron: '0 6 * * *'    # 11:00 PKT
+    - cron: '0 10 * * *'   # 15:00 PKT (Friday SPI release lands ~noon-2pm PKT)
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: 'Space-separated PBS jobs to run now (default: the ones due today)'
+        required: false
+        default: ''
+concurrency:
+  group: pbs
+  cancel-in-progress: false
+jobs:
+  pbs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: probe PBS from this runner
+        run: |
+          code=$(curl -s -o /dev/null -m 25 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130" \
+                 -w "%{http_code}" https://www.pbs.gov.pk/price-statistics/ || true)
+          echo "PBS price-statistics -> $code"
+          [ "$code" = "200" ] || { echo "::error::PBS unreachable from this runner ($code)"; exit 1; }
+      - name: pick jobs due today
+        id: due
+        run: |
+          if [ -n "${{ github.event.inputs.jobs }}" ]; then
+            jobs="${{ github.event.inputs.jobs }}"
+          else
+            dow=$(date -u +%u); dom=$((10#$(date -u +%d))); jobs=""
+            [ "$dow" = "5" ] || [ "$dow" = "6" ] && jobs="$jobs pbs_spi_weekly"
+            [ $dom -le 8 ] && jobs="$jobs pbs_cpi_monthly"
+            [ $dom -le 10 ] && jobs="$jobs pbs_cpi_groups"
+            [ $dom -ge 10 ] && [ $dom -le 22 ] && jobs="$jobs pbs_external_trade"
+            [ $dom -ge 10 ] && [ $dom -le 27 ] && jobs="$jobs pbs_lsm"
+          fi
+          echo "jobs=$jobs" >> "$GITHUB_OUTPUT"
+          echo "due today:$jobs"
+      - uses: actions/checkout@v4
+        if: steps.due.outputs.jobs != ''
+      - uses: actions/setup-python@v5
+        if: steps.due.outputs.jobs != ''
+        with:
+          python-version: '3.12'
+      - name: install deps
+        if: steps.due.outputs.jobs != ''
+        run: pip install -q -r requirements.txt
+      - name: open DB tunnel to VPS
+        if: steps.due.outputs.jobs != ''
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_TUNNEL_KEY }}" > ~/.ssh/tunnel_key
+          chmod 600 ~/.ssh/tunnel_key
+          ok=""
+          for i in 1 2 3 4 5; do
+            if ssh -i ~/.ssh/tunnel_key -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes \
+                 -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 \
+                 -o TCPKeepAlive=yes -f -N -L 5432:127.0.0.1:5432 root@${{ secrets.VPS_HOST }}; then
+              ok=1; echo "tunnel up (attempt $i)"; break
+            fi
+            echo "tunnel attempt $i failed; retrying in 20s"; sleep 20
+          done
+          [ -n "$ok" ] || { echo "tunnel failed after 5 attempts"; exit 1; }
+      - name: run PBS jobs
+        if: steps.due.outputs.jobs != ''
+        env:
+          DATABASE_URL: postgresql://pakdata:${{ secrets.DB_PASSWORD }}@127.0.0.1:5432/pakdata
+          RAW_ARCHIVE_DIR: /tmp/raw
+        run: |
+          mkdir -p /tmp/raw
+          set +e
+          fail=0
+          for job in ${{ steps.due.outputs.jobs }}; do
+            echo "::group::$job"
+            python -m ingestion.run "$job" --force
+            rc=$?; echo "exit=$rc for $job"; [ $rc -eq 0 ] || fail=1
+            echo "::endgroup::"
+          done
+          exit $fail
