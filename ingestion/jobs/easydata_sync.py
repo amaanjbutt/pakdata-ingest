@@ -88,10 +88,11 @@ def _module_priority(s: EasyDataSeries) -> int:
 
 
 def _load_api_keys() -> list[str]:
-    """EasyData API keys in rotation order. Prefer EASYDATA_API_KEYS (comma- or
-    whitespace-separated) for multi-key rotation; fall back to the single
-    EASYDATA_API_KEY. Blanks and duplicates removed, order preserved."""
-    raw = os.getenv("EASYDATA_API_KEYS") or os.getenv("EASYDATA_API_KEY") or ""
+    """EasyData API keys in rotation order: EASYDATA_API_KEYS (comma- or
+    whitespace-separated) plus EASYDATA_API_KEY. Both are merged, so a new key can be
+    added as the single-key secret without rewriting the list secret (GitHub secrets
+    are write-only). Blanks and duplicates removed, order preserved."""
+    raw = f"{os.getenv('EASYDATA_API_KEYS') or ''},{os.getenv('EASYDATA_API_KEY') or ''}"
     seen: set[str] = set()
     keys: list[str] = []
     for k in re.split(r"[,\s]+", raw.strip()):
@@ -284,12 +285,15 @@ class EasyDataSyncJob(IngestionJob):
                         "update EASYDATA_API_KEYS in BOTH GHA repos (amaanjbutt + amaanu01) "
                         "and the VPS .env. " + self.redact(str(exc)),
                     )
-                if not _is_rate_limited(exc):
+                unauthorized = _is_unauthorized(exc)
+                if not (_is_rate_limited(exc) or unauthorized):
                     raise
                 last_exc = exc
                 penalize = getattr(quota, "penalize", None)
                 if penalize:
-                    penalize()  # retire this key for the hour; rotate below
+                    # 429: retire the key for the hour. 401: the key is expired/invalid —
+                    # retire it for the rest of the run (30 days) and keep going on the others.
+                    penalize(30 * 86400.0 if unauthorized else 3600.0)
                 if not quota.allow():  # no other key has budget -> stop cleanly
                     raise QuotaExhausted(self.redact(str(exc))) from exc
         raise QuotaExhausted(self.redact(str(last_exc)) if last_exc else "quota exhausted")
