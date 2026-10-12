@@ -140,6 +140,10 @@ class IngestionJob:
         out: list[tuple[Record, bool]] = []
         rejects: list[str] = []
         large_steps: list[str] = []
+        # one baseline lookup per (series, dims), not per record — each is a round trip,
+        # and over the GitHub Actions SSH tunnel a full re-parse (CPI groups ~2.6k rows)
+        # spent most of a 40-minute run on these
+        prev_cache: dict[tuple[str, str], tuple[float | None, date | None]] = {}
         for r in records:
             if r.obs_date > today:
                 rejects.append(f"{r.series_id}: date in the future {r.obs_date}")
@@ -159,7 +163,10 @@ class IngestionJob:
             flagged = False
             step = b.get("max_step")
             if step is not None and r.value is not None:
-                prev, prev_date = self._prev_value(r.series_id, r.dims)
+                ck = (r.series_id, json.dumps(r.dims, sort_keys=True))
+                if ck not in prev_cache:
+                    prev_cache[ck] = self._prev_value(r.series_id, r.dims)
+                prev, prev_date = prev_cache[ck]
                 # Only flag a large step for records that EXTEND the series past its
                 # current latest date. Comparing RE-INGESTED history against the newest
                 # stored value (e.g. 2017 CPI 107 vs 2026 CPI 293) is a false positive —
@@ -204,24 +211,33 @@ class IngestionJob:
         nonzero_series: set[str] = set()
         with db.connection() as conn:
             with conn.cursor() as cur:
-                for r, flagged in validated:
-                    cur.execute(
-                        """
-                        INSERT INTO observations (series_id, obs_date, value, dims, flagged, revised_at)
-                        VALUES (%s, %s, %s, %s::jsonb, %s, now())
-                        ON CONFLICT (series_id, obs_date, dims)
-                        DO UPDATE SET value = EXCLUDED.value,
-                                      flagged = EXCLUDED.flagged,
-                                      revised_at = now()
-                        """,
+                # executemany pipelines the statements (a few round trips per batch, not
+                # one per row — matters over the GHA SSH tunnel). Unchanged rows are left
+                # alone: no write, no revised_at bump (the revision trigger ignores them
+                # anyway).
+                cur.executemany(
+                    """
+                    INSERT INTO observations (series_id, obs_date, value, dims, flagged, revised_at)
+                    VALUES (%s, %s, %s, %s::jsonb, %s, now())
+                    ON CONFLICT (series_id, obs_date, dims)
+                    DO UPDATE SET value = EXCLUDED.value,
+                                  flagged = EXCLUDED.flagged,
+                                  revised_at = now()
+                    WHERE observations.value IS DISTINCT FROM EXCLUDED.value
+                       OR observations.flagged IS DISTINCT FROM EXCLUDED.flagged
+                    """,
+                    [
                         (
                             r.series_id,
                             r.obs_date,
                             Decimal(str(r.value)) if r.value is not None else None,
                             json.dumps(r.dims),
                             flagged,
-                        ),
-                    )
+                        )
+                        for r, flagged in validated
+                    ],
+                )
+                for r, _ in validated:
                     n += 1
                     if r.value is not None and r.value != 0:
                         nonzero_series.add(r.series_id)
