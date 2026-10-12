@@ -30,6 +30,7 @@ import threading
 import time
 from collections import defaultdict
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from dataclasses import replace
 from datetime import date, datetime, timedelta
 from typing import Callable
 from urllib.parse import quote
@@ -194,6 +195,35 @@ class EasyDataSyncJob(IngestionJob):
         "daily": 7, "weekly": 16, "monthly": 45, "quarterly": 130,
         "annual": 400, "irregular": 60,
     }
+
+    @staticmethod
+    def _with_db_state(series: list[EasyDataSeries]) -> list[EasyDataSeries]:
+        """Overlay what the database knows onto the static config.
+
+        `easydata_series.json` is a snapshot: its `easydata_last_refresh` never moves and
+        almost every entry says module "economic". Comparing EasyData's refresh date with
+        the snapshot re-selected every series of an advanced dataset on every run (the DB
+        value written by `_update_refresh` was never read back), and with one shared
+        priority the file order decided who got the 450-series budget — the confidence
+        surveys (module social in the DB) went unpulled from Aug-2026. Take the DB's
+        refresh date (the later of the two) and the DB's module."""
+        rows = db.query(
+            "SELECT id, module, easydata_last_refresh FROM series WHERE id = ANY(%(ids)s)",
+            {"ids": [s.id for s in series]},
+        )
+        known = {r["id"]: r for r in rows}
+        out: list[EasyDataSeries] = []
+        for s in series:
+            r = known.get(s.id)
+            if r is None:
+                out.append(s)
+                continue
+            db_ref = r.get("easydata_last_refresh")
+            ref = s.easydata_last_refresh
+            if db_ref is not None and (ref is None or str(db_ref) > str(ref)):
+                ref = str(db_ref)
+            out.append(replace(s, module=r.get("module") or s.module, easydata_last_refresh=ref))
+        return out
 
     def _select_backfill(self, series: list[EasyDataSeries]) -> list[EasyDataSeries]:
         """Pick series a backfill still needs, skipping ones already fresh. One bulk
@@ -492,7 +522,7 @@ class EasyDataSyncJob(IngestionJob):
                 if len(self.api_keys) > 1
                 else QuotaCounter(self.quota_path)
             )
-            series = load_series()
+            series = self._with_db_state(load_series())
             # Wall-clock deadline so the run always finishes with a terminal status
             # (partial) even if EasyData is slow/erroring — never hangs to the runner
             # timeout and leaves a zombie 'running' row.
