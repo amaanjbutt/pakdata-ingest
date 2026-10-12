@@ -1,0 +1,101 @@
+[
+  {
+    "id": "money.m2.monthly",
+    "name": "Broad money (M2) — month-end",
+    "description": "Broad money (M2), month-end stock, Rs billion, as printed in SBP's Monthly Statistical Bulletin (Selected Economic Indicators). Monthly since 2007; our other M2 series are weekly or quarterly. Each point carries its first print and every revision.",
+    "unit": "pkr_bn", "module": "monetary", "frequency": "monthly",
+    "source_url": "https://www.sbp.org.pk/our-operations/publications/statistical-bulletin/412",
+    "doc_source": "sbp_msb", "min_value": 1000, "max_value": 500000,
+    "labels": ["Broad Money (M2) @ \""]
+  },
+  {
+    "id": "rates.kibor.1m.month_end",
+    "name": "KIBOR 1-month — month-end",
+    "description": "1-month KIBOR (offer) at month-end, percent, as printed in SBP's Monthly Statistical Bulletin. Monthly since 2007.",
+    "unit": "percent", "module": "fixed-income", "frequency": "monthly",
+    "source_url": "https://www.sbp.org.pk/our-operations/publications/statistical-bulletin/412",
+    "doc_source": "sbp_msb", "min_value": 0.5, "max_value": 40,
+    "labels": ["KIBOR – End Month (1 Month) ** \""]
+  },
+  {
+    "id": "rates.kibor.1m.month_avg",
+    "name": "KIBOR 1-month — monthly average",
+    "description": "1-month KIBOR (offer), average of the month's fixings, percent, as printed in SBP's Monthly Statistical Bulletin. Monthly since 2007.",
+    "unit": "percent", "module": "fixed-income", "frequency": "monthly",
+    "source_url": "https://www.sbp.org.pk/our-operations/publications/statistical-bulletin/412",
+    "doc_source": "sbp_msb", "min_value": 0.5, "max_value": 40,
+    "labels": ["KIBOR – Month Average (1 Month) ** \""]
+  },
+  {
+    "id": "banking.advances_to_deposits_ratio.monthly",
+    "name": "Scheduled banks' advances-to-deposits ratio (monthly)",
+    "description": "Ratio of scheduled banks' advances to deposits, percent, month-end, as printed in SBP's Monthly Statistical Bulletin. Monthly since 2004 (our other ADR series are quarterly).",
+    "unit": "percent", "module": "monetary", "frequency": "monthly",
+    "source_url": "https://www.sbp.org.pk/our-operations/publications/statistical-bulletin/412",
+    "doc_source": "sbp_msb", "min_value": 5, "max_value": 150,
+    "labels": ["Ratio of Scheduled Banks' Advances to Deposits Percent"]
+  },
+  {
+    "id": "banking.investment_to_deposits_ratio.monthly",
+    "name": "Scheduled banks' investment-to-deposits ratio (monthly)",
+    "description": "Ratio of scheduled banks' investments to deposits, percent, month-end, as printed in SBP's Monthly Statistical Bulletin. Monthly since 2004.",
+    "unit": "percent", "module": "monetary", "frequency": "monthly",
+    "source_url": "https://www.sbp.org.pk/our-operations/publications/statistical-bulletin/412",
+    "doc_source": "sbp_msb", "min_value": 5, "max_value": 200,
+    "labels": ["Ratio of Scheduled Banks' Investment to Deposits \""]
+  },
+  {
+    "id": "inflation.core.trimmed_mean.national.yoy",
+    "name": "Core inflation, 20% trimmed mean (national, YoY) — historical",
+    "description": "National core inflation, 20% trimmed mean, year-on-year percent, as printed in SBP's Monthly Statistical Bulletin, 2007-2019 (base 2007-08; superseded by the base-2015-16 urban/rural trimmed-mean series). Historical series.",
+    "unit": "percent", "module": "prices", "frequency": "monthly",
+    "source_url": "https://www.sbp.org.pk/our-operations/publications/statistical-bulletin/412",
+    "doc_source": "sbp_msb", "min_value": -10, "max_value": 40,
+    "labels": ["Core Inflation (20% Trimmed Mean) \"", "Core Inflation (20% Tri mmed Mean) \"", "Core Inflation YoY (20% Trimmed Mean) \""]
+  },
+  {
+    "id": "inflation.cpi.national.food.yoy",
+    "name": "CPI food inflation (national, YoY) — historical",
+    "description": "National CPI food inflation, year-on-year percent, as printed in SBP's Monthly Statistical Bulletin, 2007-2019 (base 2000-01 then 2007-08). Since 2016 PBS publishes food inflation for urban and rural areas separately. Historical series.",
+    "unit": "percent", "module": "prices", "frequency": "monthly",
+    "source_url": "https://www.sbp.org.pk/our-operations/publications/statistical-bulletin/412",
+    "doc_source": "sbp_msb", "min_value": -20, "max_value": 60,
+    "labels": ["CPI Inflation (Foods) \"", "CPI Inflation (Food) \"", "CPI Inflation YoY (Food) \""]
+  },
+  {
+    "id": "inflation.cpi.national.nonfood.yoy",
+    "name": "CPI non-food inflation (national, YoY) — historical",
+    "description": "National CPI non-food inflation, year-on-year percent, as printed in SBP's Monthly Statistical Bulletin, 2007-2019. Historical series.",
+    "unit": "percent", "module": "prices", "frequency": "monthly",
+    "source_url": "https://www.sbp.org.pk/our-operations/publications/statistical-bulletin/412",
+    "doc_source": "sbp_msb", "min_value": -20, "max_value": 60,
+    "labels": ["CPI Inflation (Non Foods) \"", "CPI Inflation (Non Food) \"", "CPI Inflation YoY (Non Food) \""]
+  },
+  {
+    "id": "inflation.core.nfne.national.yoy",
+    "name": "Core inflation, non-food non-energy (national, YoY) — historical",
+    "description": "National core inflation excluding food and energy (NFNE), year-on-year percent, as printed in SBP's Monthly Statistical Bulletin, 2007-2019 (superseded by the base-2015-16 urban/rural NFNE series). Historical series.",
+    "unit": "percent", "module": "prices", "frequency": "monthly",
+    "source_url": "https://www.sbp.org.pk/our-operations/publications/statistical-bulletin/412",
+    "doc_source": "sbp_msb", "min_value": -10, "max_value": 40,
+    "labels": ["Core Inflation (Non Foods, Non Energy) \"", "Core Inflation (Non Food, Non Energy) \"", "Core Inflation YoY (Non Food, Non Energy) \""]
+  },
+  {
+    "id": "inflation.cpi.national.index_2007_08",
+    "name": "Consumer Price Index, national (2007-08 = 100) — historical",
+    "description": "National CPI level, base 2007-08 = 100, as printed in SBP's Monthly Statistical Bulletin, 2010-2019 (PBS rebased to 2015-16 in 2019). Historical series.",
+    "unit": "index", "module": "prices", "frequency": "monthly",
+    "source_url": "https://www.sbp.org.pk/our-operations/publications/statistical-bulletin/412",
+    "doc_source": "sbp_msb", "min_value": 50, "max_value": 1000,
+    "labels": ["Consumer Price Index (Overall) (2007-08=100)"]
+  },
+  {
+    "id": "inflation.cpi.national.index_2000_01",
+    "name": "Consumer Price Index, national (2000-01 = 100) — historical",
+    "description": "National CPI level, base 2000-01 = 100, as printed in SBP's Monthly Statistical Bulletin, 2004-2011 (PBS rebased to 2007-08 in 2011). Historical series.",
+    "unit": "index", "module": "prices", "frequency": "monthly",
+    "source_url": "https://www.sbp.org.pk/our-operations/publications/statistical-bulletin/412",
+    "doc_source": "sbp_msb", "min_value": 50, "max_value": 1000,
+    "labels": ["Consumer Price Index 2000-01=100", "Consumer Price Index (overall) (2000-01=100)"]
+  }
+]

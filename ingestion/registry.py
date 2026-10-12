@@ -30,6 +30,7 @@ from ingestion.jobs.pbs_spi_weekly import PbsSpiWeeklyJob
 from ingestion.jobs.pta_telecom import PtaTelecomJob
 from ingestion.jobs.sbp_auctions import SbpAuctionsJob
 from ingestion.jobs.sbp_kibor import SbpKiborJob
+from ingestion.jobs.sbp_msb_vintages import SbpMsbFetchJob, VintagesRefreshJob
 from ingestion.jobs.sbp_payment_systems import SbpPaymentSystemsJob
 from ingestion.jobs.sbp_policy_rate import SbpPolicyRateJob
 from ingestion.jobs.sbp_sme_finance import SbpSmeFinanceJob
@@ -62,4 +63,6 @@ JOBS: dict[str, type[IngestionJob]] = {
     PtaTelecomJob.name: PtaTelecomJob,
     SbpPaymentSystemsJob.name: SbpPaymentSystemsJob,
     SbpSmeFinanceJob.name: SbpSmeFinanceJob,
+    SbpMsbFetchJob.name: SbpMsbFetchJob,
+    VintagesRefreshJob.name: VintagesRefreshJob,
 }

@@ -84,6 +84,10 @@ SCHEDULES: list[Schedule] = [
     # PBS (SPI, CPI, CPI groups, LSM, trade): www.pbs.gov.pk has dropped connections
     # from this VPS since ~2026-10-05, so these run on GitHub Actions (`pbs.yml` in
     # pakdata-ingest, on the days each release can land) and are monitored below.
+    # Rebuild the bulletin series + revision vintages when sbp_msb_fetch (GHA) stored a
+    # new SBP Monthly Statistical Bulletin issue; a cheap no-op otherwise.
+    Schedule("vintages_refresh", {"hour": 6, "minute": 15},
+             expected_interval=timedelta(days=3)),
     # PTA telecom indicators and SBP's Payment Systems / SME Finance reviews: PTA drops
     # connections from this VPS and sbp.org.pk 403s it (both since ~Aug-2026), so they
     # run on GitHub Actions (`publications.yml`) and are monitored below.
@@ -108,6 +112,8 @@ MONITORED_EXTERNAL: list[Schedule] = [
     Schedule("pta_telecom", {}, expected_interval=timedelta(days=40)),
     Schedule("sbp_payment_systems", {}, expected_interval=timedelta(days=130)),
     Schedule("sbp_sme_finance", {}, expected_interval=timedelta(days=130)),
+    # SBP Monthly Statistical Bulletin (publications.yml); a new issue roughly monthly.
+    Schedule("sbp_msb_fetch", {}, expected_interval=timedelta(days=10)),
     # MUFAP now runs on GitHub Actions (Azure IPs) — see mufap.yml in pakdata-ingest.
     # Not scheduled here; monitored so a persistent GHA/MUFAP outage still surfaces via
     # the hourly staleness_check. Intervals match the old VPS cadence.

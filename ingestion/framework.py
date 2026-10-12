@@ -43,6 +43,20 @@ class ValidationError(Exception):
     pass
 
 
+def dedupe_last(records: list) -> list:
+    """Keep the last record per (series_id, obs_date, dims), in first-seen order. Records
+    without a series_id (dedicated-table jobs) pass through untouched. Pure."""
+    out: dict = {}
+    passthrough = []
+    for r in records:
+        sid = getattr(r, "series_id", None)
+        if sid is None:
+            passthrough.append(r)
+            continue
+        out[(sid, r.obs_date, json.dumps(r.dims, sort_keys=True))] = r
+    return list(out.values()) + passthrough
+
+
 # Flagship-id canonicalization (2026-07-30 rename). Scraped jobs historically
 # emitted short ids (kibor.3m, cpi.national, ...); the public catalog now uses the
 # unified `topic.group.item` scheme. Rewriting at the ingestion boundary means a
@@ -302,6 +316,11 @@ class IngestionJob:
                 raise ValueError(
                     f"all {len(files)} file(s) failed to parse; first: {failures[0]}"
                 )
+
+            # One value per (series, date, dims) per run — the last one parsed. Several
+            # files restating the same point (quarterly reviews, month-to-date reports)
+            # otherwise write it over and over within a run: each flip is a fake revision.
+            all_records = dedupe_last(all_records)
 
             validated = self.validate(all_records)
             rows = self.upsert(validated)

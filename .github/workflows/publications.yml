@@ -25,7 +25,7 @@ jobs:
         id: due
         run: |
           jobs="${{ github.event.inputs.jobs }}"
-          [ -n "$jobs" ] || jobs="pta_telecom sbp_payment_systems sbp_sme_finance"
+          [ -n "$jobs" ] || jobs="pta_telecom sbp_payment_systems sbp_sme_finance sbp_msb_fetch"
           echo "jobs=$jobs" >> "$GITHUB_OUTPUT"
           echo "jobs:$jobs"
       - uses: actions/checkout@v4

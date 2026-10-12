@@ -38,7 +38,9 @@ class PdfReportJob(IngestionJob):
     def fetch(self, backfill: bool = False) -> list[FetchedFile]:
         out: list[FetchedFile] = []
         errors: list[Exception] = []
-        urls = self.report_urls(backfill)
+        # Oldest report first: a later review restates earlier quarters (preliminary ->
+        # revised), and the framework keeps the last value per point — newest must win.
+        urls = sorted(self.report_urls(backfill), key=lambda uw: uw[1])
         for url, when in urls:
             try:
                 content = self.http_get(url)
