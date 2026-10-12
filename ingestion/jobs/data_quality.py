@@ -22,6 +22,7 @@ Nothing is deleted outright: every removed/changed row is kept in an audit table
 from __future__ import annotations
 
 import logging
+from datetime import date, timedelta
 
 from app import db
 from ingestion import alerting
@@ -38,6 +39,8 @@ _DDL = [
          reason TEXT, quarantined_at TIMESTAMPTZ DEFAULT now())""",
     """CREATE TABLE IF NOT EXISTS obs_scale_corrections (series_id TEXT, obs_date DATE, dims JSONB,
          old_value NUMERIC, new_value NUMERIC, factor NUMERIC, corrected_at TIMESTAMPTZ DEFAULT now())""",
+    """CREATE TABLE IF NOT EXISTS agri_prices_quarantine (LIKE agri_prices INCLUDING DEFAULTS,
+         reason TEXT, quarantined_at TIMESTAMPTZ DEFAULT now())""",
 ]
 
 _NAV_SPIKES = """
@@ -47,6 +50,28 @@ WITH n AS (
 SELECT fund_id, obs_date FROM n
 WHERE nav <= 0
    OR (pv > 0 AND nv > 0 AND nav > 0 AND abs(pv/nv - 1) < 0.10 AND (nav/pv > 1.4 OR nav/pv < 0.6))
+"""
+
+# AMIS fair-quality price that jumps >4x (or drops below a quarter) for one day while the
+# days either side agree within 30% — a typo in the market report (Mint 2,500 -> 27,002
+# -> 2,500; Ginger 34,500 -> 343 -> 34,500), not a market move. ~0.1% of rows.
+_AGRI_SPIKES = """
+WITH a AS (
+  SELECT commodity_id, market_id, obs_date, fqp, lag(fqp) OVER w pv, lead(fqp) OVER w nv
+  FROM agri_prices WHERE obs_date > %(since)s
+  WINDOW w AS (PARTITION BY commodity_id, market_id ORDER BY obs_date))
+SELECT commodity_id, market_id, obs_date FROM a
+WHERE fqp > 0 AND pv > 0 AND nv > 0 AND abs(pv / nv - 1) < 0.3
+  AND (fqp / pv > 4 OR fqp / pv < 0.25)
+"""
+
+# Rows dated more than a few days ahead. Money-market funds legitimately publish weekend
+# NAVs a day or two early; anything further out is a parse/date bug. Alert only.
+_FUTURE_ROWS = """
+SELECT 'observations' AS t, count(*) AS n FROM observations WHERE obs_date > current_date + 3
+UNION ALL SELECT 'fund_navs', count(*) FROM fund_navs WHERE obs_date > current_date + 3
+UNION ALL SELECT 'security_prices', count(*) FROM security_prices WHERE obs_date > current_date + 3
+UNION ALL SELECT 'agri_prices', count(*) FROM agri_prices WHERE obs_date > current_date + 3
 """
 
 _SCALE_SLIPS = """
@@ -86,7 +111,12 @@ class DataQualityJob(IngestionJob):
                 "securities": self._quarantine_security_prices(),
                 "auctions": self._quarantine_auctions(),
                 "scale": self._fix_scale_slips(),
+                # nightly: the last 60 days; `--backfill`: the whole AMIS history once
+                "agri": self._quarantine_agri(full=backfill),
             }
+            future = {r["t"]: int(r["n"]) for r in db.query(_FUTURE_ROWS) if int(r["n"])}
+            if future:
+                alerting.alert(f"{self.name}: rows dated more than 3 days ahead", str(future))
             total = sum(res.values())
             self._finish(run_id, "success", total, None, None)
             if total >= 50:  # a normal night is ~0; a burst means a feed changed format
@@ -107,6 +137,21 @@ class DataQualityJob(IngestionJob):
                     """WITH d AS (DELETE FROM fund_navs WHERE fund_id=%s AND obs_date=%s RETURNING *)
                        INSERT INTO fund_navs_quarantine SELECT d.*, 'nonpositive_or_isolated_spike' FROM d""",
                     [(r["fund_id"], r["obs_date"]) for r in rows],
+                )
+        return len(rows)
+
+    def _quarantine_agri(self, full: bool = False) -> int:
+        since = date(2007, 1, 1) if full else date.today() - timedelta(days=60)
+        rows = db.query(_AGRI_SPIKES, {"since": since})
+        if not rows:
+            return 0
+        with db.connection() as conn:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    """WITH d AS (DELETE FROM agri_prices
+                                  WHERE commodity_id=%s AND market_id=%s AND obs_date=%s RETURNING *)
+                       INSERT INTO agri_prices_quarantine SELECT d.*, 'isolated_fqp_spike' FROM d""",
+                    [(r["commodity_id"], r["market_id"], r["obs_date"]) for r in rows],
                 )
         return len(rows)
 
