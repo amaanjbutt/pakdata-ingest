@@ -84,15 +84,9 @@ SCHEDULES: list[Schedule] = [
     # PBS (SPI, CPI, CPI groups, LSM, trade): www.pbs.gov.pk has dropped connections
     # from this VPS since ~2026-10-05, so these run on GitHub Actions (`pbs.yml` in
     # pakdata-ingest, on the days each release can land) and are monitored below.
-    Schedule("pta_telecom", {"hour": 10, "minute": 0, "day_of_week": "mon"},
-             expected_interval=timedelta(days=40)),
-    # Payment Systems Review: quarterly PDF. Check weekly for a new issue;
-    # a quarter can lag ~2 months after quarter-end, so allow a long interval.
-    Schedule("sbp_payment_systems", {"hour": 9, "minute": 0, "day_of_week": "mon"},
-             expected_interval=timedelta(days=130)),
-    # SME Finance Review: quarterly PDF, published with a lag; weekly check.
-    Schedule("sbp_sme_finance", {"hour": 9, "minute": 30, "day_of_week": "mon"},
-             expected_interval=timedelta(days=130)),
+    # PTA telecom indicators and SBP's Payment Systems / SME Finance reviews: PTA drops
+    # connections from this VPS and sbp.org.pk 403s it (both since ~Aug-2026), so they
+    # run on GitHub Actions (`publications.yml`) and are monitored below.
 ]
 
 
@@ -110,6 +104,10 @@ MONITORED_EXTERNAL: list[Schedule] = [
     Schedule("pbs_cpi_groups", {}, expected_interval=timedelta(days=40)),
     Schedule("pbs_lsm", {}, expected_interval=timedelta(days=40)),
     Schedule("pbs_external_trade", {}, expected_interval=timedelta(days=40)),
+    # publications.yml (Mon + Thu): PTA monthly-ish, SBP reviews quarterly with a lag.
+    Schedule("pta_telecom", {}, expected_interval=timedelta(days=40)),
+    Schedule("sbp_payment_systems", {}, expected_interval=timedelta(days=130)),
+    Schedule("sbp_sme_finance", {}, expected_interval=timedelta(days=130)),
     # MUFAP now runs on GitHub Actions (Azure IPs) — see mufap.yml in pakdata-ingest.
     # Not scheduled here; monitored so a persistent GHA/MUFAP outage still surfaces via
     # the hourly staleness_check. Intervals match the old VPS cadence.

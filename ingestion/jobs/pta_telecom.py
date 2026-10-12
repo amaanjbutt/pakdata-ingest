@@ -192,13 +192,19 @@ class PtaTelecomJob(IngestionJob):
 
     def fetch(self, backfill: bool = False) -> list[FetchedFile]:
         out: list[FetchedFile] = []
+        errors: list[Exception] = []
         for key, ind in INDICATORS.items():
             try:
                 content = self.http_get(BASE.format(id=ind["id"]))
-            except Exception:
+            except Exception as exc:
+                errors.append(exc)
                 continue
             out.append(FetchedFile(filename=f"{key}.html", content=content,
                                    when=date.today()))
+        # Every page failing means PTA is unreachable (it has dropped connections from
+        # the VPS since Aug-2026) — fail loudly rather than report "no new data".
+        if errors and not out:
+            raise errors[0]
         return out
 
     def parse(self, f: FetchedFile) -> list[Record]:

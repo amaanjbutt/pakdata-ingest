@@ -1,0 +1,71 @@
+name: publications
+# PTA telecom indicators + SBP's Payment Systems Review and SME Finance Review from
+# GitHub's Azure runners. PTA drops connections from the VPS and sbp.org.pk 403s it
+# (both since ~Aug-2026 — the jobs read as "no new data" for two months). Same
+# restricted SSH tunnel to the VPS Postgres. Releases are monthly/quarterly; twice a
+# week is plenty.
+on:
+  schedule:
+    - cron: '30 5 * * 1,4'   # Mon + Thu 10:30 PKT
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: 'Space-separated jobs to run (default: all three)'
+        required: false
+        default: ''
+concurrency:
+  group: publications
+  cancel-in-progress: false
+jobs:
+  publications:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: pick jobs
+        id: due
+        run: |
+          jobs="${{ github.event.inputs.jobs }}"
+          [ -n "$jobs" ] || jobs="pta_telecom sbp_payment_systems sbp_sme_finance"
+          echo "jobs=$jobs" >> "$GITHUB_OUTPUT"
+          echo "jobs:$jobs"
+      - uses: actions/checkout@v4
+        if: steps.due.outputs.jobs != ''
+      - uses: actions/setup-python@v5
+        if: steps.due.outputs.jobs != ''
+        with:
+          python-version: '3.12'
+      - name: install deps
+        if: steps.due.outputs.jobs != ''
+        run: pip install -q -r requirements.txt
+      - name: open DB tunnel to VPS
+        if: steps.due.outputs.jobs != ''
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_TUNNEL_KEY }}" > ~/.ssh/tunnel_key
+          chmod 600 ~/.ssh/tunnel_key
+          ok=""
+          for i in 1 2 3 4 5; do
+            if ssh -i ~/.ssh/tunnel_key -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes \
+                 -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 \
+                 -o TCPKeepAlive=yes -f -N -L 5432:127.0.0.1:5432 root@${{ secrets.VPS_HOST }}; then
+              ok=1; echo "tunnel up (attempt $i)"; break
+            fi
+            echo "tunnel attempt $i failed; retrying in 20s"; sleep 20
+          done
+          [ -n "$ok" ] || { echo "tunnel failed after 5 attempts"; exit 1; }
+      - name: run jobs
+        if: steps.due.outputs.jobs != ''
+        env:
+          DATABASE_URL: postgresql://pakdata:${{ secrets.DB_PASSWORD }}@127.0.0.1:5432/pakdata
+          RAW_ARCHIVE_DIR: /tmp/raw
+        run: |
+          mkdir -p /tmp/raw
+          set +e
+          fail=0
+          for job in ${{ steps.due.outputs.jobs }}; do
+            echo "::group::$job"
+            python -m ingestion.run "$job" --force
+            rc=$?; echo "exit=$rc for $job"; [ $rc -eq 0 ] || fail=1
+            echo "::endgroup::"
+          done
+          exit $fail

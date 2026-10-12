@@ -37,15 +37,22 @@ class PdfReportJob(IngestionJob):
 
     def fetch(self, backfill: bool = False) -> list[FetchedFile]:
         out: list[FetchedFile] = []
-        for url, when in self.report_urls(backfill):
+        errors: list[Exception] = []
+        urls = self.report_urls(backfill)
+        for url, when in urls:
             try:
                 content = self.http_get(url)
-            except Exception:
+            except Exception as exc:
+                errors.append(exc)
                 continue
             if content[:4] != b"%PDF":  # SBP redesign catch-all shell, not a PDF
                 continue
             name = url.rsplit("/", 1)[-1] or "report.pdf"
             out.append(FetchedFile(filename=name, content=content, when=when))
+        # Every download failed = the source is unreachable (e.g. it started blocking our
+        # IP), not "no new data" — fail the run so it alerts instead of looking healthy.
+        if urls and len(errors) == len(urls):
+            raise errors[0]
         return out
 
     def parse(self, f: FetchedFile) -> list[Record]:
@@ -58,11 +65,9 @@ class PdfReportJob(IngestionJob):
 
     def _links(self, page_url: str, pattern: str) -> list[str]:
         """Absolute hrefs on `page_url` matching `pattern` (order preserved,
-        de-duplicated). Returns [] if the page can't be fetched."""
-        try:
-            html = self.http_get(page_url).decode("utf-8", errors="replace")
-        except Exception:
-            return []
+        de-duplicated). An unreachable landing page raises: SBP 403'd the VPS from
+        Aug-2026 and returning [] here made two months of failures read as no_new_data."""
+        html = self.http_get(page_url).decode("utf-8", errors="replace")
         seen: dict[str, None] = {}
         for m in re.finditer(r'href="([^"]+)"', html):
             h = m.group(1)
