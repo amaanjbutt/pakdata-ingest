@@ -31,14 +31,17 @@ FILE_BASE = "https://www.mufap.com.pk"
 TAB_ID = 45
 INCREMENTAL_FILES = 2  # newest month-to-date file(s); dedup handles overlap
 
+# Case-insensitive: since mid-2026 MUFAP prints "Non-Bats" (the old upper-case-only
+# pattern silently dropped every such trade) and the occasional "Unliisted" typo.
 _ROW_RE = re.compile(
     r"^(BATS|Non-BATS)\s+"
     r"(\d{1,2}-[A-Za-z]{3}-\d{2})\s+"
     r"(.+?)\s+"
     r"([A-Za-z]{3}\s+\d{1,2},\s*\d{4})\s+"
     r"([A-Za-z]{3}\s+\d{1,2},\s*\d{4})\s+"
-    r"(Listed|Unlisted|Un-listed)\s+"
-    r"(.+)$"
+    r"(Listed|Un-?l+i+sted)\s+"
+    r"(.+)$",
+    re.I,
 )
 # Split the trailing run of numbers on the space that follows a "…dd" number end.
 _NUM_SPLIT = re.compile(r"(?<=\.\d\d)\s+")
@@ -76,18 +79,48 @@ def _date(s: str, fmts: tuple[str, ...]) -> date | None:
     return None
 
 
+def _page_lines(page) -> list[str]:
+    """Text lines rebuilt from word positions, joining words that touch. The PDFs set
+    some numbers in pieces with no gap between them — extract_text() reads a volume of
+    25.00 as "2 5.00" and 1,500.00 as "1 ,500.00", which shifts every column after it."""
+    words = sorted(page.extract_words(x_tolerance=1.5), key=lambda w: (w["top"], w["x0"]))
+    lines: list[list[dict]] = []
+    for w in words:
+        if lines and abs(w["top"] - lines[-1][0]["top"]) < 2.5:
+            lines[-1].append(w)
+        else:
+            lines.append([w])
+    out = []
+    for ln in lines:
+        ln.sort(key=lambda w: w["x0"])
+        text = ln[0]["text"]
+        for prev, w in zip(ln, ln[1:]):
+            text += ("" if w["x0"] - prev["x1"] < 0.5 else " ") + w["text"]
+        out.append(text)
+    return out
+
+
+def _numbers(tail: str) -> list[float | None]:
+    """Face value, volume, value (Rs mn), price (% of FV) from the trailing columns."""
+    parts = tail.split()
+    if len(parts) != 4:  # older layouts: split only after a "…dd" decimal end
+        parts = _NUM_SPLIT.split(tail.strip())
+    return ([_num(x) for x in parts] + [None, None, None, None])[:4]
+
+
 def parse_debt_trades(pdf_bytes: bytes) -> list[TradeRow]:
     """Parse a MUFAP daily-trading PDF into TradeRow records. Pure."""
     rows: list[TradeRow] = []
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         for page in pdf.pages:
-            for line in (page.extract_text() or "").splitlines():
+            for line in _page_lines(page):
                 m = _ROW_RE.match(line.strip())
                 if not m:
                     continue
                 bats, td, issue, idate, mdate, listed, tail = m.groups()
-                nums = [_num(x) for x in _NUM_SPLIT.split(tail.strip())]
-                nums = (nums + [None, None, None, None])[:4]
+                bats = "BATS" if bats.upper() == "BATS" else "Non-BATS"
+                listed = "Listed" if listed.lower() == "listed" else "Unlisted"
+                nums = _numbers(tail)
                 trade_date = _date(td, ("%d-%b-%y",))
                 if trade_date is None:
                     continue
@@ -97,7 +130,7 @@ def parse_debt_trades(pdf_bytes: bytes) -> list[TradeRow]:
                     issue_name=re.sub(r"\s+", " ", issue).strip(),
                     issue_date=_date(idate, ("%b %d, %Y", "%B %d, %Y")),
                     maturity_date=_date(mdate, ("%b %d, %Y", "%B %d, %Y")),
-                    listed=listed.replace("Un-listed", "Unlisted"),
+                    listed=listed,
                     face_value=nums[0], volume=nums[1], value_mn=nums[2], price_pct=nums[3],
                 ))
     return rows
