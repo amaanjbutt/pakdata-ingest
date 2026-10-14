@@ -1,0 +1,26 @@
+name: ed_probe
+# Print the raw EasyData response shape for series easydata_sync fails to parse
+# (scripts/dq_audit.py probe-easydata). Read-only: no DB, keys redacted by the job.
+on:
+  workflow_dispatch:
+    inputs:
+      series:
+        description: 'Space-separated series ids'
+        required: true
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -q -r requirements.txt
+      - name: probe
+        env:
+          EASYDATA_API_KEYS: ${{ secrets.EASYDATA_API_KEYS }}
+          EASYDATA_API_KEY: ${{ secrets.EASYDATA_API_KEY }}
+          EASYDATA_QUOTA_NOSLEEP: '1'
+          DATABASE_URL: postgresql://unused@127.0.0.1:1/none
+        run: python -m scripts.dq_audit probe-easydata ${{ github.event.inputs.series }} 2>&1 | sed -E 's/api_key=[^&" ]+/api_key=***/g'
