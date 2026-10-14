@@ -17,6 +17,9 @@ runs on the VPS after the day's ingestion and applies idempotent, audited rules:
    Percent/index/app-dep series are never touched. The value is corrected in place; the
    original is kept by the observation_revisions trigger and in `obs_scale_corrections`.
 
+5. **Consistency checks** (alert only): CPI YoY vs its index, reserves identity, offer >= bid,
+   SPI national vs cities, newly written NAVs dated before their fund existed.
+
 Nothing is deleted outright: every removed/changed row is kept in an audit table.
 """
 from __future__ import annotations
@@ -117,6 +120,9 @@ class DataQualityJob(IngestionJob):
             future = {r["t"]: int(r["n"]) for r in db.query(_FUTURE_ROWS) if int(r["n"])}
             if future:
                 alerting.alert(f"{self.name}: rows dated more than 3 days ahead", str(future))
+            broken = self._identity_checks()
+            if broken:
+                alerting.alert(f"{self.name}: consistency checks failed", str(broken))
             total = sum(res.values())
             self._finish(run_id, "success", total, None, None)
             if total >= 50:  # a normal night is ~0; a burst means a feed changed format
@@ -126,6 +132,25 @@ class DataQualityJob(IngestionJob):
         except Exception as exc:
             self._finish(run_id, "failed", 0, str(exc), None)
             raise
+
+    def _identity_checks(self) -> dict[str, list]:
+        """Alert-only checks that should always hold (2026-10-14 audit): headline CPI YoY vs
+        the YoY of its own index, liquid reserves = SBP + banks, offer >= bid, the SPI national
+        price = the mean of the cities, and no NAV written in the last two days dated before
+        its fund existed. Nothing is changed — a hit means a parser or a mapping broke."""
+        from scripts.dq_audit import DETECTORS  # lazy: the GHA repos import every job
+
+        out: dict[str, list] = {}
+        for name in ("cpi_yoy_vs_index", "reserves_identity", "bid_above_offer", "spi_national_vs_cities"):
+            rows = db.query(DETECTORS[name])
+            if rows:
+                out[name] = [f"{r['series_id']} {r['obs_date']}" for r in rows[:5]] + [f"({len(rows)} total)"]
+        pre = db.query(
+            """SELECT n.fund_id, min(n.obs_date) d, count(*) n FROM fund_navs n JOIN funds f USING (fund_id)
+               WHERE n.obs_date < f.inception_date - 60 AND n.revised_at > now() - interval '2 days' GROUP BY 1""")
+        if pre:
+            out["navs_before_inception"] = [f"fund {r['fund_id']} from {r['d']} ({r['n']})" for r in pre[:5]]
+        return out
 
     def _quarantine_navs(self) -> int:
         rows = db.query(_NAV_SPIKES)
