@@ -23,6 +23,10 @@ on:
         description: 'Instead of reconciling: print the raw response shape for these series ids (space-separated)'
         required: false
         default: ''
+      mode:
+        description: 'reconcile (compare only) or apply (write SBP values for points that differ / we lack)'
+        required: false
+        default: 'reconcile'
 concurrency:
   group: dq-verify
   cancel-in-progress: false
@@ -67,5 +71,9 @@ jobs:
             python -m scripts.dq_audit probe-easydata ${{ github.event.inputs.probe }}
             exit 0
           fi
-          python -m scripts.dq_audit reconcile-easydata --budget=$budget $flag --commit
+          if [ "${{ github.event.inputs.mode }}" = "apply" ]; then
+            python -m scripts.dq_audit apply-easydata --budget=$budget --commit
+          else
+            python -m scripts.dq_audit reconcile-easydata --budget=$budget $flag --commit
+          fi
           python -m scripts.dq_audit report

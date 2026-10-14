@@ -386,6 +386,62 @@ def reconcile_easydata(budget: int = 500, include_all: bool = False, commit: boo
     return stats
 
 
+def apply_easydata(budget: int = 500, commit: bool = False, deadline_s: int = 50 * 60) -> Counter:
+    """Bring series with reconciliation differences in line with SBP: re-fetch each one,
+    write the points that differ or that we lack (through the sync job's validate +
+    upsert, so they are ordinary publisher revisions/additions), then re-check it.
+    Points we hold that SBP no longer lists, and our deliberate unit-slip fixes, are
+    left alone."""
+    from app import db
+    from ingestion.easydata_config import load_series
+    from ingestion.framework import Record
+    from ingestion.jobs.easydata_sync import EasyDataSyncJob, QuotaExhausted
+    from ingestion.quota import QuotaCounter, QuotaPool
+
+    job = EasyDataSyncJob(quota_path="./data/dq_quota.json")
+    quota = QuotaPool(job.api_keys, base_path="./data/dq_quota.json") if len(job.api_keys) > 1 \
+        else QuotaCounter("./data/dq_quota.json")
+    key_of = {s.id: s.easydata_key for s in load_series()}
+    todo = [r["series_id"] for r in db.query(
+        """SELECT series_id, count(*) n FROM dq_mismatches WHERE method='easydata' AND kind IN ('value','missing_ours')
+           GROUP BY 1 ORDER BY 2 DESC LIMIT %s""", (budget,))]
+    stats: Counter = Counter()
+    t_end = time.time() + deadline_s
+    for sid in todo:
+        if time.time() > t_end or not quota.allow():
+            stats["stopped_budget"] += 1
+            break
+        key = key_of.get(sid)
+        if not key:
+            stats["no_easydata_key"] += 1
+            continue
+        try:
+            src = _fetch_easydata(job, quota, key)
+        except QuotaExhausted:
+            stats["stopped_quota"] += 1
+            break
+        except Exception:  # noqa: BLE001
+            stats["fetch_error"] += 1
+            continue
+        fixed = {r["obs_date"] for r in db.query(
+            "SELECT obs_date FROM obs_scale_corrections WHERE series_id=%s", (sid,))}
+        ours = {r["obs_date"]: r["v"] for r in db.query(
+            "SELECT obs_date, value::float8 v FROM observations WHERE series_id=%s AND dims='{}'::jsonb", (sid,))}
+        _, diffs = compare_points(ours, src)
+        recs = [Record(sid, d.obs_date, d.source, {}) for d in diffs
+                if d.kind in ("value", "missing_ours") and d.obs_date not in fixed]
+        stats["series"] += 1
+        stats["points_written"] += len(recs)
+        if commit and recs:
+            job.upsert(job.validate(recs))
+        if commit:
+            _store_reconciliation(sid, "easydata", src, True, stats, evidence=f"easydata:{key}")
+    print(dict(stats))
+    if not commit:
+        print("dry run — re-run with --commit to write")
+    return stats
+
+
 def _store_reconciliation(sid: str, method: str, src: dict[date, float | None], commit: bool,
                           stats: Counter, evidence: str, dims: str = "{}", partial: bool = False) -> None:
     """Compare one (series, dims) with the source's points and store the outcome. `partial`:
@@ -489,6 +545,102 @@ def compare_records(method: str, path: str, commit: bool = False) -> Counter:
     print({"series": len(per_series), **dict(stats)})
     if not commit:
         print("dry run — re-run with --commit to store results")
+    return stats
+
+
+def compare_fund_navs(path: str, commit: bool = False) -> Counter:
+    """Every fund's NAV history as MUFAP serves it today ({fund_id: [[date, nav], ...]},
+    fetched raw on a workstation) vs `fund_navs`. A MUFAP point we hold in
+    `fund_navs_quarantine` instead is reported as `quarantined` (the nightly spike rule
+    removed it) so false quarantines show up."""
+    from app import db
+    ensure_tables()
+    src_all = json.loads(open(path, encoding="utf-8").read())
+    quarantined = defaultdict(dict)
+    for r in db.query("SELECT fund_id, obs_date, nav::float8 v FROM fund_navs_quarantine"):
+        quarantined[r["fund_id"]][r["obs_date"]] = r["v"]
+    stats: Counter = Counter()
+    for fid_s, pts in src_all.items():
+        fid = int(fid_s)
+        src = {date.fromisoformat(d): v for d, v in pts}
+        ours = {r["obs_date"]: r["v"] for r in db.query(
+            "SELECT obs_date, nav::float8 v FROM fund_navs WHERE fund_id=%s", (fid,))}
+        matched, diffs = compare_points(ours, src)
+        rows = []
+        for d in diffs:
+            kind = d.kind
+            if kind == "missing_ours" and d.obs_date in quarantined.get(fid, {}):
+                kind = "quarantined"
+            rows.append((f"fund:{fid}", d.obs_date, kind, d.ours, d.source))
+            stats[f"points_{kind}"] += 1
+        stats["funds"] += 1
+        stats["points_matched"] += matched
+        if commit:
+            with db.connection() as conn, conn.cursor() as cur:
+                cur.execute("DELETE FROM dq_mismatches WHERE series_id=%s AND method='mufap_nav'", (f"fund:{fid}",))
+                if rows:
+                    cur.executemany(
+                        """INSERT INTO dq_mismatches (series_id, obs_date, dims, method, kind, our_value, source_value)
+                           VALUES (%s, %s, '{}'::jsonb, 'mufap_nav', %s, %s, %s)""", rows)
+                cur.execute(
+                    """INSERT INTO dq_series_checks (series_id, method, checked_at, source_points, our_points, matched,
+                                                    mismatched, missing_ours, missing_source, error)
+                       VALUES (%s, 'mufap_nav', now(), %s, %s, %s, %s, %s, %s, NULL)
+                       ON CONFLICT (series_id, method) DO UPDATE SET checked_at=now(), source_points=EXCLUDED.source_points,
+                         our_points=EXCLUDED.our_points, matched=EXCLUDED.matched, mismatched=EXCLUDED.mismatched,
+                         missing_ours=EXCLUDED.missing_ours, missing_source=EXCLUDED.missing_source, error=NULL""",
+                    (f"fund:{fid}", len(src), len(ours), matched, sum(1 for r in rows if r[2] == "value"),
+                     sum(1 for r in rows if r[2] in ("missing_ours", "quarantined")),
+                     sum(1 for r in rows if r[2] == "missing_source")))
+    print(dict(stats))
+    return stats
+
+
+def compare_agri(path: str, commit: bool = False) -> Counter:
+    """AMIS FQP histories re-fetched for a sample of (commodity, market) pairs — JSON list
+    of {commodity_id, market_id, obs_date, fqp} — vs `agri_prices`. Points we hold in
+    `agri_prices_quarantine` instead are `quarantined` (removed as typos at source)."""
+    from app import db
+    ensure_tables()
+    by_pair: dict[tuple[int, int], dict[date, float]] = defaultdict(dict)
+    for r in json.loads(open(path, encoding="utf-8").read()):
+        by_pair[(r["commodity_id"], r["market_id"])][date.fromisoformat(r["obs_date"])] = r["fqp"]
+    stats: Counter = Counter()
+    for (cid, mid), src in by_pair.items():
+        ours = {r["obs_date"]: r["v"] for r in db.query(
+            "SELECT obs_date, fqp::float8 v FROM agri_prices WHERE commodity_id=%s AND market_id=%s "
+            "AND fqp IS NOT NULL", (cid, mid))}
+        quar = {r["obs_date"] for r in db.query(
+            "SELECT obs_date FROM agri_prices_quarantine WHERE commodity_id=%s AND market_id=%s", (cid, mid))}
+        # the history export ends a few days back; only compare dates both could hold
+        last = max(src) if src else None
+        ours = {d: v for d, v in ours.items() if last is None or d <= last}
+        matched, diffs = compare_points(ours, src)
+        rows = []
+        for d in diffs:
+            kind = "quarantined" if d.kind == "missing_ours" and d.obs_date in quar else d.kind
+            stats[f"points_{kind}"] += 1
+            rows.append((f"agri:{cid}:{mid}", d.obs_date, kind, d.ours, d.source))
+        stats["pairs"] += 1
+        stats["points_matched"] += matched
+        if commit:
+            with db.connection() as conn, conn.cursor() as cur:
+                cur.execute("DELETE FROM dq_mismatches WHERE series_id=%s AND method='amis_fqp'", (f"agri:{cid}:{mid}",))
+                if rows:
+                    cur.executemany(
+                        """INSERT INTO dq_mismatches (series_id, obs_date, dims, method, kind, our_value, source_value)
+                           VALUES (%s, %s, '{}'::jsonb, 'amis_fqp', %s, %s, %s)""", rows)
+                cur.execute(
+                    """INSERT INTO dq_series_checks (series_id, method, checked_at, source_points, our_points, matched,
+                                                    mismatched, missing_ours, missing_source, error)
+                       VALUES (%s, 'amis_fqp', now(), %s, %s, %s, %s, %s, %s, NULL)
+                       ON CONFLICT (series_id, method) DO UPDATE SET checked_at=now(), source_points=EXCLUDED.source_points,
+                         our_points=EXCLUDED.our_points, matched=EXCLUDED.matched, mismatched=EXCLUDED.mismatched,
+                         missing_ours=EXCLUDED.missing_ours, missing_source=EXCLUDED.missing_source, error=NULL""",
+                    (f"agri:{cid}:{mid}", len(src), len(ours), matched, sum(1 for r in rows if r[2] == "value"),
+                     sum(1 for r in rows if r[2] in ("missing_ours", "quarantined")),
+                     sum(1 for r in rows if r[2] == "missing_source")))
+    print(dict(stats))
     return stats
 
 
@@ -615,10 +767,16 @@ def main(argv: list[str]) -> None:
         detect(commit, only)
     elif cmd == "reconcile-easydata":
         reconcile_easydata(int(flags.get("--budget", 500)), bool(flags.get("--all")), commit)
+    elif cmd == "apply-easydata":
+        apply_easydata(int(flags.get("--budget", 500)), commit)
     elif cmd == "probe-easydata":
         probe_easydata(args[1:])
     elif cmd == "compare-records":
         compare_records(args[1], args[2], commit)
+    elif cmd == "compare-agri":
+        compare_agri(args[1], commit)
+    elif cmd == "compare-fund-navs":
+        compare_fund_navs(args[1], commit)
     elif cmd == "resolve-copies":
         resolve_copies(commit)
     elif cmd == "mark":
