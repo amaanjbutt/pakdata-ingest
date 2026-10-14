@@ -47,8 +47,17 @@ TENORS = ["1w", "2w", "1m", "2m", "3m", "4m", "6m", "9m", "1y", "2y", "3y",
 PKISRV_TENORS = ["1m", "3m", "6m", "9m", "1y"]
 
 
+# Older files (to early 2024) are a panel of broker quotes with day-bucket tenors:
+# "TENOR,AHL,ALFA,BCAP,...,FMAP" / "0-7days,21.75,..." — the PKRV is the FMAP column.
+_DAY_BUCKETS = {"0-7": "1w", "8-15": "2w", "16-30": "1m", "31-60": "2m", "61-90": "3m",
+                "91-120": "4m", "121-180": "6m", "181-270": "9m", "271-365": "1y"}
+
+
 def _norm_tenor(text: str) -> str | None:
-    """'1 - Month' / '10Y' / '6-Month' -> '1m' / '10y' / '6m'."""
+    """'1 - Month' / '10Y' / '6-Month' / '0-7days' -> '1m' / '10y' / '6m' / '1w'."""
+    b = re.match(r"^\s*(\d+)\s*-\s*(\d+)\s*days?\s*$", text.strip().lower())
+    if b:
+        return _DAY_BUCKETS.get(f"{b.group(1)}-{b.group(2)}")
     m = re.search(r"(\d+)\s*[-\s]?\s*(week|month|year|w|m|y)", text.strip().lower())
     if not m:
         return None
@@ -64,21 +73,35 @@ def parse_pkrv_csv(text: str, obs_date: date) -> list[Record]:
     # above it rather than starting with the header.
     header_idx = None
     for i, row in enumerate(rows[:10]):
-        if row and "tenor" in (row[0] or "").strip().lower():
+        first = (row[0] or "").strip().lower() if row else ""
+        if "tenor" in first or first == "userid":  # "userid": the 2022-24 broker-panel files
             header_idx = i
             break
     if header_idx is None:
         raise ValueError("not a PKRV CSV (missing Tenor header)")
+    # The rate column: "Mid Rate" in the current layout; in the broker-panel layouts the
+    # published rate is the panel average — "FMAP" (2023-24) or "Avg" (2022-24). Column 1
+    # there is a single broker's quote.
+    header = [(c or "").strip().lower() for c in rows[header_idx]]
+    col = next((i for i, c in enumerate(header) if c.startswith("mid")), None)
+    if col is None:
+        col = next((i for i, c in enumerate(header) if c in ("fmap", "avg", "average")), None)
+    if col is None:
+        if len([c for c in header if c]) > 3:
+            raise ValueError(f"PKRV CSV with an unknown rate column: {header}")
+        col = 1
     records: list[Record] = []
     for row in rows[header_idx + 1:]:
-        if len(row) < 2:
+        if len(row) <= col:
             continue
         tenor = _norm_tenor(row[0])
         if tenor is None or not re.match(r"^\d+[wmy]$", tenor):
             continue
         try:
-            mid = float(str(row[1]).strip())
+            mid = float(str(row[col]).strip())
         except ValueError:
+            continue
+        if mid <= 0:  # a blank quote, not a rate
             continue
         records.append(Record(f"pkrv.{tenor}", obs_date, mid, {}))
     if not records:
@@ -112,6 +135,8 @@ def parse_pkisrv_csv(text: str, obs_date: date) -> list[Record]:
             continue
         m = re.search(r"-?\d+(?:\.\d+)?", row[ycol])
         if not m:
+            continue
+        if float(m.group(0)) <= 0:  # placeholder, not a yield (see parse_pkrv_csv)
             continue
         records.append(Record(f"pkisrv.{tenor}", obs_date, float(m.group(0)), {}))
     if not records:

@@ -297,20 +297,14 @@ def _candidates(limit: int, include_all: bool) -> list[dict]:
 
 
 def _fetch_easydata(job, quota, key: str) -> dict[date, float | None]:
-    from ingestion.jobs.easydata_sync import _col_index, _parse_date, _parse_value
+    from ingestion.jobs.easydata_sync import _parse_date, _parse_value, easydata_rows
 
     def url(api_key: str) -> str:
         return (f"https://easydata.sbp.org.pk/api/v1/series/{quote(key, safe='')}/data?api_key={api_key}"
                 f"&start_date=1940-01-01&end_date={date.today().isoformat()}&format=json")
 
-    payload = json.loads(job._http_get_rotating(quota, url))
-    cols = payload["columns"]
-    ki, di, vi = (_col_index(cols, c) for c in ("Series Key", "Observation Date", "Observation Value"))
-    out: dict[date, float | None] = {}
-    for row in payload.get("rows", []):
-        if str(row[ki]).strip() == key:
-            out[_parse_date(row[di])] = _parse_value(row[vi])
-    return out
+    text = job._http_get_rotating(quota, url).decode("utf-8", "replace")
+    return {_parse_date(d): _parse_value(v) for k, d, v in easydata_rows(text) if k == key}
 
 
 def probe_easydata(series_ids: list[str]) -> None:

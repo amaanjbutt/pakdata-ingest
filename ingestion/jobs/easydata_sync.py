@@ -87,6 +87,17 @@ def _module_priority(s: EasyDataSeries) -> int:
     return _MODULE_PRIORITY.get(s.module, 9)
 
 
+_FLAGSHIP_PRIORITY = 2  # forex, monetary, prices: meta-checked first on every run
+
+
+def _sweep_order(priority: int, last_checked: datetime | None) -> tuple:
+    """Meta-sweep order of a dataset: flagship modules first (by priority), then every
+    other dataset least-recently checked first (never-checked first). Pure."""
+    if priority <= _FLAGSHIP_PRIORITY:
+        return (0, priority, 0.0)
+    return (1, 0, last_checked.timestamp() if last_checked else 0.0)
+
+
 def _load_api_keys() -> list[str]:
     """EasyData API keys in rotation order: EASYDATA_API_KEYS (comma- or
     whitespace-separated) plus EASYDATA_API_KEY. Both are merged, so a new key can be
@@ -142,26 +153,53 @@ def _parse_date(raw: str) -> date:
     return datetime.strptime(str(raw).strip()[:10], "%Y-%m-%d").date()
 
 
+# Fallback for payloads that aren't valid JSON: SBP writes free-text status comments with
+# unescaped quotes ('... missing "MIS" due to trimmed inflation ...', the CPI 12-month
+# moving-average series), which broke every pull of those series. The first five fields
+# of a row (dataset name, series key, series name, date, value) never carry quotes.
+_ROW_FALLBACK = re.compile(
+    r'\[\s*"[^"]*"\s*,\s*"(?P<key>[^"]*)"\s*,\s*"[^"]*"\s*,\s*"(?P<date>\d{4}-\d{2}-\d{2})[^"]*"'
+    r'\s*,\s*(?:"(?P<sval>[^"]*)"|(?P<nval>-?[\d.eE+-]+|null))')
+_STANDARD_COLUMNS = ["Dataset Name", "Series Key", "Series Name", "Observation Date", "Observation Value"]
+
+
+def easydata_rows(text: str) -> list[tuple[str, str, str | None]]:
+    """[(series_key, date, raw value)] from an EasyData series-data payload. Empty rows
+    (a discontinued key returns `"rows": [[]]`) are skipped; a payload that isn't valid
+    JSON is read row by row with `_ROW_FALLBACK`. Pure."""
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        head = text[:400]
+        if not all(f'"{c}"' in head for c in _STANDARD_COLUMNS):
+            raise
+        out = []
+        for m in _ROW_FALLBACK.finditer(text):
+            v = m.group("sval") if m.group("sval") is not None else m.group("nval")
+            out.append((m.group("key").strip(), m.group("date"), None if v == "null" else v))
+        if not out:
+            raise
+        return out
+    columns = payload["columns"]
+    key_idx = _col_index(columns, "Series Key")
+    date_idx = _col_index(columns, "Observation Date")
+    val_idx = _col_index(columns, "Observation Value")
+    need = max(key_idx, date_idx, val_idx)
+    return [(str(r[key_idx]).strip(), r[date_idx], r[val_idx])
+            for r in payload.get("rows", []) if len(r) > need]
+
+
 def parse_easydata_json(text: str) -> list[Record]:
     """Parse an EasyData series-data JSON payload into catalog-mapped records.
     Rows are mapped to catalog ids via the 'Series Key' column; unknown keys are
     skipped. Pure — no DB/network."""
-    payload = json.loads(text)
-    columns = payload["columns"]
-    rows = payload.get("rows", [])
-    key_idx = _col_index(columns, "Series Key")
-    date_idx = _col_index(columns, "Observation Date")
-    val_idx = _col_index(columns, "Observation Value")
-
     mapping = by_easydata_key()
     records: list[Record] = []
-    for row in rows:
-        cfg = mapping.get(str(row[key_idx]).strip())
+    for key, d, v in easydata_rows(text):
+        cfg = mapping.get(key)
         if cfg is None:
             continue
-        records.append(
-            Record(cfg.id, _parse_date(row[date_idx]), _parse_value(row[val_idx]), {})
-        )
+        records.append(Record(cfg.id, _parse_date(d), _parse_value(v), {}))
     return records
 
 
@@ -330,9 +368,38 @@ class EasyDataSyncJob(IngestionJob):
             (by_code[s.easydata_dataset_code].append(s)
              if s.easydata_dataset_code else to_pull.append(s))
         # Meta-check flagship datasets first, so their series enter `to_pull` even if
-        # the sweep is cut short by the quota gate.
-        ordered = sorted(by_code.items(),
-                         key=lambda kv: min(_module_priority(s) for s in kv[1]))
+        # the sweep is cut short by the quota gate; then everything else least-recently
+        # checked first. (A strict module order let every run's sweep stop before the
+        # same tail datasets — the SCRA daily flows and BOP-by-country went unchecked,
+        # and so unpulled, from mid-July to October 2026.)
+        last_checked = self._dataset_checks()
+        ordered = sorted(by_code.items(), key=lambda kv: _sweep_order(
+            min(_module_priority(s) for s in kv[1]), last_checked.get(kv[0])))
+        checked: list[str] = []
+        try:
+            self._sweep(ordered, quota, deadline, to_pull, refresh_map, checked)
+        finally:
+            self._record_dataset_checks(checked)
+        # Flagship modules (forex/monetary/CPI) pulled before the quota cap is hit.
+        to_pull.sort(key=_module_priority)  # stable: preserves order within a priority
+        return to_pull, refresh_map
+
+    @staticmethod
+    def _dataset_checks() -> dict[str, datetime]:
+        db.execute("CREATE TABLE IF NOT EXISTS easydata_dataset_checks "
+                   "(code TEXT PRIMARY KEY, checked_at TIMESTAMPTZ NOT NULL)")
+        return {r["code"]: r["checked_at"] for r in db.query("SELECT code, checked_at FROM easydata_dataset_checks")}
+
+    @staticmethod
+    def _record_dataset_checks(codes: list[str]) -> None:
+        if not codes:
+            return
+        with db.connection() as conn, conn.cursor() as cur:
+            cur.executemany(
+                "INSERT INTO easydata_dataset_checks (code, checked_at) VALUES (%s, now()) "
+                "ON CONFLICT (code) DO UPDATE SET checked_at = now()", [(c,) for c in codes])
+
+    def _sweep(self, ordered, quota, deadline, to_pull, refresh_map, checked) -> None:
         for code, members in ordered:
             if deadline is not None and time.time() > deadline:
                 logging.getLogger("pakdata.ingest").warning(
@@ -356,9 +423,7 @@ class EasyDataSyncJob(IngestionJob):
                 stored = s.easydata_last_refresh
                 if latest is None or stored is None or str(latest) > str(stored):
                     to_pull.append(s)
-        # Flagship modules (forex/monetary/CPI) pulled before the quota cap is hit.
-        to_pull.sort(key=_module_priority)  # stable: preserves order within a priority
-        return to_pull, refresh_map
+            checked.append(code)
 
     def _pull_one(
         self, s: EasyDataSeries, quota: QuotaCounter, backfill: bool, latest_refresh: str | None
