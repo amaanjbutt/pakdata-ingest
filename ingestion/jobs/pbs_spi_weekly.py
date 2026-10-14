@@ -43,6 +43,8 @@ ARCHIVE_PAGE = "https://www.pbs.gov.pk/price-statistics/"
 BACKFILL_BATCH = 20
 # How many recent weeks an incremental fetch probes (newest first).
 INCREMENTAL_LOOKBACK_WEEKS = 3
+# Incremental runs also fill any week of the last 12 that PBS lists and we lack.
+RECENT_LISTED_WEEKS = 12
 
 _CITY_CODE_RE = re.compile(r"\(\s*\d{1,2}\s*\)")
 _DATE_PATTERNS = ["%d-%m-%Y", "%d.%m.%Y", "%d-%b-%Y", "%d/%m/%Y", "%B %d, %Y", "%d %B %Y"]
@@ -275,8 +277,33 @@ class PbsSpiWeeklyJob(IngestionJob):
         return {r["obs_date"] for r in db.query(
             "SELECT DISTINCT obs_date FROM observations WHERE series_id LIKE 'commodities.%%'")}
 
+    def _recent_listed(self, held: set[date], weeks: int = RECENT_LISTED_WEEKS) -> list[FetchedFile]:
+        """Weeks of the last `weeks` that PBS's archive list carries and we don't hold.
+        PBS moves the release off Thursday around holidays (Wed 13-Aug-2025, 24-Dec-2025,
+        4-Feb-2026, 11/18-Mar-2026), and those weeks never matched the Thursday file-name
+        probe — nine weeks were missing. The list names the real week-ended date."""
+        import httpx
+
+        from app.config import settings
+
+        try:
+            page = httpx.get(ARCHIVE_PAGE, headers={"User-Agent": settings.user_agent},
+                             timeout=60, follow_redirects=True).text
+        except httpx.HTTPError:
+            return []
+        cutoff = date.today() - timedelta(weeks=weeks)
+        out = []
+        for d, url in archive_entries(page):
+            if d >= cutoff and d not in held:
+                content = self._get(url)
+                if content is not None:
+                    out.append(FetchedFile(filename=url.rsplit("/", 1)[-1], content=content, when=d))
+        return out
+
     def fetch(self, backfill: bool = False) -> list[FetchedFile]:
         out: list[FetchedFile] = []
+        if not backfill:
+            out = self._recent_listed(self._held_weeks())
         if backfill:
             import httpx
 
@@ -296,7 +323,10 @@ class PbsSpiWeeklyJob(IngestionJob):
             if out or todo:
                 return out
         weeks = BACKFILL_WEEKS if backfill else INCREMENTAL_LOOKBACK_WEEKS
+        have = {f.when for f in out}
         for d in _recent_thursdays(weeks):
+            if d in have:
+                continue
             content = self._get_pdf(d)
             if content is None:
                 continue
