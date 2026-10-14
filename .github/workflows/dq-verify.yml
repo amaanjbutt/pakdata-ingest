@@ -77,4 +77,6 @@ jobs:
           else
             python -m scripts.dq_audit reconcile-easydata --budget=$budget $flag --apply --commit
           fi
+          python -m scripts.dq_audit resolve-copies --commit
+          python -m scripts.dq_audit make-notes --commit
           python -m scripts.dq_audit report

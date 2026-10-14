@@ -817,6 +817,72 @@ def resolve_copies(commit: bool = False) -> Counter:
     return stats
 
 
+NOTES_DDL = """CREATE TABLE IF NOT EXISTS observation_notes (
+    series_id TEXT NOT NULL, obs_date DATE NOT NULL, dims JSONB NOT NULL DEFAULT '{}', note TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'as_published', evidence TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (series_id, obs_date, dims))"""
+_PUBLISHER = {"SBP": "SBP", "PBS": "PBS", "PTA": "PTA", "MUFAP": "MUFAP"}
+
+
+def _times(x: float) -> str:
+    """2 significant figures, thousands separated: 3643.8 -> '3,600'. Pure."""
+    from math import floor, log10
+    r = round(x, -int(floor(log10(abs(x)))) + 1) if x else 0
+    return f"{int(r):,}" if r >= 100 else f"{r:g}"
+
+
+def note_for(detector: str, value: float, context: dict, publisher: str, evidence: str | None) -> str | None:
+    """Public note text for a finding confirmed as published, or None when it doesn't merit
+    one (ordinary lumpy moves). Pure."""
+    where = f"As published by {publisher}"
+    if evidence and evidence.startswith("easydata:"):
+        where += f" (EasyData {evidence.split(':', 1)[1]})"
+    if detector == "spike_level":
+        prev, nxt = context.get("prev"), context.get("next")
+        if not prev or not value:
+            return None
+        ratio = max(abs(value / prev), abs(prev / value))
+        if ratio < 100:
+            return None
+        direction = "above" if abs(value) > abs(prev) else "below"
+        return (f"{where}, re-checked at the source. About {_times(ratio)} times {direction} the periods either "
+                f"side ({prev:g} and {nxt:g}), which suggests a unit slip in the source's figure for this period.")
+    if detector == "out_of_range":
+        return f"{where}, re-checked at the source. Unusual for a percentage measure."
+    return None
+
+
+def make_notes(manual_path: str | None = None, commit: bool = False) -> int:
+    """Turn findings confirmed as published into public notes (meta.notes), plus hand-written
+    notes from a JSON list of {series_id, obs_date, [dims], note, evidence}."""
+    from app import db
+    rows = db.query("""SELECT f.series_id, f.obs_date, f.dims, f.detector, f.our_value::float8 v, f.context, f.evidence,
+                              s.source FROM dq_findings f JOIN series s ON s.id = f.series_id
+                       WHERE f.verdict = 'confirmed_as_published' AND f.detector IN ('spike_level', 'out_of_range')""")
+    notes = {}
+    for r in rows:
+        text = note_for(r["detector"], r["v"], r["context"] or {}, _PUBLISHER.get(r["source"], r["source"]), r["evidence"])
+        if text:
+            notes[(r["series_id"], r["obs_date"], json.dumps(r["dims"] or {}))] = (text, r["evidence"])
+    if manual_path:
+        for it in json.loads(open(manual_path, encoding="utf-8").read()):
+            notes[(it["series_id"], date.fromisoformat(it["obs_date"]), json.dumps(it.get("dims") or {}))] = (
+                it["note"], it.get("evidence"))
+    print(f"{len(notes)} notes on {len({k[0] for k in notes})} series")
+    for (sid, d, _), (text, _) in list(notes.items())[:5]:
+        print(f"  {sid} {d}: {text}")
+    if not commit:
+        print("dry run — re-run with --commit to write")
+        return len(notes)
+    db.execute(NOTES_DDL)
+    with db.connection() as conn, conn.cursor() as cur:
+        cur.executemany(
+            """INSERT INTO observation_notes (series_id, obs_date, dims, note, evidence) VALUES (%s, %s, %s::jsonb, %s, %s)
+               ON CONFLICT (series_id, obs_date, dims) DO UPDATE SET note = EXCLUDED.note, evidence = EXCLUDED.evidence""",
+            [(sid, d, dims, text, ev) for (sid, d, dims), (text, ev) in notes.items()])
+    return len(notes)
+
+
 def mark(path: str, commit: bool = False) -> int:
     """Apply verdicts established by reading the source document directly. JSON list of
     {series_id, obs_date, [dims], verdict, [source_value], evidence}; applies to every
@@ -897,6 +963,8 @@ def main(argv: list[str]) -> None:
         compare_fund_navs(args[1], commit)
     elif cmd == "resolve-copies":
         resolve_copies(commit)
+    elif cmd == "make-notes":
+        make_notes(args[1] if len(args) > 1 else None, commit)
     elif cmd == "mark":
         mark(args[1], commit)
     elif cmd == "report":
