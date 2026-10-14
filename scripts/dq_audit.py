@@ -6,7 +6,7 @@ re-reading the official source, so a value is either confirmed as published, cor
 or reported as unverifiable — never left at "suspicious".
 
   python -m scripts.dq_audit detect [--commit]            # VPS, api container: run the detectors
-  python -m scripts.dq_audit reconcile-easydata [--budget N] [--all] [--commit]
+  python -m scripts.dq_audit reconcile-easydata [--budget N] [--all] [--apply] [--commit]
                                                           # GHA (SBP blocks the VPS): every stored
                                                           # point of each SBP EasyData series vs
                                                           # EasyData's current figures
@@ -372,9 +372,37 @@ def probe_easydata(series_ids: list[str]) -> None:
         print(f"last rows: {rows[-3:]}")
 
 
+def _write_source_values(job, sid: str, src: dict[date, float | None], stats: Counter) -> None:
+    """Write SBP's current figure for the points of `sid` that differ or that we lack, through
+    the sync job's own validate + upsert (so they land as ordinary publisher revisions and
+    additions). Our deliberate unit-slip fixes and points SBP no longer lists are left alone.
+    The job's per-call alert emails are collected into one summary instead."""
+    from app import db
+    from ingestion import framework
+    from ingestion.framework import Record
+    fixed = {r["obs_date"] for r in db.query("SELECT obs_date FROM obs_scale_corrections WHERE series_id=%s", (sid,))}
+    ours = {r["obs_date"]: r["v"] for r in db.query(
+        "SELECT obs_date, value::float8 v FROM observations WHERE series_id=%s AND dims='{}'::jsonb", (sid,))}
+    _, diffs = compare_points(ours, src)
+    recs = [Record(sid, d.obs_date, d.source, {}) for d in diffs
+            if d.kind in ("value", "missing_ours") and d.obs_date not in fixed]
+    if not recs:
+        return
+    real_alert = framework.alerting.alert
+    framework.alerting.alert = lambda subject, body="": _ALERTS.append(f"{subject}: {body}"[:300])
+    try:
+        stats["points_written"] += job.upsert(job.validate(recs))
+    finally:
+        framework.alerting.alert = real_alert
+
+
+_ALERTS: list[str] = []
+
+
 def reconcile_easydata(budget: int = 500, include_all: bool = False, commit: bool = False,
-                       deadline_s: int = 50 * 60) -> Counter:
-    """Pull each candidate series' full history from EasyData and compare every point."""
+                       deadline_s: int = 50 * 60, apply: bool = False) -> Counter:
+    """Pull each candidate series' full history from EasyData and compare every point; with
+    `apply`, write SBP's current figure where ours differs or is missing."""
     from app import db
     from ingestion.easydata_config import load_series
     from ingestion.jobs.easydata_sync import EasyDataSyncJob, QuotaExhausted
@@ -411,9 +439,15 @@ def reconcile_easydata(budget: int = 500, include_all: bool = False, commit: boo
                        ON CONFLICT (series_id, method) DO UPDATE SET checked_at=now(), error=EXCLUDED.error""",
                     (sid, job.redact(str(exc))[:300]))
             continue
+        if commit and apply:
+            _write_source_values(job, sid, src, stats)
         _store_reconciliation(sid, "easydata", src, commit, stats, evidence=f"easydata:{key}")
     if commit:
         _save_dataset_names()
+    if _ALERTS:
+        from ingestion import alerting
+        alerting.alert(f"dq_audit: {len(_ALERTS)} validation notices while writing SBP values",
+                       "\n".join(_ALERTS[:20]))
     print(dict(stats))
     if not commit:
         print("dry run — re-run with --commit to store results")
@@ -428,7 +462,6 @@ def apply_easydata(budget: int = 500, commit: bool = False, deadline_s: int = 50
     left alone."""
     from app import db
     from ingestion.easydata_config import load_series
-    from ingestion.framework import Record
     from ingestion.jobs.easydata_sync import EasyDataSyncJob, QuotaExhausted
     from ingestion.quota import QuotaCounter, QuotaPool
 
@@ -457,19 +490,14 @@ def apply_easydata(budget: int = 500, commit: bool = False, deadline_s: int = 50
         except Exception:  # noqa: BLE001
             stats["fetch_error"] += 1
             continue
-        fixed = {r["obs_date"] for r in db.query(
-            "SELECT obs_date FROM obs_scale_corrections WHERE series_id=%s", (sid,))}
-        ours = {r["obs_date"]: r["v"] for r in db.query(
-            "SELECT obs_date, value::float8 v FROM observations WHERE series_id=%s AND dims='{}'::jsonb", (sid,))}
-        _, diffs = compare_points(ours, src)
-        recs = [Record(sid, d.obs_date, d.source, {}) for d in diffs
-                if d.kind in ("value", "missing_ours") and d.obs_date not in fixed]
-        stats["series"] += 1
-        stats["points_written"] += len(recs)
-        if commit and recs:
-            job.upsert(job.validate(recs))
+        stats["series_applied"] += 1
         if commit:
+            _write_source_values(job, sid, src, stats)
             _store_reconciliation(sid, "easydata", src, True, stats, evidence=f"easydata:{key}")
+    if _ALERTS:
+        from ingestion import alerting
+        alerting.alert(f"dq_audit: {len(_ALERTS)} validation notices while writing SBP values",
+                       "\n".join(_ALERTS[:20]))
     print(dict(stats))
     if not commit:
         print("dry run — re-run with --commit to write")
@@ -627,6 +655,59 @@ def compare_fund_navs(path: str, commit: bool = False) -> Counter:
                      sum(1 for r in rows if r[2] in ("missing_ours", "quarantined")),
                      sum(1 for r in rows if r[2] == "missing_source")))
     print(dict(stats))
+    return stats
+
+
+def apply_fund_navs(path: str, commit: bool = False) -> Counter:
+    """Bring fund NAV histories in line with MUFAP — only for funds whose MUFAP history is
+    trustworthy: its latest point equals the NAV we stored from MUFAP's official daily
+    table on that date. (For a few fund ids MUFAP's history endpoint serves another fund's
+    series — e.g. Atlas Islamic Income at ~102 while the daily table says 532 — those are
+    reported and left alone.)
+
+    For a trusted fund: values that differ are replaced, MUFAP points we lack are added
+    (including points our nightly spike rule had quarantined: the rule re-runs and keeps
+    out the real glitches), and points MUFAP doesn't list — e.g. another fund's history
+    stored under a new fund's id, dated before it existed — are removed. Offer/repurchase
+    from the daily snapshots are kept. Back up fund_navs + fund_navs_quarantine first."""
+    from app import db
+    src_all = {int(k): {date.fromisoformat(d): float(v) for d, v in pts}
+               for k, pts in json.loads(open(path, encoding="utf-8").read()).items() if pts}
+    stats: Counter = Counter()
+    untrusted = []
+    upserts, deletes, unquarantine = [], [], []
+    for fid, src in src_all.items():
+        ours = {r["obs_date"]: r["v"] for r in db.query(
+            "SELECT obs_date, nav::float8 v FROM fund_navs WHERE fund_id=%s", (fid,))}
+        last = max(src)
+        if not ours or last not in ours or not same_value(ours[last], src[last]):
+            untrusted.append(fid)
+            continue
+        _, diffs = compare_points(ours, src)
+        for d in diffs:
+            if d.kind in ("value", "missing_ours"):
+                upserts.append((fid, d.obs_date, d.source))
+                stats[f"nav_{d.kind}"] += 1
+                if d.kind == "missing_ours":
+                    unquarantine.append((fid, d.obs_date))
+            elif d.kind == "missing_source" and d.obs_date < last:  # history can lag the daily table
+                deletes.append((fid, d.obs_date))
+                stats["nav_removed_not_at_source"] += 1
+        stats["trusted_funds"] += 1
+    stats["untrusted_funds"] = len(untrusted)
+    print(dict(stats))
+    print("left alone (MUFAP history disagrees with its own daily NAV):", untrusted)
+    if not commit:
+        print("dry run — re-run with --commit to write")
+        return stats
+    with db.connection() as conn, conn.cursor() as cur:
+        cur.executemany(
+            """INSERT INTO fund_navs (fund_id, obs_date, nav) VALUES (%s, %s, %s)
+               ON CONFLICT (fund_id, obs_date) DO UPDATE SET nav = EXCLUDED.nav, revised_at = now()
+               WHERE fund_navs.nav IS DISTINCT FROM EXCLUDED.nav""", upserts)
+        cur.executemany("DELETE FROM fund_navs WHERE fund_id=%s AND obs_date=%s", deletes)
+        cur.executemany("DELETE FROM fund_navs_quarantine WHERE fund_id=%s AND obs_date=%s", unquarantine)
+    print(f"wrote {len(upserts)} NAVs, removed {len(deletes)}")
     return stats
 
 
@@ -800,13 +881,16 @@ def main(argv: list[str]) -> None:
         only = str(flags["--only"]).split(",") if "--only" in flags else None
         detect(commit, only)
     elif cmd == "reconcile-easydata":
-        reconcile_easydata(int(flags.get("--budget", 500)), bool(flags.get("--all")), commit)
+        reconcile_easydata(int(flags.get("--budget", 500)), bool(flags.get("--all")), commit,
+                           apply=bool(flags.get("--apply")))
     elif cmd == "apply-easydata":
         apply_easydata(int(flags.get("--budget", 500)), commit)
     elif cmd == "probe-easydata":
         probe_easydata(args[1:])
     elif cmd == "compare-records":
         compare_records(args[1], args[2], commit)
+    elif cmd == "apply-fund-navs":
+        apply_fund_navs(args[1], commit)
     elif cmd == "compare-agri":
         compare_agri(args[1], commit)
     elif cmd == "compare-fund-navs":

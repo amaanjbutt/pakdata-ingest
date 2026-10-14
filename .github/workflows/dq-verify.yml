@@ -1,7 +1,8 @@
 name: dq-verify
-# Data-quality audit (2026-10-14): re-pull each SBP EasyData series' full history and
-# compare every stored point with SBP's current figure (scripts/dq_audit.py
-# reconcile-easydata). Series with open findings go first, then — with `all` — the
+# Data-quality audit (2026-10-14): re-pull each SBP EasyData series' full history,
+# compare every stored point with SBP's current figure and write SBP's figure where ours
+# differs or is missing (scripts/dq_audit.py reconcile-easydata --apply; approved by the
+# user 2026-10-14). Series with open findings go first, then — with `all` — the
 # rest of the catalog, least-recently checked first. Runs on GitHub's runners because
 # easydata.sbp.org.pk blocks the VPS; writes results to the VPS DB over the same
 # restricted SSH tunnel. Its own call budget per run, offset from the ingest crons, so
@@ -74,6 +75,6 @@ jobs:
           if [ "${{ github.event.inputs.mode }}" = "apply" ]; then
             python -m scripts.dq_audit apply-easydata --budget=$budget --commit
           else
-            python -m scripts.dq_audit reconcile-easydata --budget=$budget $flag --commit
+            python -m scripts.dq_audit reconcile-easydata --budget=$budget $flag --apply --commit
           fi
           python -m scripts.dq_audit report
