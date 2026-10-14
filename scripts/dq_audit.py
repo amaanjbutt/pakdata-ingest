@@ -304,7 +304,26 @@ def _fetch_easydata(job, quota, key: str) -> dict[date, float | None]:
                 f"&start_date=1940-01-01&end_date={date.today().isoformat()}&format=json")
 
     text = job._http_get_rotating(quota, url).decode("utf-8", "replace")
+    m = _DATASET_NAME.search(text)
+    if m:
+        _DATASET_NAMES[key.split(".", 1)[0]] = m.group(1).strip()
     return {_parse_date(d): _parse_value(v) for k, d, v in easydata_rows(text) if k == key}
+
+
+# The first row's "Dataset Name" — captured while reconciling so series names that collide
+# can be told apart by their SBP table ("Monetary Survey" vs "Reserve Money").
+_DATASET_NAME = __import__("re").compile(r'"rows"\s*:\s*\[\s*\[\s*"([^"]+)"')
+_DATASET_NAMES: dict[str, str] = {}
+
+
+def _save_dataset_names() -> None:
+    from app import db
+    if not _DATASET_NAMES:
+        return
+    db.execute("CREATE TABLE IF NOT EXISTS easydata_datasets (code TEXT PRIMARY KEY, name TEXT NOT NULL)")
+    with db.connection() as conn, conn.cursor() as cur:
+        cur.executemany("INSERT INTO easydata_datasets (code, name) VALUES (%s, %s) "
+                        "ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name", list(_DATASET_NAMES.items()))
 
 
 def probe_easydata(series_ids: list[str]) -> None:
@@ -380,6 +399,8 @@ def reconcile_easydata(budget: int = 500, include_all: bool = False, commit: boo
                     (sid, job.redact(str(exc))[:300]))
             continue
         _store_reconciliation(sid, "easydata", src, commit, stats, evidence=f"easydata:{key}")
+    if commit:
+        _save_dataset_names()
     print(dict(stats))
     if not commit:
         print("dry run — re-run with --commit to store results")
