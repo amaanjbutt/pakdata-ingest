@@ -10,6 +10,9 @@ or reported as unverifiable — never left at "suspicious".
                                                           # GHA (SBP blocks the VPS): every stored
                                                           # point of each SBP EasyData series vs
                                                           # EasyData's current figures
+  python -m scripts.dq_audit resolve-copies [--commit]    # rates.kibor.* / rates.auction.* findings via
+                                                          # their (reconciled) EasyData inputs
+  python -m scripts.dq_audit mark verdicts.json [--commit] # verdicts read off the source document by hand
   python -m scripts.dq_audit report [out.csv]             # summary + CSV of findings/mismatches
 
 Tables (created on first use, also in db/schema.sql):
@@ -255,17 +258,28 @@ def verdict_for(our_value: float | None, src: dict[date, float | None], d: date,
     return "source_differs", sv
 
 
+# EasyData series our flagship copies are made from (derive_kibor -> rates.kibor.*,
+# derive_auctions -> rates.auction.*): reconciled first, so `resolve-copies` can settle the
+# tier-1 findings on the copies.
+COPY_INPUTS_LIKE = ["banking.%karachi_interbank_%", "banking.cut_off_yield%"]
+
+
 def _candidates(limit: int, include_all: bool) -> list[dict]:
-    """EasyData series to reconcile: those with unverified findings first (tier 1 then by
-    finding count), then — with --all — every other active EasyData series, oldest check
-    first."""
+    """EasyData series to reconcile: inputs of tier-1 copies not yet checked, then series
+    with unverified findings (by finding count), then — with --all — every other active
+    EasyData series, oldest check first."""
     from app import db
+    inputs = db.query(
+        """SELECT s.id FROM series s LEFT JOIN dq_series_checks c ON c.series_id = s.id AND c.method = 'easydata'
+           WHERE s.is_active AND s.easydata_dataset_code IS NOT NULL AND c.series_id IS NULL
+             AND s.id LIKE ANY(%(likes)s) ORDER BY s.id""", {"likes": COPY_INPUTS_LIKE})
     flagged = db.query(
         """SELECT f.series_id, min(f.tier) tier, count(*) n FROM dq_findings f
            JOIN series s ON s.id = f.series_id
            WHERE f.verdict IS NULL AND s.easydata_dataset_code IS NOT NULL AND s.is_active
            GROUP BY 1 ORDER BY 2, 3 DESC""")
-    out = [r["series_id"] for r in flagged]
+    out = [r["id"] for r in inputs]
+    out += [r["series_id"] for r in flagged if r["series_id"] not in set(out)]
     if include_all:
         seen = set(out)
         rest = db.query(
@@ -390,6 +404,85 @@ def _store_reconciliation(sid: str, method: str, src: dict[date, float | None], 
                 [(v, sv, evidence, fid) for fid, v, sv in verdicts])
 
 
+# ---- copies + manual verdicts -----------------------------------------------------------
+
+def _copy_sources() -> dict[tuple[str, str], str]:
+    """{(flagship series id, dims json): EasyData input series id} for the derived copies."""
+    from app import db
+    from ingestion.jobs.derive_auctions import map_sources
+    from ingestion.jobs.derive_kibor import map_source, target_id
+    out: dict[tuple[str, str], str] = {}
+    for r in db.query("SELECT id FROM series WHERE id LIKE 'banking.%%karachi_interbank_%%'"):
+        m = map_source(r["id"])
+        if m:
+            out[(target_id(m[0]), json.dumps({"side": m[1]}))] = r["id"]
+    rows = db.query("SELECT id, name, easydata_dataset_code FROM series "
+                    "WHERE easydata_dataset_code IN ('TS_GP_BAM_SIRTBIL_AH', 'TS_GP_BAM_SIRPIBS_AH')")
+    for sid, (atype, tenor) in map_sources(rows).items():
+        out.setdefault((f"rates.auction.{atype}.{tenor}.cutoff_yield", "{}"), sid)
+    return out
+
+
+def resolve_copies(commit: bool = False) -> Counter:
+    """Settle findings on rates.kibor.* / rates.auction.* (copies of EasyData series): the
+    copy must equal its input, and the input must match SBP (reconciled, no mismatch on
+    that date). Inputs not yet reconciled are left for a later pass."""
+    from app import db
+    srcs = _copy_sources()
+    stats: Counter = Counter()
+    updates = []
+    for f in db.query("""SELECT id, series_id, obs_date, dims, our_value::float8 v FROM dq_findings
+                         WHERE verdict IS NULL AND (series_id LIKE 'rates.kibor.%%' OR series_id LIKE 'rates.auction.%%')"""):
+        src = srcs.get((f["series_id"], json.dumps(f["dims"] or {})))
+        if not src:
+            stats["no_input"] += 1  # e.g. a scraped (non-EasyData) point
+            continue
+        inp = db.query_one("SELECT value::float8 v FROM observations WHERE series_id=%s AND obs_date=%s "
+                           "AND dims='{}'::jsonb", (src, f["obs_date"]))
+        chk = db.query_one("SELECT 1 FROM dq_series_checks WHERE series_id=%s AND method='easydata' "
+                           "AND error IS NULL", (src,))
+        mism = db.query_one("SELECT kind, source_value::float8 sv FROM dq_mismatches WHERE series_id=%s "
+                            "AND obs_date=%s AND method='easydata'", (src, f["obs_date"]))
+        if inp is None or not same_value(inp["v"], f["v"]):
+            updates.append(("copy_differs", inp["v"] if inp else None, f"copy of {src}", f["id"]))
+        elif not chk:
+            stats["input_not_reconciled"] += 1
+            continue
+        elif mism:
+            updates.append(("source_differs", mism["sv"], f"easydata:{src}", f["id"]))
+        else:
+            updates.append(("confirmed_as_published", f["v"], f"easydata:{src}", f["id"]))
+    for u in updates:
+        stats[u[0]] += 1
+    if commit and updates:
+        with db.connection() as conn, conn.cursor() as cur:
+            cur.executemany("UPDATE dq_findings SET verdict=%s, source_value=%s, evidence=%s, checked_at=now() "
+                            "WHERE id=%s", updates)
+    print(dict(stats))
+    return stats
+
+
+def mark(path: str, commit: bool = False) -> int:
+    """Apply verdicts established by reading the source document directly. JSON list of
+    {series_id, obs_date, [dims], verdict, [source_value], evidence}; applies to every
+    detector's finding on that point."""
+    from app import db
+    items = json.loads(open(path, encoding="utf-8").read())
+    n = 0
+    with db.connection() as conn, conn.cursor() as cur:
+        for it in items:
+            cur.execute(
+                """UPDATE dq_findings SET verdict=%s, source_value=%s, evidence=%s, checked_at=now()
+                   WHERE series_id=%s AND obs_date=%s AND dims=%s::jsonb""",
+                (it["verdict"], it.get("source_value"), it["evidence"], it["series_id"], it["obs_date"],
+                 json.dumps(it.get("dims") or {})))
+            n += cur.rowcount or 0
+        if not commit:
+            conn.rollback()
+    print(f"{n} findings {'updated' if commit else 'would be updated (dry run)'} from {len(items)} verdicts")
+    return n
+
+
 # ---- report -----------------------------------------------------------------------------
 
 def report(out_csv: str | None = None) -> None:
@@ -434,6 +527,10 @@ def main(argv: list[str]) -> None:
         detect(commit, only)
     elif cmd == "reconcile-easydata":
         reconcile_easydata(int(flags.get("--budget", 500)), bool(flags.get("--all")), commit)
+    elif cmd == "resolve-copies":
+        resolve_copies(commit)
+    elif cmd == "mark":
+        mark(args[1], commit)
     elif cmd == "report":
         report(args[1] if len(args) > 1 else None)
     else:
