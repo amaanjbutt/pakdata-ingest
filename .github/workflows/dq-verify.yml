@@ -1,0 +1,63 @@
+name: dq-verify
+# Data-quality audit (2026-10-14): re-pull each SBP EasyData series' full history and
+# compare every stored point with SBP's current figure (scripts/dq_audit.py
+# reconcile-easydata). Series with open findings go first, then — with `all` — the
+# rest of the catalog, least-recently checked first. Runs on GitHub's runners because
+# easydata.sbp.org.pk blocks the VPS; writes results to the VPS DB over the same
+# restricted SSH tunnel. Its own call budget per run, offset from the ingest crons, so
+# the normal sync keeps its EasyData quota.
+on:
+  schedule:
+    - cron: '20 4,10,16,22 * * *'
+  workflow_dispatch:
+    inputs:
+      budget:
+        description: 'Max series to reconcile this run'
+        required: false
+        default: '650'
+      all:
+        description: 'After flagged series, continue through every EasyData series (true/false)'
+        required: false
+        default: 'true'
+concurrency:
+  group: dq-verify
+  cancel-in-progress: false
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 58
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: install deps
+        run: pip install -q -r requirements.txt
+      - name: open DB tunnel to VPS
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_TUNNEL_KEY }}" > ~/.ssh/tunnel_key
+          chmod 600 ~/.ssh/tunnel_key
+          ok=""
+          for i in 1 2 3 4 5; do
+            if ssh -i ~/.ssh/tunnel_key -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes \
+                 -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 \
+                 -o TCPKeepAlive=yes -f -N -L 5432:127.0.0.1:5432 root@${{ secrets.VPS_HOST }}; then
+              ok=1; echo "tunnel up (attempt $i)"; break
+            fi
+            echo "tunnel attempt $i failed; retrying in 20s"; sleep 20
+          done
+          [ -n "$ok" ] || { echo "tunnel failed after 5 attempts"; exit 1; }
+      - name: reconcile
+        env:
+          DATABASE_URL: postgresql://pakdata:${{ secrets.DB_PASSWORD }}@127.0.0.1:5432/pakdata
+          EASYDATA_API_KEYS: ${{ secrets.EASYDATA_API_KEYS }}
+          EASYDATA_API_KEY: ${{ secrets.EASYDATA_API_KEY }}
+          EASYDATA_QUOTA_NOSLEEP: '1'
+          RAW_ARCHIVE_DIR: /tmp/raw
+        run: |
+          budget="${{ github.event.inputs.budget }}"; [ -n "$budget" ] || budget=650
+          all="${{ github.event.inputs.all }}"; [ -n "$all" ] || all=true
+          flag=""; [ "$all" = "true" ] && flag="--all"
+          python -m scripts.dq_audit reconcile-easydata --budget=$budget $flag --commit
+          python -m scripts.dq_audit report
