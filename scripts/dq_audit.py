@@ -268,8 +268,8 @@ COPY_INPUTS_LIKE = ["banking.%karachi_interbank_%", "banking.cut_off_yield%"]
 
 
 def _candidates(limit: int, include_all: bool) -> list[dict]:
-    """EasyData series to reconcile: inputs of tier-1 copies not yet checked, then series
-    with unverified findings (by finding count), then — with --all — every other active
+    """EasyData series to reconcile: inputs of tier-1 copies not yet checked, series whose
+    names collide, then series with unverified findings (by finding count), then — with --all — every other active
     EasyData series, oldest check first."""
     from app import db
     inputs = db.query(
@@ -281,7 +281,13 @@ def _candidates(limit: int, include_all: bool) -> list[dict]:
            JOIN series s ON s.id = f.series_id
            WHERE f.verdict IS NULL AND s.easydata_dataset_code IS NOT NULL AND s.is_active
            GROUP BY 1 ORDER BY 2, 3 DESC""")
+    # series whose names collide: their SBP series/table names settle the rename
+    collide = db.query(
+        """SELECT s.id FROM series s LEFT JOIN dq_series_checks c ON c.series_id = s.id AND c.method = 'easydata'
+           WHERE s.is_active AND s.easydata_dataset_code IS NOT NULL AND c.series_id IS NULL
+             AND s.name IN (SELECT name FROM series WHERE is_active GROUP BY 1 HAVING count(*) > 1) ORDER BY s.name""")
     out = [r["id"] for r in inputs]
+    out += [r["id"] for r in collide if r["id"] not in set(out)]
     out += [r["series_id"] for r in flagged if r["series_id"] not in set(out)]
     if include_all:
         seen = set(out)
@@ -304,26 +310,33 @@ def _fetch_easydata(job, quota, key: str) -> dict[date, float | None]:
                 f"&start_date=1940-01-01&end_date={date.today().isoformat()}&format=json")
 
     text = job._http_get_rotating(quota, url).decode("utf-8", "replace")
-    m = _DATASET_NAME.search(text)
+    m = _FIRST_ROW.search(text)
     if m:
         _DATASET_NAMES[key.split(".", 1)[0]] = m.group(1).strip()
+        _SERIES_NAMES[key] = m.group(3).strip()
     return {_parse_date(d): _parse_value(v) for k, d, v in easydata_rows(text) if k == key}
 
 
-# The first row's "Dataset Name" — captured while reconciling so series names that collide
-# can be told apart by their SBP table ("Monetary Survey" vs "Reserve Money").
-_DATASET_NAME = __import__("re").compile(r'"rows"\s*:\s*\[\s*\[\s*"([^"]+)"')
+# The first row's "Dataset Name" and "Series Name" — captured while reconciling so series
+# whose composed names collide can be told apart by their SBP table ("Monetary Survey" vs
+# "Reserve Money") or by SBP's own series name (scripts/disambiguate_series_names.py).
+_FIRST_ROW = __import__("re").compile(r'"rows"\s*:\s*\[\s*\[\s*"([^"]+)"\s*,\s*"([^"]*)"\s*,\s*"([^"]*)"')
 _DATASET_NAMES: dict[str, str] = {}
+_SERIES_NAMES: dict[str, str] = {}
 
 
 def _save_dataset_names() -> None:
     from app import db
-    if not _DATASET_NAMES:
-        return
-    db.execute("CREATE TABLE IF NOT EXISTS easydata_datasets (code TEXT PRIMARY KEY, name TEXT NOT NULL)")
-    with db.connection() as conn, conn.cursor() as cur:
-        cur.executemany("INSERT INTO easydata_datasets (code, name) VALUES (%s, %s) "
-                        "ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name", list(_DATASET_NAMES.items()))
+    if _DATASET_NAMES:
+        db.execute("CREATE TABLE IF NOT EXISTS easydata_datasets (code TEXT PRIMARY KEY, name TEXT NOT NULL)")
+        with db.connection() as conn, conn.cursor() as cur:
+            cur.executemany("INSERT INTO easydata_datasets (code, name) VALUES (%s, %s) "
+                            "ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name", list(_DATASET_NAMES.items()))
+    if _SERIES_NAMES:
+        db.execute("CREATE TABLE IF NOT EXISTS easydata_series_names (easydata_key TEXT PRIMARY KEY, name TEXT NOT NULL)")
+        with db.connection() as conn, conn.cursor() as cur:
+            cur.executemany("INSERT INTO easydata_series_names (easydata_key, name) VALUES (%s, %s) "
+                            "ON CONFLICT (easydata_key) DO UPDATE SET name = EXCLUDED.name", list(_SERIES_NAMES.items()))
 
 
 def probe_easydata(series_ids: list[str]) -> None:
