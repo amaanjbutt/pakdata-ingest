@@ -4,13 +4,18 @@ name: publications
 # (both since ~Aug-2026 — the jobs read as "no new data" for two months). Same
 # restricted SSH tunnel to the VPS Postgres. Releases are monthly/quarterly; twice a
 # week is plenty.
+# GitHub drops scheduled runs under load (Mon 13-Oct-2026 never fired), so each day has a
+# second slot; a repeat run re-reads the same reports and writes nothing new.
+# PTA is not in the default list: pta.gov.pk answers only Pakistani IPs (6/6 GitHub runners
+# timed out on 14-Oct-2026); dispatch with jobs=pta_telecom to try anyway.
 on:
   schedule:
     - cron: '30 5 * * 1,4'   # Mon + Thu 10:30 PKT
+    - cron: '47 11 * * 1,4'  # backup slot, 16:47 PKT
   workflow_dispatch:
     inputs:
       jobs:
-        description: 'Space-separated jobs to run (default: all three)'
+        description: 'Space-separated jobs to run (default: sbp_payment_systems sbp_sme_finance sbp_msb_fetch)'
         required: false
         default: ''
 concurrency:
@@ -25,7 +30,7 @@ jobs:
         id: due
         run: |
           jobs="${{ github.event.inputs.jobs }}"
-          [ -n "$jobs" ] || jobs="pta_telecom sbp_payment_systems sbp_sme_finance sbp_msb_fetch"
+          [ -n "$jobs" ] || jobs="sbp_payment_systems sbp_sme_finance sbp_msb_fetch"
           echo "jobs=$jobs" >> "$GITHUB_OUTPUT"
           echo "jobs:$jobs"
       - uses: actions/checkout@v4
