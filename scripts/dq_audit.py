@@ -831,6 +831,19 @@ def _times(x: float) -> str:
     return f"{int(r):,}" if r >= 100 else f"{r:g}"
 
 
+def _exact_slip(value: float, prev: float, nxt: float | None) -> bool:
+    """Dividing (or multiplying) by an exact power of 1,000 puts the value between its
+    neighbours — the signature of a unit slip, not of a lumpy flow. Pure."""
+    if nxt is None or not value:
+        return False
+    lo, hi = sorted((abs(prev), abs(nxt)))
+    for k in (1, 2, 3):
+        for v in (abs(value) / 1000 ** k, abs(value) * 1000 ** k):
+            if lo * 0.8 <= v <= hi * 1.25:
+                return True
+    return False
+
+
 def note_for(detector: str, value: float, context: dict, publisher: str, evidence: str | None) -> str | None:
     """Public note text for a finding confirmed as published, or None when it doesn't merit
     one (ordinary lumpy moves). Pure."""
@@ -845,8 +858,9 @@ def note_for(detector: str, value: float, context: dict, publisher: str, evidenc
         if ratio < 100:
             return None
         direction = "above" if abs(value) > abs(prev) else "below"
-        return (f"{where}, re-checked at the source. About {_times(ratio)} times {direction} the periods either "
-                f"side ({prev:g} and {nxt:g}), which suggests a unit slip in the source's figure for this period.")
+        text = f"{where}, re-checked at the source. About {_times(ratio)} times {direction} the periods either side ({prev:g} and {nxt:g})"
+        return text + (", which suggests a unit slip in the source's figure for this period." if _exact_slip(value, prev, nxt)
+                       else ".")
     if detector == "out_of_range":
         return f"{where}, re-checked at the source. Unusual for a percentage measure."
     return None
@@ -864,6 +878,12 @@ def make_notes(manual_path: str | None = None, commit: bool = False) -> int:
         text = note_for(r["detector"], r["v"], r["context"] or {}, _PUBLISHER.get(r["source"], r["source"]), r["evidence"])
         if text:
             notes[(r["series_id"], r["obs_date"], json.dumps(r["dims"] or {}))] = (text, r["evidence"])
+    # A series with several such points is a lumpy flow (dividends paid twice a year,
+    # sporadic country-level transfers): there the extremes are the data, not anomalies.
+    per_series = Counter(k[0] for k in notes)
+    lumpy = {sid for sid, n in per_series.items() if n >= 3}
+    notes = {k: v for k, v in notes.items() if k[0] not in lumpy}
+    print(f"skipped {len(lumpy)} lumpy series")
     if manual_path:
         for it in json.loads(open(manual_path, encoding="utf-8").read()):
             notes[(it["series_id"], date.fromisoformat(it["obs_date"]), json.dumps(it.get("dims") or {}))] = (
@@ -876,6 +896,8 @@ def make_notes(manual_path: str | None = None, commit: bool = False) -> int:
         return len(notes)
     db.execute(NOTES_DDL)
     with db.connection() as conn, conn.cursor() as cur:
+        # notes are regenerated in full from the current findings (manual ones are re-supplied)
+        cur.execute("DELETE FROM observation_notes WHERE kind = 'as_published'")
         cur.executemany(
             """INSERT INTO observation_notes (series_id, obs_date, dims, note, evidence) VALUES (%s, %s, %s::jsonb, %s, %s)
                ON CONFLICT (series_id, obs_date, dims) DO UPDATE SET note = EXCLUDED.note, evidence = EXCLUDED.evidence""",
