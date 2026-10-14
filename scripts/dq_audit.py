@@ -10,6 +10,9 @@ or reported as unverifiable — never left at "suspicious".
                                                           # GHA (SBP blocks the VPS): every stored
                                                           # point of each SBP EasyData series vs
                                                           # EasyData's current figures
+  python -m scripts.dq_audit compare-records <method> records.json [--commit]
+                                                          # records parsed from the publisher's files (job
+                                                          # parser, on a PC that reaches the source) vs DB
   python -m scripts.dq_audit resolve-copies [--commit]    # rates.kibor.* / rates.auction.* findings via
                                                           # their (reconciled) EasyData inputs
   python -m scripts.dq_audit mark verdicts.json [--commit] # verdicts read off the source document by hand
@@ -32,7 +35,7 @@ import json
 import logging
 import sys
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import date
 from urllib.parse import quote
@@ -310,6 +313,39 @@ def _fetch_easydata(job, quota, key: str) -> dict[date, float | None]:
     return out
 
 
+def probe_easydata(series_ids: list[str]) -> None:
+    """Print the shape of EasyData's raw response for series the sync fails to parse:
+    columns, row lengths, and the text around a JSON error. No DB writes."""
+    from ingestion.easydata_config import load_series
+    from ingestion.jobs.easydata_sync import EasyDataSyncJob
+    from ingestion.quota import QuotaCounter, QuotaPool
+    job = EasyDataSyncJob(quota_path="./data/dq_quota.json")
+    quota = QuotaPool(job.api_keys, base_path="./data/dq_quota.json") if len(job.api_keys) > 1 \
+        else QuotaCounter("./data/dq_quota.json")
+    key_of = {s.id: s.easydata_key for s in load_series()}
+    for sid in series_ids:
+        key = key_of.get(sid)
+        print(f"== {sid} key={key}")
+        if not key:
+            continue
+        raw = job._http_get_rotating(quota, lambda k: (
+            f"https://easydata.sbp.org.pk/api/v1/series/{quote(key, safe='')}/data?api_key={k}"
+            f"&start_date=1940-01-01&end_date={date.today().isoformat()}&format=json")).decode("utf-8", "replace")
+        print(f"bytes={len(raw)} head={raw[:300]!r}")
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            print(f"JSON error: {exc}; around: {raw[max(0, exc.pos - 200):exc.pos + 120]!r}")
+            continue
+        cols = payload.get("columns", [])
+        rows = payload.get("rows", [])
+        print(f"columns={cols}")
+        print(f"rows={len(rows)} row lengths={dict(Counter(len(r) for r in rows))}")
+        short = [r for r in rows if len(r) < len(cols)]
+        print(f"short rows (first 5): {short[:5]}")
+        print(f"last rows: {rows[-3:]}")
+
+
 def reconcile_easydata(budget: int = 500, include_all: bool = False, commit: bool = False,
                        deadline_s: int = 50 * 60) -> Counter:
     """Pull each candidate series' full history from EasyData and compare every point."""
@@ -357,11 +393,13 @@ def reconcile_easydata(budget: int = 500, include_all: bool = False, commit: boo
 
 
 def _store_reconciliation(sid: str, method: str, src: dict[date, float | None], commit: bool,
-                          stats: Counter, evidence: str) -> None:
+                          stats: Counter, evidence: str, dims: str = "{}", partial: bool = False) -> None:
+    """Compare one (series, dims) with the source's points and store the outcome. `partial`:
+    the source covers only some dates (a set of files), so only those dates are compared."""
     from app import db
-    rows = db.query("SELECT obs_date, value::float8 v FROM observations WHERE series_id=%s AND dims='{}'::jsonb",
-                    (sid,))
-    ours = {r["obs_date"]: r["v"] for r in rows}
+    rows = db.query("SELECT obs_date, value::float8 v FROM observations WHERE series_id=%s AND dims=%s::jsonb",
+                    (sid, dims))
+    ours = {r["obs_date"]: r["v"] for r in rows if not partial or r["obs_date"] in src}
     matched, diffs = compare_points(ours, src)
     kinds = Counter(d.kind for d in diffs)
     stats["series"] += 1
@@ -371,24 +409,35 @@ def _store_reconciliation(sid: str, method: str, src: dict[date, float | None], 
     if kinds.get("value"):
         stats["series_with_value_diffs"] += 1
     fixed = {r["obs_date"]: float(r["old_value"]) for r in db.query(
-        "SELECT obs_date, old_value FROM obs_scale_corrections WHERE series_id=%s", (sid,))}
+        "SELECT obs_date, old_value FROM obs_scale_corrections WHERE series_id=%s AND dims=%s::jsonb", (sid, dims))}
     findings = db.query("SELECT id, obs_date, our_value::float8 v FROM dq_findings WHERE series_id=%s "
-                        "AND dims='{}'::jsonb AND verdict IS NULL", (sid,))
+                        "AND dims=%s::jsonb AND verdict IS NULL", (sid, dims))
     verdicts = [(fid["id"], *verdict_for(fid["v"], src, fid["obs_date"], fixed.get(fid["obs_date"])))
-                for fid in findings]
+                for fid in findings if not partial or fid["obs_date"] in src]
     for _, v, _ in verdicts:
         stats[f"verdict_{v}"] += 1
     if not commit:
         return
     with db.connection() as conn, conn.cursor() as cur:
-        cur.execute("DELETE FROM dq_mismatches WHERE series_id=%s AND method=%s", (sid, method))
+        if partial:
+            cur.execute("DELETE FROM dq_mismatches WHERE series_id=%s AND method=%s AND dims=%s::jsonb "
+                        "AND obs_date = ANY(%s)", (sid, method, dims, list(src)))
+        else:
+            cur.execute("DELETE FROM dq_mismatches WHERE series_id=%s AND method=%s AND dims=%s::jsonb",
+                        (sid, method, dims))
         if diffs:
             cur.executemany(
                 """INSERT INTO dq_mismatches (series_id, obs_date, dims, method, kind, our_value, source_value)
-                   VALUES (%s, %s, '{}'::jsonb, %s, %s, %s, %s)""",
-                [(sid, d.obs_date, method,
+                   VALUES (%s, %s, %s::jsonb, %s, %s, %s, %s)""",
+                [(sid, d.obs_date, dims, method,
                   "scale_corrected" if d.kind == "value" and same_value(fixed.get(d.obs_date), d.source) else d.kind,
                   d.ours, d.source) for d in diffs])
+        if partial:  # dq_series_checks is per series: accumulate the files' coverage instead
+            if verdicts:
+                cur.executemany(
+                    "UPDATE dq_findings SET verdict=%s, source_value=%s, evidence=%s, checked_at=now() WHERE id=%s",
+                    [(v, sv, evidence, fid) for fid, v, sv in verdicts])
+            return
         cur.execute(
             """INSERT INTO dq_series_checks (series_id, method, checked_at, source_points, our_points, matched,
                                             mismatched, missing_ours, missing_source, error)
@@ -402,6 +451,51 @@ def _store_reconciliation(sid: str, method: str, src: dict[date, float | None], 
             cur.executemany(
                 "UPDATE dq_findings SET verdict=%s, source_value=%s, evidence=%s, checked_at=now() WHERE id=%s",
                 [(v, sv, evidence, fid) for fid, v, sv in verdicts])
+
+
+def compare_records(method: str, path: str, commit: bool = False) -> Counter:
+    """Compare records parsed from the publisher's own files (by the job's parser, on a
+    machine that can reach the source) with what we store — only the dates the files cover.
+    JSON list of {series_id, obs_date, value, dims}. Records go through the job's id
+    canonicalisation first."""
+    from app import db
+    from ingestion.framework import canonicalize_id
+    ensure_tables()
+    groups: dict[tuple[str, str], dict[date, float | None]] = defaultdict(dict)
+    for r in json.loads(open(path, encoding="utf-8").read()):
+        dims = json.dumps(r.get("dims") or {}, sort_keys=True)
+        groups[(canonicalize_id(r["series_id"]), dims)][date.fromisoformat(r["obs_date"])] = r["value"]
+    known = {r["id"] for r in db.query("SELECT id FROM series WHERE id = ANY(%s)", (list({s for s, _ in groups}),))}
+    stats: Counter = Counter()
+    per_series: dict[str, Counter] = defaultdict(Counter)
+    for (sid, dims), src in sorted(groups.items()):
+        if sid not in known:
+            stats["not_in_catalog"] += 1
+            continue
+        # the DB stores dims as jsonb; compare on its canonical text form
+        dims_db = db.query_one("SELECT %s::jsonb::text AS d", (dims,))["d"]
+        c: Counter = Counter()
+        _store_reconciliation(sid, method, src, commit, c, evidence=f"{method}:{path.rsplit('/', 1)[-1]}",
+                              dims=dims_db, partial=True)
+        per_series[sid].update(c)
+        stats.update(c)
+    if commit:
+        with db.connection() as conn, conn.cursor() as cur:
+            cur.executemany(
+                """INSERT INTO dq_series_checks (series_id, method, checked_at, source_points, our_points, matched,
+                                                mismatched, missing_ours, missing_source, error)
+                   VALUES (%s, %s, now(), %s, %s, %s, %s, %s, 0, NULL)
+                   ON CONFLICT (series_id, method) DO UPDATE SET checked_at=now(), source_points=EXCLUDED.source_points,
+                     our_points=EXCLUDED.our_points, matched=EXCLUDED.matched, mismatched=EXCLUDED.mismatched,
+                     missing_ours=EXCLUDED.missing_ours, missing_source=0, error=NULL""",
+                [(sid, method, c["points_matched"] + c["points_value"] + c["points_missing_ours"],
+                  c["points_matched"] + c["points_value"], c["points_matched"], c["points_value"],
+                  c["points_missing_ours"]) for sid, c in per_series.items()])
+    stats.pop("series", None)
+    print({"series": len(per_series), **dict(stats)})
+    if not commit:
+        print("dry run — re-run with --commit to store results")
+    return stats
 
 
 # ---- copies + manual verdicts -----------------------------------------------------------
@@ -527,6 +621,10 @@ def main(argv: list[str]) -> None:
         detect(commit, only)
     elif cmd == "reconcile-easydata":
         reconcile_easydata(int(flags.get("--budget", 500)), bool(flags.get("--all")), commit)
+    elif cmd == "probe-easydata":
+        probe_easydata(args[1:])
+    elif cmd == "compare-records":
+        compare_records(args[1], args[2], commit)
     elif cmd == "resolve-copies":
         resolve_copies(commit)
     elif cmd == "mark":

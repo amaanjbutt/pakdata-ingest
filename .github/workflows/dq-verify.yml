@@ -19,6 +19,10 @@ on:
         description: 'After flagged series, continue through every EasyData series (true/false)'
         required: false
         default: 'true'
+      probe:
+        description: 'Instead of reconciling: print the raw response shape for these series ids (space-separated)'
+        required: false
+        default: ''
 concurrency:
   group: dq-verify
   cancel-in-progress: false
@@ -59,5 +63,9 @@ jobs:
           budget="${{ github.event.inputs.budget }}"; [ -n "$budget" ] || budget=650
           all="${{ github.event.inputs.all }}"; [ -n "$all" ] || all=true
           flag=""; [ "$all" = "true" ] && flag="--all"
+          if [ -n "${{ github.event.inputs.probe }}" ]; then
+            python -m scripts.dq_audit probe-easydata ${{ github.event.inputs.probe }}
+            exit 0
+          fi
           python -m scripts.dq_audit reconcile-easydata --budget=$budget $flag --commit
           python -m scripts.dq_audit report
