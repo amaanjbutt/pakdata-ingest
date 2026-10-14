@@ -1,0 +1,23 @@
+name: pta_probe
+# Is pta.gov.pk reachable from GitHub's runners? (It times out from the VPS, IPv4 and
+# IPv6; answers from a Pakistani residential IP.) Each matrix leg lands on a different
+# Azure IP. Read-only: three GETs, no DB, no secrets.
+on:
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        leg: [1, 2, 3, 4, 5, 6]
+    steps:
+      - name: probe
+        run: |
+          curl -s https://ifconfig.me/ip; echo " (runner IP)"
+          for u in https://www.pta.gov.pk/ https://www.pta.gov.pk/category/telecom-indicators/1 ; do
+            printf '%s -> ' "$u"
+            curl -4 -s -o /dev/null -w '%{http_code} %{time_total}s\n' --max-time 25 \
+              -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141 Safari/537.36' "$u" || echo "timeout"
+          done
