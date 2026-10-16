@@ -11,5 +11,6 @@ pytest>=8.2
 redis>=5.0
 pdfplumber>=0.11
 openpyxl>=3.1
+xlrd>=2.0          # PBS Agricultural Census district tables are Excel 97 (.xls)
 apscheduler>=3.10
 tzdata>=2024.1

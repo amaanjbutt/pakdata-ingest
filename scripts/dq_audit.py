@@ -658,16 +658,38 @@ def compare_fund_navs(path: str, commit: bool = False) -> Counter:
     return stats
 
 
+def history_trusted(ours: dict, src: dict) -> bool:
+    """MUFAP's history endpoint serves another fund's series for a few ids (12683 gets
+    13189's, 12883 gets 13210's). Trust a fund's history only if it agrees with the NAVs
+    we stored from MUFAP's daily table: the latest shared date matches and ≥99% of shared
+    dates match. (Cum- vs ex-payout NAV on a payout day also fails the latest-date test.)"""
+    common = set(ours) & set(src)
+    if len(common) < 5:  # a fund a few days old: its latest point must match
+        last = max(src)
+        return last in ours and same_value(ours[last], src[last])
+    if not same_value(ours[max(common)], src[max(common)]):
+        return False
+    return sum(1 for d in common if same_value(ours[d], src[d])) >= 0.99 * len(common)
+
+
+def _rounds_to(ours: float | None, source: float | None) -> bool:
+    if ours is None or source is None:
+        return False
+    s = repr(float(source))
+    places = len(s.split(".")[1]) if "." in s else 0
+    return places < 4 and abs(ours - source) <= 0.5 * 10 ** -places + 1e-9
+
+
 def apply_fund_navs(path: str, commit: bool = False) -> Counter:
     """Bring fund NAV histories in line with MUFAP — only for funds whose MUFAP history is
-    trustworthy: its latest point equals the NAV we stored from MUFAP's official daily
-    table on that date. (For a few fund ids MUFAP's history endpoint serves another fund's
-    series — e.g. Atlas Islamic Income at ~102 while the daily table says 532 — those are
-    reported and left alone.)
+    trustworthy (`history_trusted`: it agrees with the NAVs we stored from MUFAP's
+    official daily table). For a few fund ids MUFAP's history endpoint serves another
+    fund's series — e.g. Atlas Islamic Income at ~102 while the daily table says 532 —
+    those are reported and left alone.
 
     For a trusted fund: values that differ are replaced, MUFAP points we lack are added
-    (including points our nightly spike rule had quarantined: the rule re-runs and keeps
-    out the real glitches), and points MUFAP doesn't list — e.g. another fund's history
+    (except points the nightly spike rule quarantined after the first apply on 2026-10-14
+    — it already re-judged those), and points MUFAP doesn't list — e.g. another fund's history
     stored under a new fund's id, dated before it existed — are removed. Offer/repurchase
     from the daily snapshots are kept. Back up fund_navs + fund_navs_quarantine first."""
     from app import db
@@ -676,15 +698,26 @@ def apply_fund_navs(path: str, commit: bool = False) -> Counter:
     stats: Counter = Counter()
     untrusted = []
     upserts, deletes, unquarantine = [], [], []
+    rejudged = {(r["fund_id"], r["obs_date"]) for r in db.query(
+        "SELECT fund_id, obs_date FROM fund_navs_quarantine WHERE quarantined_at >= '2026-10-14'")}
     for fid, src in src_all.items():
         ours = {r["obs_date"]: r["v"] for r in db.query(
             "SELECT obs_date, nav::float8 v FROM fund_navs WHERE fund_id=%s", (fid,))}
         last = max(src)
-        if not ours or last not in ours or not same_value(ours[last], src[last]):
+        if not history_trusted(ours, src):
             untrusted.append(fid)
             continue
         _, diffs = compare_points(ours, src)
         for d in diffs:
+            if d.kind == "missing_ours" and d.source <= 0:  # wind-down funds print 0 / negative NAVs
+                stats["nav_skipped_nonpositive"] += 1
+                continue
+            if d.kind == "value" and _rounds_to(d.ours, d.source):  # history is rounded, the daily table isn't
+                stats["nav_skipped_rounding"] += 1
+                continue
+            if d.kind == "missing_ours" and (fid, d.obs_date) in rejudged:
+                stats["nav_skipped_quarantined"] += 1
+                continue
             if d.kind in ("value", "missing_ours"):
                 upserts.append((fid, d.obs_date, d.source))
                 stats[f"nav_{d.kind}"] += 1

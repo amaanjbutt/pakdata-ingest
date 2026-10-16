@@ -22,11 +22,18 @@ from ingestion.jobs.mufap_fund_portfolio import MufapFundPortfolioJob
 from ingestion.jobs.mufap_debt_trades import MufapDebtTradesJob
 from ingestion.jobs.mufap_tfc_valuations import MufapTfcValuationsJob
 from ingestion.jobs.mufap_pkrv import MufapPkrvJob
+from ingestion.jobs.nepra_generation import NepraGenerationJob
+from ingestion.jobs.pbs_agri_census import PbsAgriCensusJob
+from ingestion.jobs.pbs_census_2023 import PbsCensus2023Job
 from ingestion.jobs.pbs_cpi_groups import PbsCpiGroupsJob
 from ingestion.jobs.pbs_cpi_monthly import PbsCpiMonthlyJob
+from ingestion.jobs.pbs_economic_census import PbsEconomicCensusJob
 from ingestion.jobs.pbs_external_trade import PbsExternalTradeJob
+from ingestion.jobs.pbs_hies import PbsHiesJob
+from ingestion.jobs.pbs_lfs import PbsLfsJob
 from ingestion.jobs.pbs_lsm import PbsLsmJob
 from ingestion.jobs.pbs_spi_weekly import PbsSpiWeeklyJob
+from ingestion.jobs.pso_fuel_prices import PsoFuelPricesJob
 from ingestion.jobs.pta_telecom import PtaTelecomJob
 from ingestion.jobs.sbp_auctions import SbpAuctionsJob
 from ingestion.jobs.sbp_kibor import SbpKiborJob
@@ -34,6 +41,7 @@ from ingestion.jobs.sbp_msb_vintages import SbpMsbFetchJob, VintagesRefreshJob
 from ingestion.jobs.sbp_payment_systems import SbpPaymentSystemsJob
 from ingestion.jobs.sbp_policy_rate import SbpPolicyRateJob
 from ingestion.jobs.sbp_sme_finance import SbpSmeFinanceJob
+from ingestion.jobs.sindh_amis_prices import SindhAmisPricesJob
 
 JOBS: dict[str, type[IngestionJob]] = {
     SbpKiborJob.name: SbpKiborJob,
@@ -65,4 +73,13 @@ JOBS: dict[str, type[IngestionJob]] = {
     SbpSmeFinanceJob.name: SbpSmeFinanceJob,
     SbpMsbFetchJob.name: SbpMsbFetchJob,
     VintagesRefreshJob.name: VintagesRefreshJob,
+    PsoFuelPricesJob.name: PsoFuelPricesJob,
+    SindhAmisPricesJob.name: SindhAmisPricesJob,
+    # Run from a workstation (the publishers block the VPS); annual / one-off sources.
+    NepraGenerationJob.name: NepraGenerationJob,
+    PbsCensus2023Job.name: PbsCensus2023Job,
+    PbsEconomicCensusJob.name: PbsEconomicCensusJob,
+    PbsAgriCensusJob.name: PbsAgriCensusJob,
+    PbsLfsJob.name: PbsLfsJob,
+    PbsHiesJob.name: PbsHiesJob,
 }

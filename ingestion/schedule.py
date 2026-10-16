@@ -65,6 +65,15 @@ SCHEDULES: list[Schedule] = [
              expected_interval=timedelta(days=3)),
     Schedule("amis_prices_all", {"hour": 3, "minute": 30, "day_of_week": "sun"},
              expected_interval=timedelta(days=9)),
+    # Sindh AMIS fruit & vegetable rates (reachable from the VPS), entered over the day.
+    Schedule("sindh_amis_prices", {"hour": 21, "minute": 45},
+             expected_interval=timedelta(days=3)),
+    # PSO retail fuel prices (psopk.com answers the VPS): PSO now posts a notice most
+    # weekdays; check each morning and evening. A quiet stretch is normal, hence stale_on_run.
+    Schedule("pso_fuel_prices", {"hour": 9, "minute": 5},
+             expected_interval=timedelta(days=3), stale_on_run=True),
+    Schedule("pso_fuel_prices", {"hour": 19, "minute": 5},
+             expected_interval=timedelta(days=3), stale_on_run=True),
     Schedule("derive_indicators", {"hour": 9, "minute": 45},
              expected_interval=timedelta(days=3)),
     Schedule("derive_indicators", {"hour": 23, "minute": 30},
