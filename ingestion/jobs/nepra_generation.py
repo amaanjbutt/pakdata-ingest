@@ -69,6 +69,16 @@ CATALOG = [
                      "bagasse). FY2017-18 onward."),
 ]
 
+# The first sentence is what the series page and search results lead with; the declared
+# `dimensions` are the headline filters (the series page and API examples default to them).
+_LEADS = {'energy.generation.plant': 'Monthly electricity generation of every power plant in Pakistan.', 'energy.utilization.plant': 'Monthly utilization of every power plant in Pakistan.', 'energy.capacity.installed': 'Installed capacity of every power plant in Pakistan.', 'energy.capacity.dependable': 'Dependable capacity of every power plant in Pakistan.', 'energy.generation.by_source': "Pakistan's monthly electricity generation by source: hydel, thermal, coal, nuclear, wind, solar."}
+_DIMS = {}
+for _c in CATALOG:
+    _c["description"] = f"{_LEADS[_c['id']]} {_c['description'].replace('`', '')}"
+    if _c["id"] in _DIMS:
+        _c["dimensions"] = _DIMS[_c["id"]]
+
+
 _ROW = re.compile(r"<tr[^>]*>(.*?)</tr>", re.S | re.I)
 _TD = re.compile(r"<td[^>]*>(.*?)</td>", re.S | re.I)
 _FY = re.compile(r"FY\s*(\d{4})-(\d{2})")

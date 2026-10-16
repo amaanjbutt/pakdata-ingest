@@ -51,6 +51,16 @@ _NAMES = {
 CATALOG = [dict(id=f"regional.lfs.{k}", name=n, unit=u, min_value=0, max_value=300 if u == "million" else 100,
                 description=f"{n}. {_D}", **_C) for k, (n, u) in _NAMES.items()]
 
+# The first sentence is what the series page and search results lead with; the declared
+# `dimensions` are the headline filters (the series page and API examples default to them).
+_LEADS = {'regional.lfs.unemployment_rate': 'Unemployment rate in Pakistan and each province, by sex (Labour Force Survey).', 'regional.lfs.employment_to_population': 'Employment-to-population ratio in Pakistan and each province, by sex (LFS).', 'regional.lfs.participation_rate': 'Labour force participation rate in Pakistan and each province, by sex (LFS).', 'regional.lfs.employed': 'Employed persons in Pakistan and each province, by sex (Labour Force Survey).', 'regional.lfs.unemployed': 'Unemployed persons in Pakistan and each province, by sex (Labour Force Survey).', 'regional.lfs.labour_force': 'Labour force of Pakistan and each province, by sex (Labour Force Survey).', 'regional.lfs.out_of_labour_force': 'Working-age people outside the labour force, Pakistan and provinces (LFS).', 'regional.lfs.working_age_population': 'Working-age population of Pakistan and each province, by sex (LFS).'}
+_DIMS = {'regional.lfs.unemployment_rate': {'sex': ['all', 'male', 'female'], 'standard': ['19th ICLS', '13th ICLS']}, 'regional.lfs.employment_to_population': {'sex': ['all', 'male', 'female'], 'standard': ['19th ICLS', '13th ICLS']}, 'regional.lfs.participation_rate': {'sex': ['all', 'male', 'female'], 'standard': ['19th ICLS', '13th ICLS']}, 'regional.lfs.employed': {'sex': ['all', 'male', 'female'], 'standard': ['19th ICLS', '13th ICLS']}, 'regional.lfs.unemployed': {'sex': ['all', 'male', 'female'], 'standard': ['19th ICLS', '13th ICLS']}, 'regional.lfs.labour_force': {'sex': ['all', 'male', 'female'], 'standard': ['19th ICLS', '13th ICLS']}, 'regional.lfs.out_of_labour_force': {'sex': ['all', 'male', 'female'], 'standard': ['19th ICLS', '13th ICLS']}, 'regional.lfs.working_age_population': {'sex': ['all', 'male', 'female'], 'standard': ['19th ICLS', '13th ICLS']}}
+for _c in CATALOG:
+    _c["description"] = f"{_LEADS[_c['id']]} {_c['description'].replace('`', '')}"
+    if _c["id"] in _DIMS:
+        _c["dimensions"] = _DIMS[_c["id"]]
+
+
 _ROW = re.compile(r"^(Total|Both Sexes|Male|Female|KP|Punjab|Sindh|Balochistan)\s+((?:[\d.]+\s+){7}[\d.]+)\s*$")
 
 

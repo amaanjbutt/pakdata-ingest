@@ -59,6 +59,15 @@ CATALOG = [
                                    f"`size`), {_D[3:]}.", **_C),
 ]
 
+# The first sentence is what the series page and search results lead with; the declared
+# `dimensions` are the headline filters (the series page and API examples default to them).
+_LEADS = {'regional.econ_census.establishments': 'Business establishments in every district of Pakistan, by industry, from the 2023 Economic Census.', 'regional.econ_census.workforce': 'People working in establishments in every district of Pakistan, by industry (Economic Census 2023).', 'regional.econ_census.establishments_by_size': 'Small and larger establishments in every district of Pakistan (Economic Census 2023).'}
+_DIMS = {'regional.econ_census.establishments': {'sector': ['All sectors']}, 'regional.econ_census.workforce': {'sector': ['All sectors']}, 'regional.econ_census.establishments_by_size': {'sector': ['All sectors'], 'size': ['under 10', '10 and above']}}
+for _c in CATALOG:
+    _c["description"] = f"{_LEADS[_c['id']]} {_c['description'].replace('`', '')}"
+    if _c["id"] in _DIMS:
+        _c["dimensions"] = _DIMS[_c["id"]]
+
 
 def _title(s: str) -> str:
     s = re.sub(r"\s+DISTRICT$", "", s.strip(), flags=re.I)

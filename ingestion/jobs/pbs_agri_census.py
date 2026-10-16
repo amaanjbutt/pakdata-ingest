@@ -57,6 +57,15 @@ CATALOG = [
                                    f"`power`), {_G}.", **_C),
 ]
 
+# The first sentence is what the series page and search results lead with; the declared
+# `dimensions` are the headline filters (the series page and API examples default to them).
+_LEADS = {'regional.agri_census.livestock': 'Cattle, buffaloes, goats, sheep and other livestock in every district of Pakistan (Agricultural Census 2024).', 'regional.agri_census.farms': 'Number of farms in every district of Pakistan, by farm size (Agricultural Census 2024).', 'regional.agri_census.farm_area': 'Farm area in every district of Pakistan, by farm size (Agricultural Census 2024).', 'regional.agri_census.cultivated_area': 'Cultivated area in every district of Pakistan, by farm size (Agricultural Census 2024).', 'regional.agri_census.tractors': 'Tractors in every district of Pakistan (Agricultural Census 2024).', 'regional.agri_census.tubewells': 'Tubewells and lift pumps in every district of Pakistan, by power source (Agricultural Census 2024).'}
+_DIMS = {'regional.agri_census.livestock': {'animal': ['cattle', 'buffaloes', 'sheep', 'goats', 'camels', 'horses', 'mules', 'asses', 'yak/dzo/dzomo']}, 'regional.agri_census.farms': {'farm_size': ['all']}, 'regional.agri_census.farm_area': {'farm_size': ['all']}, 'regional.agri_census.cultivated_area': {'farm_size': ['all']}, 'regional.agri_census.tractors': {'ownership': ['all', 'individual', 'joint', 'cooperative']}, 'regional.agri_census.tubewells': {'kind': ['all', 'tubewell', 'lift pump'], 'power': ['all', 'electric', 'solar', 'diesel', 'petrol', 'other']}}
+for _c in CATALOG:
+    _c["description"] = f"{_LEADS[_c['id']]} {_c['description'].replace('`', '')}"
+    if _c["id"] in _DIMS:
+        _c["dimensions"] = _DIMS[_c["id"]]
+
 
 class _Geo:
     def __init__(self):

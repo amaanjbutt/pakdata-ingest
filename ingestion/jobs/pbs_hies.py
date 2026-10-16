@@ -48,6 +48,16 @@ CATALOG = [
          description=f"Average monthly consumption expenditure per person in rupees, {_Q} — HIES.", **_C),
 ]
 
+# The first sentence is what the series page and search results lead with; the declared
+# `dimensions` are the headline filters (the series page and API examples default to them).
+_LEADS = {'regional.hies.household_size': 'Average household size in Pakistan, urban and rural, and by province (HIES).', 'regional.hies.earners_per_household': 'Average earners per household in Pakistan, urban and rural, and by province (HIES).', 'regional.hies.household_income': 'Average monthly household income in Pakistan, by income quintile (HIES).', 'regional.hies.household_consumption': 'Average monthly household spending in Pakistan, by quintile (HIES).', 'regional.hies.consumption_per_capita': 'Monthly spending per person in Pakistan, by quintile (HIES).'}
+_DIMS = {'regional.hies.household_income': {'locality': ['total', 'urban', 'rural'], 'quintile': ['all', '1', '2', '3', '4', '5']}, 'regional.hies.household_consumption': {'locality': ['total', 'urban', 'rural'], 'quintile': ['all', '1', '2', '3', '4', '5']}, 'regional.hies.consumption_per_capita': {'locality': ['total', 'urban', 'rural'], 'quintile': ['all', '1', '2', '3', '4', '5']}}
+for _c in CATALOG:
+    _c["description"] = f"{_LEADS[_c['id']]} {_c['description'].replace('`', '')}"
+    if _c["id"] in _DIMS:
+        _c["dimensions"] = _DIMS[_c["id"]]
+
+
 _AREAS = {"Total": ("locality", "total"), "Urban": ("locality", "urban"), "Rural": ("locality", "rural"),
           "Punjab": ("province", "Punjab"), "Sindh": ("province", "Sindh"),
           "Khyber Pakhtunkhwa": ("province", "Khyber Pakhtunkhwa"), "Balochistan": ("province", "Balochistan")}

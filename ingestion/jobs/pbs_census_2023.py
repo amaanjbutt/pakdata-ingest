@@ -73,6 +73,15 @@ CATALOG = [
          min_value=0, max_value=50e6, description=f"Children aged 5-16 not in school, by sex, {_GEO}.", **_C),
 ]
 
+# The first sentence is what the series page and search results lead with; the declared
+# `dimensions` are the headline filters (the series page and API examples default to them).
+_LEADS = {'regional.census.population': 'Population of every province, district and tehsil of Pakistan in the 2023 census.', 'regional.census.population_2017': 'Population of each province, district and tehsil in 2017, as tabulated with the 2023 census.', 'regional.census.growth_rate': 'Annual population growth of every district and tehsil, 2017-2023.', 'regional.census.area': 'Land area of every province, district and tehsil of Pakistan.', 'regional.census.density': 'Population density of every district and tehsil of Pakistan.', 'regional.census.urban_share': 'Urban share of the population of every district and tehsil of Pakistan.', 'regional.census.sex_ratio': 'Males per 100 females in every district and tehsil of Pakistan.', 'regional.census.household_size': 'Average household size in every district and tehsil of Pakistan.', 'regional.census.literacy_rate': 'Literacy rate of every district and tehsil of Pakistan in the 2023 census.', 'regional.census.out_of_school': 'Out-of-school children aged 5-16 in every district and tehsil of Pakistan.'}
+_DIMS = {'regional.census.population': {'locality': ['total', 'rural', 'urban'], 'sex': ['all', 'male', 'female', 'transgender']}, 'regional.census.population_2017': {'locality': ['total', 'rural', 'urban']}, 'regional.census.growth_rate': {'locality': ['total', 'rural', 'urban']}, 'regional.census.sex_ratio': {'locality': ['total', 'rural', 'urban']}, 'regional.census.household_size': {'locality': ['total', 'rural', 'urban']}, 'regional.census.literacy_rate': {'locality': ['total', 'rural', 'urban'], 'sex': ['all', 'male', 'female', 'transgender']}, 'regional.census.out_of_school': {'locality': ['total', 'rural', 'urban'], 'sex': ['all', 'male', 'female', 'transgender']}}
+for _c in CATALOG:
+    _c["description"] = f"{_LEADS[_c['id']]} {_c['description'].replace('`', '')}"
+    if _c["id"] in _DIMS:
+        _c["dimensions"] = _DIMS[_c["id"]]
+
 _UNIT_TYPES = {"DISTRICT": "district", "TEHSIL": "tehsil", "TALUKA": "taluka", "SUB-DIVISION": "sub-division",
                "SUB-TEHSIL": "sub-tehsil", "DIVISION": "division"}
 _LINE = re.compile(r"^([A-Z][A-Z0-9 .()&'/@-]*?[A-Z.)])\s+((?:-|[\d,]+(?:\.\d+)?)(?:\s+(?:-|[\d,]+(?:\.\d+)?))+)$")
