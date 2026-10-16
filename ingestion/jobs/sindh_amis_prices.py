@@ -13,7 +13,8 @@ rate is one market price (stored as `fqp`; Sindh publishes no min/max) in rupees
 or per dozen where the commodity name says "Per Dozen" (bananas; the rate itself always
 prints "/ KG"). The filter form's <select> options carry Sindh's
 market and commodity ids; we store them offset by `ID_OFFSET` in the shared agri tables
-(with `province = 'Sindh'`) so they never collide with Punjab AMIS ids.
+(with `province = 'Sindh'`, slugs `sindh_karachi`, `sindh_potato_grade_1`) so they never
+collide with Punjab AMIS ids or slugs.
 """
 from __future__ import annotations
 
@@ -143,11 +144,12 @@ class SindhAmisPricesJob(IngestionJob):
                        VALUES (%s, %s, %s, false, 'Sindh', %s)
                        ON CONFLICT (market_id) DO UPDATE SET name = EXCLUDED.name, slug = EXCLUDED.slug,
                            province = 'Sindh', district = EXCLUDED.district""",
-                    [(ID_OFFSET + i, n, "sindh-" + slug(n), d) for i, (n, d) in markets.items()])
+                    [(ID_OFFSET + i, n, "sindh_" + slug(re.sub(r"\s+Market$", "", n)), d)
+                     for i, (n, d) in markets.items()])
                 cur.executemany(
                     """INSERT INTO agri_commodities (commodity_id, name, slug, category, unit, province)
                        VALUES (%s, %s, %s, %s, %s, 'Sindh')
                        ON CONFLICT (commodity_id) DO UPDATE SET name = EXCLUDED.name, slug = EXCLUDED.slug,
                            category = EXCLUDED.category, unit = EXCLUDED.unit, province = 'Sindh'""",
-                    [(ID_OFFSET + i, n, "sindh-" + slug(n), category_for(n, fruits), u)
+                    [(ID_OFFSET + i, n, "sindh_" + slug(n), category_for(n, fruits), u)
                      for i, (n, u) in commodities.items()])
