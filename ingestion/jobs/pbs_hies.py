@@ -29,7 +29,7 @@ REPORT_URL = "https://www.pbs.gov.pk/wp-content/uploads/2020/07/HIES-2024-25-Rep
 SOURCE_URL = "https://www.pbs.gov.pk/hies/"
 Y1, Y2 = date(2019, 6, 30), date(2025, 6, 30)
 
-_C = dict(module="regional", frequency="annual", source="PBS", source_url=SOURCE_URL)
+_C = dict(module="regional", frequency="survey", source="PBS", source_url=SOURCE_URL)
 _Q = "by quintile (dimension `quintile`, 1 = poorest; `all` = every household) and urban / rural (`locality`)"
 CATALOG = [
     dict(id="regional.hies.household_size", name="Average household size (HIES)", unit="persons", min_value=0,

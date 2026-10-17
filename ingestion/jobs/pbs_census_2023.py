@@ -43,19 +43,19 @@ OBS_DATE = date(2023, 12, 31)
 SOURCE_URL = "https://www.pbs.gov.pk/census/"
 
 _C = dict(module="regional", frequency="census", source="PBS", source_url=SOURCE_URL)
-_GEO = ("by province, district and sub-district (tehsil / taluka / sub-division), "
-        "total, rural and urban — 7th Population & Housing Census 2023")
+_GEO = ("by province, district and sub-district (tehsil / taluka / sub-division), total, rural and urban, "
+        "at each census: 2023 to tehsil level, 2017 and 1998 to district level, 1981 for districts")
 CATALOG = [
-    dict(id="regional.census.population", name="Population (Census 2023)", unit="count", min_value=0,
+    dict(id="regional.census.population", name="Population (census)", unit="count", min_value=0,
          max_value=300e6, description=f"Population by sex (dimension `sex`: all, male, female, transgender), {_GEO}.",
          **_C),
     dict(id="regional.census.population_2017", name="Population in 2017 (Census 2017, as tabulated in 2023)",
          unit="count", min_value=0, max_value=300e6,
          description=f"2017 census population of the same areas, {_GEO}.", **_C),
-    dict(id="regional.census.growth_rate", name="Average annual population growth, 2017-2023", unit="percent",
+    dict(id="regional.census.growth_rate", name="Average annual population growth since the previous census", unit="percent",
          # urban areas redrawn since 2017 grow fast on paper (Ziarat urban: 56.46% a year, as PBS prints it)
          min_value=-100, max_value=200,
-         description=f"Average annual population growth rate 2017-2023, {_GEO}.", **_C),
+         description=f"Average annual population growth since the previous census (1981-98, 1998-2017, 2017-23), {_GEO}.", **_C),
     dict(id="regional.census.area", name="Area (sq km)", unit="sq_km", min_value=0, max_value=1e6,
          description=f"Land area in square kilometres, {_GEO}.", **_C),
     dict(id="regional.census.density", name="Population density", unit="per_sq_km", min_value=0, max_value=1e6,
@@ -66,7 +66,7 @@ CATALOG = [
          max_value=500, description=f"Males per 100 females, {_GEO}.", **_C),
     dict(id="regional.census.household_size", name="Average household size", unit="persons", min_value=0,
          max_value=50, description=f"Average persons per household, {_GEO}.", **_C),
-    dict(id="regional.census.literacy_rate", name="Literacy rate, age 10+ (Census 2023)", unit="percent",
+    dict(id="regional.census.literacy_rate", name="Literacy rate, age 10+ (census)", unit="percent",
          min_value=0, max_value=100,
          description=f"Literate share of the population aged 10 and over, by sex, {_GEO}.", **_C),
     dict(id="regional.census.out_of_school", name="Out-of-school children, age 5-16 (Census 2023)", unit="count",
@@ -75,7 +75,7 @@ CATALOG = [
 
 # The first sentence is what the series page and search results lead with; the declared
 # `dimensions` are the headline filters (the series page and API examples default to them).
-_LEADS = {'regional.census.population': 'Population of every province, district and tehsil of Pakistan in the 2023 census.', 'regional.census.population_2017': 'Population of each province, district and tehsil in 2017, as tabulated with the 2023 census.', 'regional.census.growth_rate': 'Annual population growth of every district and tehsil, 2017-2023.', 'regional.census.area': 'Land area of every province, district and tehsil of Pakistan.', 'regional.census.density': 'Population density of every district and tehsil of Pakistan.', 'regional.census.urban_share': 'Urban share of the population of every district and tehsil of Pakistan.', 'regional.census.sex_ratio': 'Males per 100 females in every district and tehsil of Pakistan.', 'regional.census.household_size': 'Average household size in every district and tehsil of Pakistan.', 'regional.census.literacy_rate': 'Literacy rate of every district and tehsil of Pakistan in the 2023 census.', 'regional.census.out_of_school': 'Out-of-school children aged 5-16 in every district and tehsil of Pakistan.'}
+_LEADS = {'regional.census.population': 'Population of every province, district and tehsil of Pakistan at each census since 1981.', 'regional.census.population_2017': 'Population of each province, district and tehsil in 2017, as tabulated with the 2023 census.', 'regional.census.growth_rate': 'Annual population growth of every district and tehsil between censuses.', 'regional.census.area': 'Land area of every province, district and tehsil of Pakistan.', 'regional.census.density': 'Population density of every district and tehsil of Pakistan.', 'regional.census.urban_share': 'Urban share of the population of every district and tehsil of Pakistan.', 'regional.census.sex_ratio': 'Males per 100 females in every district and tehsil of Pakistan.', 'regional.census.household_size': 'Average household size in every district and tehsil of Pakistan.', 'regional.census.literacy_rate': 'Literacy rate of every district of Pakistan in the 1998 and 2023 censuses.', 'regional.census.out_of_school': 'Out-of-school children aged 5-16 in every district and tehsil of Pakistan.'}
 _DIMS = {'regional.census.population': {'locality': ['total', 'rural', 'urban'], 'sex': ['all', 'male', 'female', 'transgender']}, 'regional.census.population_2017': {'locality': ['total', 'rural', 'urban']}, 'regional.census.growth_rate': {'locality': ['total', 'rural', 'urban']}, 'regional.census.sex_ratio': {'locality': ['total', 'rural', 'urban']}, 'regional.census.household_size': {'locality': ['total', 'rural', 'urban']}, 'regional.census.literacy_rate': {'locality': ['total', 'rural', 'urban'], 'sex': ['all', 'male', 'female', 'transgender']}, 'regional.census.out_of_school': {'locality': ['total', 'rural', 'urban'], 'sex': ['all', 'male', 'female', 'transgender']}}
 for _c in CATALOG:
     _c["description"] = f"{_LEADS[_c['id']]} {_c['description'].replace('`', '')}"

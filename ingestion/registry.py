@@ -30,6 +30,11 @@ from ingestion.jobs.pbs_cpi_monthly import PbsCpiMonthlyJob
 from ingestion.jobs.pbs_economic_census import PbsEconomicCensusJob
 from ingestion.jobs.pbs_external_trade import PbsExternalTradeJob
 from ingestion.jobs.pbs_hies import PbsHiesJob
+from ingestion.jobs.ismo_merit_order import IsmoMeritOrderJob
+from ingestion.jobs.ismo_power import IsmoPowerJob
+from ingestion.jobs.pbs_census_history import PbsCensusHistoryJob
+from ingestion.jobs.pbs_pslm import PbsPslmJob
+from ingestion.jobs.pbs_trade_hs import PbsTradeHsJob
 from ingestion.jobs.pbs_lfs import PbsLfsJob
 from ingestion.jobs.pbs_lsm import PbsLsmJob
 from ingestion.jobs.pbs_spi_weekly import PbsSpiWeeklyJob
@@ -82,4 +87,9 @@ JOBS: dict[str, type[IngestionJob]] = {
     PbsAgriCensusJob.name: PbsAgriCensusJob,
     PbsLfsJob.name: PbsLfsJob,
     PbsHiesJob.name: PbsHiesJob,
+    IsmoPowerJob.name: IsmoPowerJob,
+    IsmoMeritOrderJob.name: IsmoMeritOrderJob,
+    PbsTradeHsJob.name: PbsTradeHsJob,
+    PbsCensusHistoryJob.name: PbsCensusHistoryJob,
+    PbsPslmJob.name: PbsPslmJob,
 }

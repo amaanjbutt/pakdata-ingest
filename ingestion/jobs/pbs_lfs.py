@@ -35,7 +35,7 @@ _COLS = ["employed", "unemployed", "labour_force", "out_of_labour_force", "worki
 _PROV = {"KP": "Khyber Pakhtunkhwa", "Punjab": "Punjab", "Sindh": "Sindh", "Balochistan": "Balochistan"}
 _SEX = {"Total": "all", "Both Sexes": "all", "Male": "male", "Female": "female"}
 
-_C = dict(module="regional", frequency="annual", source="PBS", source_url=SOURCE_URL)
+_C = dict(module="regional", frequency="survey", source="PBS", source_url=SOURCE_URL)
 _D = ("Labour Force Survey, Pakistan and provinces (dimension `province`; absent = Pakistan), by sex, under "
       "the 19th ICLS (current) or 13th ICLS (older, comparable) definition (dimension `standard`).")
 _NAMES = {

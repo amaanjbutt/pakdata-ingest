@@ -1,6 +1,12 @@
 """PBS external trade endpoints.
 
-    GET /v1/trade?flow=export|import&commodity=&group=&from=&to=
+    GET /v1/trade?flow=export|import&commodity=&group=&from=&to=     monthly, by commodity group
+    GET /v1/trade/products?q=                                        product codes (public)
+    GET /v1/trade/hs?flow=&code=&country=&from=&to=                  yearly, by product x country
+    GET /v1/trade/partners?flow=&fy=&code=                           partners ranked for a year
+    GET /v1/trade/partner-products?country=&flow=&fy=                a partner's products ranked
+    GET /v1/trade/partner-history?country=&flow=                     a partner's yearly total
+    GET /v1/trade/countries?flow=                                    partner list (public)
 """
 from __future__ import annotations
 
@@ -8,8 +14,9 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app import db
 from app.security import Caller, authenticate, history_floor
-from app.services import series_repo
+from app.services import cache, series_repo
 
 router = APIRouter(prefix="/v1/trade", tags=["trade"])
 MAX_LIMIT = 10000
@@ -52,3 +59,169 @@ def trade(
         ],
         "count": len(rows),
     }
+
+
+# ---- Exports / imports by product code x partner country, fiscal years 1990-91 on (`trade_hs`) -------
+
+_HS_FLOWS = "^(export|import|re-export|re-import)$"
+_ALL = "All countries"
+# Fiscal-year average PKR per USD: the mean of the twelve SBP monthly averages, July-June.
+_FY_RATE = """fy_rate AS (
+    SELECT (EXTRACT(YEAR FROM obs_date)::int + CASE WHEN EXTRACT(MONTH FROM obs_date) >= 7 THEN 1 ELSE 0 END) AS fy,
+           avg(value) AS pkr_per_usd
+    FROM observations WHERE series_id = 'fx.rate.avg.usd' GROUP BY 1)"""
+
+
+def _fy_label(fy: int) -> str:
+    return f"{fy - 1}-{str(fy)[2:]}"
+
+
+def _fy_floor(caller: Caller) -> int | None:
+    floor = history_floor(caller)
+    return None if floor is None else floor.year + (1 if floor.month >= 7 else 0)
+
+
+def _check_fy(caller: Caller, fy: int) -> None:
+    floor = _fy_floor(caller)
+    if floor and fy < floor:
+        raise HTTPException(status_code=403, detail=f"your plan's history starts at FY{_fy_label(floor)}")
+
+
+def _code_filter(code: str | None, params: dict) -> str:
+    if not code:
+        return ""
+    c = code.strip().upper()
+    if c.endswith("*"):
+        params["code"] = c[:-1] + "%"
+        return " AND t.code LIKE %(code)s"
+    params["code"] = c
+    return " AND t.code = %(code)s"
+
+
+def _usd(v, rate):
+    return round(float(v) / float(rate), 3) if v is not None and rate else None
+
+
+@router.get("/products")
+def hs_products(q: str | None = Query(None, description="Search the product description or code"),
+                classification: str | None = Query(None, pattern="^(HS|SITC)$"),
+                limit: int = Query(50, ge=1, le=1000)):
+    """Product codes in the customs record: 8-digit HS-based codes (FY2002-03 on) and 7-digit
+    SITC-based codes (FY1990-91 to FY2001-02). Public."""
+    rows = cache.cached_json("trade:hs_codes:v1", 3600, lambda: db.query(
+        "SELECT code, classification, description, unit, first_fy, last_fy FROM trade_hs_codes "
+        "WHERE classification <> 'total' ORDER BY code"))
+    if classification:
+        rows = [r for r in rows if r["classification"] == classification]
+    if q:
+        ql = q.strip().lower()
+        rows = [r for r in rows if r["code"].startswith(ql) or ql in r["description"].lower()]
+    return {"success": True, "data": rows[:limit], "count": min(len(rows), limit), "total": len(rows)}
+
+
+@router.get("/hs")
+def hs_flows(flow: str = Query("export", pattern=_HS_FLOWS),
+             code: str | None = Query(None, description="Product code, or a prefix ending in * (e.g. 5205*)"),
+             country: str | None = Query(None, description="Partner country; 'All countries' = the product total"),
+             fy_from: int | None = Query(None, alias="from", ge=1990, le=2100, description="First fiscal year (end year)"),
+             fy_to: int | None = Query(None, alias="to", ge=1990, le=2100),
+             limit: int = Query(1000, ge=1, le=MAX_LIMIT),
+             caller: Caller = Depends(authenticate)):
+    """Yearly exports/imports for a product (or code prefix), by partner country. Value in Rs
+    thousand as published, plus US$ thousand at the fiscal-year average exchange rate."""
+    if not code and not country:
+        raise HTTPException(status_code=422, detail="give a product code (or prefix*) or a country")
+    params: dict = {"flow": flow, "limit": limit, "all": _ALL}
+    where = "t.flow = %(flow)s" + _code_filter(code, params)
+    if country:
+        where += " AND lower(t.country) = lower(%(country)s)"
+        params["country"] = country.strip()
+    lo = max(fy_from or 0, _fy_floor(caller) or 0) or None
+    if lo:
+        where += " AND t.fy >= %(lo)s"
+        params["lo"] = lo
+    if fy_to:
+        where += " AND t.fy <= %(hi)s"
+        params["hi"] = fy_to
+    rows = db.query(
+        f"""WITH {_FY_RATE}
+            SELECT t.flow, t.fy, t.code, c.description, c.unit, c.classification, t.country, t.quantity,
+                   t.value_pkr_th, r.pkr_per_usd
+            FROM trade_hs t JOIN trade_hs_codes c USING (code) LEFT JOIN fy_rate r ON r.fy = t.fy
+            WHERE {where}
+            ORDER BY t.fy DESC, t.code, (t.country <> %(all)s), t.value_pkr_th DESC NULLS LAST
+            LIMIT %(limit)s""", params)
+    return {"success": True, "data": [
+        {"flow": r["flow"], "fiscal_year": _fy_label(r["fy"]), "fy": r["fy"], "code": r["code"],
+         "product": r["description"], "classification": r["classification"], "country": r["country"],
+         "quantity": r["quantity"], "unit": r["unit"] or None, "value_pkr_th": r["value_pkr_th"],
+         "value_usd_th": _usd(r["value_pkr_th"], r["pkr_per_usd"])} for r in rows], "count": len(rows)}
+
+
+@router.get("/partners")
+def hs_partners(flow: str = Query("export", pattern=_HS_FLOWS),
+                fy: int = Query(..., ge=1991, le=2100, description="Fiscal year (end year: 2025 = FY2024-25)"),
+                code: str | None = Query(None, description="Restrict to a product code or prefix*"),
+                limit: int = Query(50, ge=1, le=500), caller: Caller = Depends(authenticate)):
+    """Partner countries ranked by value for a fiscal year: all products, or one product / prefix."""
+    _check_fy(caller, fy)
+    params: dict = {"flow": flow, "fy": fy, "limit": limit, "all": _ALL}
+    where = "t.flow = %(flow)s AND t.fy = %(fy)s AND t.country <> %(all)s AND t.code <> 'TOTAL'"
+    where += _code_filter(code, params)
+    rows = db.query(
+        f"""WITH {_FY_RATE},
+            p AS (SELECT t.country, sum(t.value_pkr_th) AS v FROM trade_hs t WHERE {where} GROUP BY 1)
+            SELECT p.country, p.v AS value_pkr_th, p.v / NULLIF(sum(p.v) OVER (), 0) * 100 AS share,
+                   (SELECT pkr_per_usd FROM fy_rate WHERE fy = %(fy)s) AS rate
+            FROM p ORDER BY p.v DESC NULLS LAST LIMIT %(limit)s""", params)
+    return {"success": True, "fy": fy, "fiscal_year": _fy_label(fy), "data": [
+        {"country": r["country"], "value_pkr_th": r["value_pkr_th"], "value_usd_th": _usd(r["value_pkr_th"], r["rate"]),
+         "share_pct": round(float(r["share"]), 3) if r["share"] is not None else None} for r in rows],
+        "count": len(rows)}
+
+
+@router.get("/partner-history")
+def hs_partner_history(country: str = Query(...), flow: str = Query("export", pattern=_HS_FLOWS),
+                       caller: Caller = Depends(authenticate)):
+    """A partner country's total trade with Pakistan each fiscal year (sum over all products)."""
+    floor = _fy_floor(caller)
+    rows = db.query(
+        f"""WITH {_FY_RATE}
+            SELECT t.fy, sum(t.value_pkr_th) AS value_pkr_th, max(r.pkr_per_usd) AS rate
+            FROM trade_hs t LEFT JOIN fy_rate r ON r.fy = t.fy
+            WHERE t.flow = %(flow)s AND lower(t.country) = lower(%(country)s) AND t.code <> 'TOTAL'
+              AND t.fy >= %(lo)s
+            GROUP BY t.fy ORDER BY t.fy""",
+        {"flow": flow, "country": country.strip(), "lo": floor or 0})
+    return {"success": True, "country": country, "flow": flow, "data": [
+        {"fy": r["fy"], "fiscal_year": _fy_label(r["fy"]), "value_pkr_th": r["value_pkr_th"],
+         "value_usd_th": _usd(r["value_pkr_th"], r["rate"])} for r in rows], "count": len(rows)}
+
+
+@router.get("/countries")
+def hs_countries(flow: str = Query("export", pattern=_HS_FLOWS)):
+    """Partner countries in the customs record, with the years they appear. Public."""
+    rows = cache.cached_json(f"trade:hs_countries:{flow}:v1", 3600, lambda: db.query(
+        "SELECT country, min(fy) AS first_fy, max(fy) AS last_fy FROM trade_hs "
+        "WHERE flow = %(flow)s AND country <> %(all)s GROUP BY 1 ORDER BY 1", {"flow": flow, "all": _ALL}))
+    return {"success": True, "data": rows, "count": len(rows)}
+
+
+@router.get("/partner-products")
+def hs_partner_products(country: str = Query(...), flow: str = Query("export", pattern=_HS_FLOWS),
+                        fy: int = Query(..., ge=1991, le=2100), limit: int = Query(50, ge=1, le=500),
+                        caller: Caller = Depends(authenticate)):
+    """A partner country's products ranked by value for a fiscal year."""
+    _check_fy(caller, fy)
+    rows = db.query(
+        f"""WITH {_FY_RATE}
+            SELECT t.code, c.description, c.unit, t.quantity, t.value_pkr_th, r.pkr_per_usd
+            FROM trade_hs t JOIN trade_hs_codes c USING (code) LEFT JOIN fy_rate r ON r.fy = t.fy
+            WHERE t.flow = %(flow)s AND t.fy = %(fy)s AND lower(t.country) = lower(%(country)s)
+              AND t.code <> 'TOTAL'
+            ORDER BY t.value_pkr_th DESC NULLS LAST LIMIT %(limit)s""",
+        {"flow": flow, "fy": fy, "country": country.strip(), "limit": limit})
+    return {"success": True, "fy": fy, "fiscal_year": _fy_label(fy), "country": country, "data": [
+        {"code": r["code"], "product": r["description"], "unit": r["unit"] or None, "quantity": r["quantity"],
+         "value_pkr_th": r["value_pkr_th"], "value_usd_th": _usd(r["value_pkr_th"], r["pkr_per_usd"])}
+        for r in rows], "count": len(rows)}

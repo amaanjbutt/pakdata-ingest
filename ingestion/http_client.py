@@ -96,17 +96,17 @@ def _retry_after(resp, default: int) -> int:
         return default
 
 
-def get(url: str, timeout: int = 30):
+def get(url: str, timeout: int = 30, headers: dict | None = None):
     """GET returning a response with `.content` / `.text` / `.status_code`.
 
     Backs off on 429 (source rate-limit) rather than failing the run — official
     sources throttle bursty callers, so we honour Retry-After and retry twice."""
     for attempt in range(4):
         if _HAVE_CFFI:
-            resp = _sess().get(url, proxies=_proxies_for(url), timeout=timeout)
+            resp = _sess().get(url, proxies=_proxies_for(url), timeout=timeout, headers=headers)
         else:
             resp = httpx.get(
-                url, headers={"User-Agent": settings.user_agent}, timeout=timeout,
+                url, headers={"User-Agent": settings.user_agent, **(headers or {})}, timeout=timeout,
                 follow_redirects=True,
             )
         if resp.status_code == 429 and attempt < 3:
