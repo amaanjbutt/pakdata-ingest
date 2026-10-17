@@ -5,9 +5,9 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import (account, auth, billing, calendar, catalog, commodities,
-                     fixed_income, funds, search, securities, series, status,
-                     trade, usage, webhooks)
+from app.api import (account, admin, agri, amcs, auth, billing, calendar, catalog,
+                     commodities, fixed_income, funds, regional, search, securities, series,
+                     status, trade, usage, webhooks)
 
 app = FastAPI(
     title="PakData API",
@@ -17,10 +17,13 @@ app = FastAPI(
 
 app.include_router(catalog.router)
 app.include_router(commodities.router)
+app.include_router(agri.router)
 app.include_router(fixed_income.router)
 app.include_router(funds.router)
+app.include_router(amcs.router)
 app.include_router(securities.router)
 app.include_router(trade.router)
+app.include_router(regional.router)
 app.include_router(series.router)
 app.include_router(status.router)
 app.include_router(usage.router)
@@ -29,6 +32,7 @@ app.include_router(search.router)
 app.include_router(calendar.router)
 app.include_router(webhooks.router)
 app.include_router(account.router)
+app.include_router(admin.router)
 app.include_router(auth.router)
 
 
@@ -66,7 +70,9 @@ _CODE_BY_STATUS = {
 
 @app.exception_handler(StarletteHTTPException)
 def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    code = _CODE_BY_STATUS.get(exc.status_code, "error")
+    # An exception may carry an explicit `error_code` (e.g. credits_exhausted) to
+    # override the coarse status→code map; otherwise fall back to the status code.
+    code = getattr(exc, "error_code", None) or _CODE_BY_STATUS.get(exc.status_code, "error")
     return JSONResponse(
         status_code=exc.status_code,
         content={"success": False, "error": {"code": code, "message": str(exc.detail)}},

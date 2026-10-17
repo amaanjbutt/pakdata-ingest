@@ -188,6 +188,17 @@ def basket_cost(items: dict[str, Points], basket: dict[str, float], carry_days: 
     return out
 
 
+def in_usd_month_end(price_changes: Points, pkr_per_usd: Points, digits: int = 4) -> Points:
+    """A rupee price dated at each change (fuel), in US dollars: the price in force at each
+    month-end ÷ that month's average PKR per USD. Months without an exchange rate are skipped."""
+    fx = {month_end(d): v for d, v in pkr_per_usd if v}
+    if not price_changes or not fx:
+        return []
+    last = min(max(fx), month_end(date.today().replace(day=1) - timedelta(days=1)))
+    asof = step_asof(price_changes, month_ends_between(month_end(min(price_changes)[0]), last))
+    return [(d, round(v / fx[d], digits)) for d, v in asof if d in fx]
+
+
 def share_pct(part: Points, whole: Points, whole_scale: float = 1.0) -> Points:
     wd = dict(whole)
     return [(d, v / (wd[d] * whole_scale) * 100.0) for d, v in part if wd.get(d)]
@@ -314,6 +325,18 @@ SPECS: list[Spec] = [
          "Sum of the latest 12 consecutive months of workers' remittances (US$ million) — the annualised "
          "inflow, free of Ramadan/Eid seasonality.",
          ["remittances.total"], lambda i: rolling_sum_months(i["remittances.total"], 12), (0, 1e6)),
+    Spec("energy.fuel.petrol.usd", "Petrol price in US dollars (per litre)",
+         "energy", "usd", "monthly",
+         "Pump price of petrol in force at each month-end (Rs per litre) ÷ that month's average PKR per US "
+         "dollar (SBP): US$ per litre, comparable across years and with world prices.",
+         ["energy.fuel.petrol", "fx.rate.avg.usd"],
+         lambda i: in_usd_month_end(i["energy.fuel.petrol"], i["fx.rate.avg.usd"]), (0, 10)),
+    Spec("energy.fuel.diesel.usd", "Diesel price in US dollars (per litre)",
+         "energy", "usd", "monthly",
+         "Pump price of high-speed diesel in force at each month-end (Rs per litre) ÷ that month's average PKR "
+         "per US dollar (SBP): US$ per litre.",
+         ["energy.fuel.diesel", "fx.rate.avg.usd"],
+         lambda i: in_usd_month_end(i["energy.fuel.diesel"], i["fx.rate.avg.usd"]), (0, 10)),
     Spec("payments.raast.share_of_retail_value", "Raast share of retail payments value",
          "alternate", "percent", "quarterly",
          "Raast transaction value (PKR bn) ÷ total retail payments value (PKR tn × 1,000) × 100, per quarter "
