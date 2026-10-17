@@ -34,6 +34,7 @@ import re
 from datetime import date
 
 from ingestion.framework import FetchedFile, IngestionJob, Record
+from ingestion.plants_pk import canon_plant
 
 BASE = "https://nepra.org.pk/publications/State%20of%20Industry%20Reports"
 FIRST_FY = 2017  # FY2017-18
@@ -151,8 +152,8 @@ def to_records(sheets: list[tuple[int, list[dict]]]) -> list[Record]:
     for y0, plants in sheets:
         fy_end = date(y0 + 1, 6, 30)
         for p in plants:
-            name = latest[plant_key(p["plant"])][1]
-            dims = {"plant": name}
+            # registry name (+ unit for Guddu's blocks); renames across years map to one plant
+            dims = canon_plant(latest[plant_key(p["plant"])][1])
             cap_dims = {**dims, "technology": p["technology"], "fuel": p["fuel"]}
             if p["installed"] is not None:
                 out.append(Record("energy.capacity.installed", fy_end, p["installed"], cap_dims))
