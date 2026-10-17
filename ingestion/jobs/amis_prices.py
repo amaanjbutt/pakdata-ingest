@@ -218,6 +218,8 @@ def upsert_reference(markets: dict[int, str], commodities: dict[int, tuple[str, 
                    ON CONFLICT (commodity_id) DO UPDATE SET name = EXCLUDED.name, slug = EXCLUDED.slug,
                        category = COALESCE(EXCLUDED.category, agri_commodities.category), unit = EXCLUDED.unit""",
                 [(i, n, slug(n), cat, unit_for(n)) for i, (n, cat) in commodities.items()])
+        from ingestion.agri_names import apply_names
+        apply_names(conn)
 
 
 def upsert_prices(rows: list[dict]) -> int:
