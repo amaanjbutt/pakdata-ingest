@@ -45,14 +45,14 @@ def _rows_trade(cur) -> list[tuple]:
     out = []
     for code, cl, name, short, raw, heading, f0, f1 in cur.fetchall():
         label = "HS" if cl == "HS" else "SITC"
-        years = f"FY{(f0 or 0) - 1}-{str(f1 or 0)[2:]}" if f0 and f1 else ""
+        years = f"FY{f0 - 1}-{str(f0)[2:]} to FY{f1 - 1}-{str(f1)[2:]}" if f0 and f1 else ""
         out.append(("trade_product", code, name, f"Traded product · {label} {code} · {years}".strip(" ·"),
                     f"/trade?code={code}", math.log10(1 + value.get(code, 0)),
                     _hay(name, short, raw, heading, code, "export import trade")))
     cur.execute("SELECT country, min(fy), max(fy) FROM trade_hs WHERE country <> 'All countries' GROUP BY 1")
     for country, f0, f1 in cur.fetchall():
         out.append(("trade_country", country, f"Trade with {country}",
-                    f"Exports and imports by product, FY{f0 - 1}–{str(f1)[2:]}",
+                    f"Exports and imports by product, FY{f0 - 1}-{str(f0)[2:]} to FY{f1 - 1}-{str(f1)[2:]}",
                     f"/trade?country={quote(country)}", 3.0, _hay(country, "trade exports imports partner")))
     return out
 
