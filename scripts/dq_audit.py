@@ -392,6 +392,11 @@ def _write_source_values(job, sid: str, src: dict[date, float | None], stats: Co
     framework.alerting.alert = lambda subject, body="": _ALERTS.append(f"{subject}: {body}"[:300])
     try:
         stats["points_written"] += job.upsert(job.validate(recs))
+    except framework.ValidationError as exc:
+        # every SBP figure for this series failed our bounds (e.g. a 30x source typo between
+        # two normal months) — leave the point out, report it, and keep auditing the rest
+        stats["points_rejected"] += len(recs)
+        _ALERTS.append(f"{sid}: {exc}"[:300])
     finally:
         framework.alerting.alert = real_alert
 
