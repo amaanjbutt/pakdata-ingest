@@ -116,11 +116,13 @@ def parse_page(tokens: list[dict], width: float) -> list[dict]:
             name, tx = min(targets, key=lambda k: abs(k[1] - cx))
             if abs(tx - cx) < width * 0.04:
                 nums[name] = v
+            elif other_x is None and fuel_x - width * 0.12 < cx < fuel_x:
+                nums["other"] = v  # 'other cost' printed on one row only: too few to form a column
         if None in (nums["specific"], nums["vom"], nums["fuel"]):
             continue
         if abs(nums["other"] + nums["fuel"] + nums["vom"] - nums["specific"]) > 0.0015:
             continue  # a misread digit: leave the row out
-        left = [(cx, t) for cx, _, x0, x1, t in r if x1 < left_edge]
+        left = [(cx, t) for cx, _, x0, x1, t in r if x1 < left_edge and not _COST.match(t.replace(",", ""))]
         in_sr = (lambda cx: sr_x is not None and abs(cx - sr_x) < width * 0.02)
         is_rank = (lambda cx, t: _INT.match(t) and int(t) <= 150 and in_sr(cx))  # '747' MW Guddu is a name
         rank = next((int(t) for cx, t in left if is_rank(cx, t)), None)
