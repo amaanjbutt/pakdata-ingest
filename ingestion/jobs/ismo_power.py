@@ -35,6 +35,7 @@ from collections import defaultdict
 from datetime import date, datetime
 
 from ingestion.framework import FetchedFile, IngestionJob, Record
+from ingestion.plants_pk import canon_disco, canon_plant
 
 SITE = "https://www.ismo.gov.pk"
 API = f"{SITE}/api/v1"
@@ -182,7 +183,7 @@ def parse_month_workbook(sheets: dict[str, list[tuple]], month: date) -> list[Re
     for r in disco[1:]:
         name, gwh = (str(r[0]).strip() if r[0] else ""), _num(r[2]) if len(r) > 2 else None
         if name and gwh is not None and re.match(r"^[A-Z][A-Za-z\-]+$", name):
-            out.append(Record("energy.power.disco_consumption", month, round(gwh, 3), {"disco": name}))
+            out.append(Record("energy.power.disco_consumption", month, round(gwh, 3), {"disco": canon_disco(name)}))
     mix = sheets.get("Generation Mix") or []
     if mix:
         head = [str(h or "").strip().lower() for h in mix[0]]
@@ -262,7 +263,7 @@ def plant_name(station: str) -> str:
 
 def parse_plants(sheets: dict[str, list[tuple]]) -> list[Record]:
     """Hourly kWh per station (one sheet per fuel) → daily MWh per plant. Pure."""
-    tot: dict[tuple[date, str, str], float] = defaultdict(float)
+    tot: dict[tuple[date, str, str], float] = defaultdict(float)  # (day, canonical dims JSON, fuel)
     for title, rows in sheets.items():
         fuel = _FUELS.get(title)
         if not fuel:
@@ -273,8 +274,9 @@ def parse_plants(sheets: dict[str, list[tuple]]) -> list[Record]:
             d, kwh = _day(r[0]), _num(r[2])
             if d is None or kwh is None:
                 continue
-            tot[(d, plant_name(str(r[3])), fuel)] += kwh
-    return [Record("energy.generation.plant_daily", d, round(kwh / 1000, 3), {"plant": p, "fuel": f})
+            plant = json.dumps(canon_plant(plant_name(str(r[3]))), sort_keys=True)
+            tot[(d, plant, fuel)] += kwh
+    return [Record("energy.generation.plant_daily", d, round(kwh / 1000, 3), {**json.loads(p), "fuel": f})
             for (d, p, f), kwh in sorted(tot.items())]
 
 
