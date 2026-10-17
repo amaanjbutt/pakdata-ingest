@@ -356,7 +356,21 @@ def build_scheduler() -> BlockingScheduler:
         sched.add_job(fn, trigger=CronTrigger(**cron, timezone=settings.timezone),
                       id=fn.__name__, name=fn.__name__)
         log.info("scheduled %-22s cron=%s", fn.__name__, label)
+
+    # site search index (trade products, districts, plants, mandi, funds …): nightly rebuild
+    sched.add_job(search_entities_refresh, trigger=CronTrigger(hour=4, minute=40, timezone=settings.timezone),
+                  id="search_entities_refresh", name="search_entities_refresh")
+    log.info("scheduled %-22s cron=daily 04:40", "search_entities_refresh")
     return sched
+
+
+def search_entities_refresh() -> None:
+    from ingestion import search_entities
+    try:
+        search_entities.refresh()
+    except Exception as exc:  # noqa: BLE001
+        log.exception("search_entities.refresh failed")
+        alerting.alert("search_entities.refresh failed", str(exc)[:500])
 
 
 def _reqlog(action: str):
