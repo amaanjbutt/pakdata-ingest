@@ -107,7 +107,7 @@ def _rows_mandi(cur) -> list[tuple]:
         # Punjab's daily report also covers Karachi, Hyderabad, Quetta and Gwadar
         title = f"{name} mandi" if region == prov else f"{name} mandi (Punjab's report)"
         out.append(("mandi_market", slug, title, f"Wholesale market · {region}", url,
-                    3.5 if major else 2.5 if region == prov else 1.5, _hay(name, raw, region, "mandi market wholesale")))
+                    1.5 if region != prov else 3.5 if major else 2.5, _hay(name, raw, region, "mandi market wholesale")))
     return out
 
 
