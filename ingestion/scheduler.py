@@ -345,7 +345,32 @@ def build_scheduler() -> BlockingScheduler:
     )
     log.info("scheduled %-22s cron=daily 08:05 (EasyData key-expiry warning)",
              "key_expiry_check")
+
+    # API request log: drain the Redis stream every minute; roll up + archive daily
+    # (05:15 / 05:30 PKT = just after the UTC day closes).
+    for fn, cron, label in (
+        (_reqlog("flush"), {"minute": "*"}, "every minute"),
+        (_reqlog("rollup"), {"hour": 5, "minute": 15}, "daily 05:15"),
+        (_reqlog("archive"), {"hour": 5, "minute": 30}, "daily 05:30"),
+    ):
+        sched.add_job(fn, trigger=CronTrigger(**cron, timezone=settings.timezone),
+                      id=fn.__name__, name=fn.__name__)
+        log.info("scheduled %-22s cron=%s", fn.__name__, label)
     return sched
+
+
+def _reqlog(action: str):
+    """A scheduler entry for ingestion.request_log.<action> that never raises."""
+    def run() -> None:
+        from ingestion import request_log
+        try:
+            getattr(request_log, action)()
+        except Exception as exc:  # noqa: BLE001 — telemetry housekeeping must not kill the scheduler
+            log.exception("request_log.%s failed", action)
+            if action != "flush":  # flush retries every minute; a failed daily step is worth a mail
+                alerting.alert(f"request_log.{action} failed", str(exc)[:500])
+    run.__name__ = f"request_log_{action}"
+    return run
 
 
 def main() -> int:
