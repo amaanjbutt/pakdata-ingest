@@ -27,6 +27,7 @@ from collections import Counter, defaultdict
 from datetime import date
 
 from ingestion.framework import FetchedFile, IngestionJob, Record
+from ingestion.plants_pk import canon_plant
 
 TOKENS_PATH = os.getenv("ISMO_MERIT_TOKENS", "/app/ismo_merit_tokens.json")
 SOURCE_URL = "https://www.ismo.gov.pk/library"
@@ -225,8 +226,8 @@ def to_records(bundle: dict) -> list[Record]:
         head = canon[_key(r["plant"])]
         if head not in best:
             continue
-        dims = {"plant": best[head], "fuel": r["fuel"]}
-        k = (d, dims["plant"], dims["fuel"])
+        dims = {**canon_plant(best[head]), "fuel": r["fuel"]}   # registry name + unit/config/tranche
+        k = (d, tuple(sorted(dims.items())))
         if k in seen:  # the same plant read twice on one order: keep the first
             continue
         seen.add(k)
