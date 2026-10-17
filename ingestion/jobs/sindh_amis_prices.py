@@ -153,3 +153,5 @@ class SindhAmisPricesJob(IngestionJob):
                            category = EXCLUDED.category, unit = EXCLUDED.unit, province = 'Sindh'""",
                     [(ID_OFFSET + i, n, "sindh_" + slug(n), category_for(n, fruits), u)
                      for i, (n, u) in commodities.items()])
+            from ingestion.agri_names import apply_names
+            apply_names(conn)
