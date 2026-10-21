@@ -95,9 +95,11 @@ jobs:
           # 3) Per-job freshness skip: run only the jobs that haven't succeeded in this
           #    slot (last 150 min). Was navs-only, so once navs landed every later
           #    attempt exited even when returns/stats had 403'd — returns sat stale.
-          TODO=$(python -m scripts.mufap_jobs_todo)
+          #    Bundle-aware: a fund job whose page this runner couldn't bundle waits for
+          #    a later runner instead of going live and writing a 403 'failed' run.
+          TODO=$(python -m scripts.mufap_jobs_todo /tmp/raw/mufap_bundle)
           if [ -z "$TODO" ]; then
-            echo "::notice::all MUFAP jobs already ingested this slot — skipping"
+            echo "::notice::nothing left this runner can ingest (done this slot, or pages not bundled) — skipping"
             exit 0
           fi
           # 4) Ingest (solo), reading the bundled pages. Per-job hard timeout.

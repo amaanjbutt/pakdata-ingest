@@ -26,11 +26,14 @@ from __future__ import annotations
 import csv
 import html as _html
 import io
+import logging
 import re
 import time
 from datetime import date, datetime, timedelta
 
 from ingestion.framework import IngestionJob
+
+log = logging.getLogger(__name__)
 
 BASE = "http://www.amis.pk"
 CITY_URL = BASE + "/ViewPrices.aspx?searchType=1&commodityId={market}"
@@ -131,18 +134,33 @@ def hidden_fields(page: str) -> dict[str, str]:
 # ---- HTTP ---------------------------------------------------------------------------------
 
 class AmisClient:
-    def __init__(self, delay: float = 0.4, timeout: float = 120):
+    def __init__(self, delay: float = 0.4, timeout: float = 45, retries: int = 3):
         import httpx
 
-        self.c = httpx.Client(headers={"User-Agent": UA}, timeout=timeout, follow_redirects=True)
+        self.c = httpx.Client(headers={"User-Agent": UA}, timeout=httpx.Timeout(timeout, connect=15),
+                              follow_redirects=True)
         self.delay = delay
+        self.retries = retries
         self._form: dict[int, tuple[str, dict]] = {}
 
+    def _send(self, method: str, url: str, **kw):
+        """One request, retried. AMIS now and then stalls a request for minutes and answers the
+        next one in ~1 s (2026-10-16/18/20 the first page hung past 120 s and sank the run)."""
+        import httpx
+
+        for attempt in range(self.retries):
+            time.sleep(self.delay if attempt == 0 else 15 * attempt)
+            try:
+                r = self.c.request(method, url, **kw)
+                r.raise_for_status()
+                return r
+            except (httpx.TransportError, httpx.HTTPStatusError) as exc:
+                client_error = isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code < 500
+                if client_error or attempt == self.retries - 1:
+                    raise
+
     def _get(self, url: str) -> str:
-        time.sleep(self.delay)
-        r = self.c.get(url)
-        r.raise_for_status()
-        return r.text
+        return self._send("GET", url).text
 
     def market_day(self, market_id: int, day: date | None = None) -> tuple[date | None, list[dict]]:
         """One market's prices for `day` (today if None)."""
@@ -157,10 +175,7 @@ class AmisClient:
         form = dict(self._form[market_id][1])
         form.update({"ctl00$cphPage$DateTextBox": day.strftime("%m/%d/%Y"),
                      "ctl00$cphPage$ReminderButton": "Show prices"})
-        time.sleep(self.delay)
-        r = self.c.post(url, data=form)
-        r.raise_for_status()
-        when, rows = parse_day_page(r.text)
+        when, rows = parse_day_page(self._send("POST", url, data=form).text)
         return (when if when == day else day if when is None else when), rows
 
     def markets(self) -> dict[int, str]:
@@ -222,6 +237,19 @@ def upsert_reference(markets: dict[int, str], commodities: dict[int, tuple[str, 
         apply_names(conn)
 
 
+def stored_lists() -> tuple[dict[int, str], dict[int, str]]:
+    """The Punjab markets and commodities from the last good run ({id: AMIS name}) — the
+    fallback when AMIS's list pages time out."""
+    from app import db
+
+    with db.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT market_id, name FROM agri_markets WHERE province = 'Punjab'")
+            markets = dict(cur.fetchall())
+            cur.execute("SELECT commodity_id, name FROM agri_commodities WHERE province = 'Punjab'")
+            return markets, dict(cur.fetchall())
+
+
 def upsert_prices(rows: list[dict]) -> int:
     """rows: {commodity_id, market_id, obs_date, min, max, fqp, quantity}. A NULL never
     overwrites a stored value (the FQP-only history backfill must not erase min/max)."""
@@ -268,8 +296,12 @@ class AmisPricesJob(IngestionJob):
         run_id = self._start_run()
         try:
             cl = AmisClient()
-            markets = cl.markets()
-            names = cl.commodities()
+            try:
+                markets = cl.markets()
+                names = cl.commodities()
+            except Exception:  # noqa: BLE001 — the price pages may still answer; use the stored lists
+                log.warning("AMIS list pages failed; using the stored Punjab market/commodity lists", exc_info=True)
+                markets, names = stored_lists()
             if not markets or not names:
                 raise RuntimeError("AMIS market/commodity lists came back empty (layout change?)")
             major = {slug(m) for m in MAJOR_MARKETS}

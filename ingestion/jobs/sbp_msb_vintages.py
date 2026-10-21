@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -64,7 +65,11 @@ class SbpMsbFetchJob(IngestionJob):
             if not row:
                 raise RuntimeError(f"vintage_source_files has no {IND_SOURCE} — load it once (see module doc)")
             issues: list[dict] = row["payload"]
-            code, body = msb._get(msb.INDEX)
+            for attempt in range(3):  # SBP's Cloudflare edge throws the odd 502 (2026-10-19)
+                code, body = msb._get(msb.INDEX)
+                if 0 < code < 500:
+                    break
+                time.sleep(30 * (attempt + 1))
             if code != 200:
                 raise RuntimeError(f"bulletin index {msb.INDEX} -> HTTP {code}")
             pages = msb.issue_pages(body.decode("utf-8", "replace"))

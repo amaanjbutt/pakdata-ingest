@@ -68,6 +68,19 @@ def test_jobs_todo_keeps_order_and_skips_done():
     assert jobs_todo(set(DAILY_JOBS)) == []
 
 
+def test_jobs_todo_holds_back_jobs_whose_page_was_not_bundled():
+    # 2026-10-20: only tab=1 bundled; navs/stats went live, 403'd, wrote 'failed'.
+    from scripts.mufap_jobs_todo import required_pages
+
+    pages = required_pages()
+    only_returns = {pages["mufap_fund_returns"]}
+    assert jobs_todo(set(), only_returns) == [
+        "mufap_fund_returns", "mufap_pkrv", "mufap_debt_prices", "mufap_tfc_valuations", "mufap_debt_trades",
+    ]
+    assert jobs_todo(set(), set(pages.values())) == DAILY_JOBS
+    assert jobs_todo(set(), set()) == DAILY_JOBS[3:]  # debt-file jobs never need the bundle
+
+
 # ---- resumable portfolio ------------------------------------------------------
 
 class _Resp:
