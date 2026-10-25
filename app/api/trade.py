@@ -103,19 +103,29 @@ def _usd(v, rate):
 
 
 @router.get("/products")
-def hs_products(q: str | None = Query(None, description="Search the product description or code"),
+def hs_products(q: str | None = Query(None, description="Words to find in the product name or heading, or a code prefix"),
                 classification: str | None = Query(None, pattern="^(HS|SITC)$"),
                 limit: int = Query(50, ge=1, le=1000)):
     """Product codes in the customs record: 8-digit HS-based codes (FY2002-03 on) and 7-digit
-    SITC-based codes (FY1990-91 to FY2001-02). Public."""
-    rows = cache.cached_json("trade:hs_codes:v1", 3600, lambda: db.query(
-        "SELECT code, classification, description, unit, first_fy, last_fy FROM trade_hs_codes "
-        "WHERE classification <> 'total' ORDER BY code"))
+    SITC-based codes (FY1990-91 to FY2001-02), with a readable `name` (the official HS/SITC text
+    where the code is the official item, otherwise PBS's wording spelled out), the official
+    parent `hs_heading`, and PBS's raw abbreviated text in `description`. Public."""
+    rows = cache.cached_json("trade:hs_codes:v2", 3600, lambda: db.query(
+        "SELECT code, classification, coalesce(display_name, description) AS name, short_name, "
+        "hs_heading, description, coalesce(unit_clean, nullif(unit, '')) AS unit, first_fy, last_fy "
+        "FROM trade_hs_codes WHERE classification <> 'total' ORDER BY code"))
     if classification:
         rows = [r for r in rows if r["classification"] == classification]
     if q:
         ql = q.strip().lower()
-        rows = [r for r in rows if r["code"].startswith(ql) or ql in r["description"].lower()]
+        words = ql.split()
+
+        def hit(r) -> bool:
+            if r["code"].startswith(ql.replace(".", "")):
+                return True
+            text = " ".join(x for x in (r["name"], r["short_name"], r["hs_heading"], r["description"]) if x).lower()
+            return all(w in text for w in words)
+        rows = [r for r in rows if hit(r)]
     return {"success": True, "data": rows[:limit], "count": min(len(rows), limit), "total": len(rows)}
 
 
@@ -145,7 +155,8 @@ def hs_flows(flow: str = Query("export", pattern=_HS_FLOWS),
         params["hi"] = fy_to
     rows = db.query(
         f"""WITH {_FY_RATE}
-            SELECT t.flow, t.fy, t.code, c.description, c.unit, c.classification, t.country, t.quantity,
+            SELECT t.flow, t.fy, t.code, c.description, coalesce(c.display_name, c.description) AS name,
+                   c.hs_heading, coalesce(c.unit_clean, nullif(c.unit, '')) AS unit, c.classification, t.country, t.quantity,
                    t.value_pkr_th, r.pkr_per_usd
             FROM trade_hs t JOIN trade_hs_codes c USING (code) LEFT JOIN fy_rate r ON r.fy = t.fy
             WHERE {where}
@@ -153,7 +164,8 @@ def hs_flows(flow: str = Query("export", pattern=_HS_FLOWS),
             LIMIT %(limit)s""", params)
     return {"success": True, "data": [
         {"flow": r["flow"], "fiscal_year": _fy_label(r["fy"]), "fy": r["fy"], "code": r["code"],
-         "product": r["description"], "classification": r["classification"], "country": r["country"],
+         "product": r["name"], "product_raw": r["description"], "hs_heading": r["hs_heading"],
+         "classification": r["classification"], "country": r["country"],
          "quantity": r["quantity"], "unit": r["unit"] or None, "value_pkr_th": r["value_pkr_th"],
          "value_usd_th": _usd(r["value_pkr_th"], r["pkr_per_usd"])} for r in rows], "count": len(rows)}
 
@@ -215,13 +227,15 @@ def hs_partner_products(country: str = Query(...), flow: str = Query("export", p
     _check_fy(caller, fy)
     rows = db.query(
         f"""WITH {_FY_RATE}
-            SELECT t.code, c.description, c.unit, t.quantity, t.value_pkr_th, r.pkr_per_usd
+            SELECT t.code, c.description, coalesce(c.display_name, c.description) AS name, c.hs_heading,
+                   coalesce(c.unit_clean, nullif(c.unit, '')) AS unit, t.quantity, t.value_pkr_th, r.pkr_per_usd
             FROM trade_hs t JOIN trade_hs_codes c USING (code) LEFT JOIN fy_rate r ON r.fy = t.fy
             WHERE t.flow = %(flow)s AND t.fy = %(fy)s AND lower(t.country) = lower(%(country)s)
               AND t.code <> 'TOTAL'
             ORDER BY t.value_pkr_th DESC NULLS LAST LIMIT %(limit)s""",
         {"flow": flow, "fy": fy, "country": country.strip(), "limit": limit})
     return {"success": True, "fy": fy, "fiscal_year": _fy_label(fy), "country": country, "data": [
-        {"code": r["code"], "product": r["description"], "unit": r["unit"] or None, "quantity": r["quantity"],
+        {"code": r["code"], "product": r["name"], "product_raw": r["description"], "hs_heading": r["hs_heading"],
+         "unit": r["unit"] or None, "quantity": r["quantity"],
          "value_pkr_th": r["value_pkr_th"], "value_usd_th": _usd(r["value_pkr_th"], r["pkr_per_usd"])}
         for r in rows], "count": len(rows)}

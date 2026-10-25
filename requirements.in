@@ -1,0 +1,19 @@
+# Direct dependencies (human-edited). requirements.txt pins the full set that production runs;
+# after changing this file, rebuild the image, run the suite, and refresh the pins with
+#   docker compose run --rm --no-deps api pip freeze > backend/requirements.txt  (keep the header)
+fastapi>=0.111
+uvicorn[standard]>=0.30
+pydantic>=2.7
+psycopg[binary]>=3.1
+psycopg-pool>=3.2
+httpx>=0.27
+curl_cffi>=0.7
+beautifulsoup4>=4.12
+lxml>=5.2
+pytest>=8.2
+redis>=5.0
+pdfplumber>=0.11
+openpyxl>=3.1
+xlrd>=2.0          # PBS Agricultural Census district tables are Excel 97 (.xls)
+apscheduler>=3.10
+tzdata>=2024.1

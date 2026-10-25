@@ -1,0 +1,15 @@
+# The api/scheduler image is `COPY . .` of backend/ (build context). Keep anything that is
+# not code out of it. Before 2026-10-21 the context was the whole /opt/pakdata, and every
+# build baked the nightly DB dumps (~1.5 GB) and .env (secrets) into the image — a rebuild
+# filled the disk mid-swap. Settings reach the containers via compose `env_file`.
+.env
+.env.*
+*.dump
+*.dump.gz
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+.ruff_cache/
+data/*
+!data/reference/
+tests/

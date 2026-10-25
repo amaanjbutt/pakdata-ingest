@@ -1,0 +1,9 @@
+{
+  "columns": ["Dataset Name", "Series Key", "Series Name", "Observation Date", "Observation Value", "Unit", "Observation Status", "Status Comments"],
+  "rows": [
+    ["Bank Floating Average Exchange Rates  (PKR per National Currency)", "TS_GP_ER_FAERPKR_M.E00220", "Average Exchange rate of Pak Rupees per U.S. Dollar", "2026-05-31", "281.4021", "PKR", "Normal", ""],
+    ["Bank Floating Average Exchange Rates  (PKR per National Currency)", "TS_GP_ER_FAERPKR_M.E00220", "Average Exchange rate of Pak Rupees per U.S. Dollar", "2026-06-30", "278.5795536", "PKR", "Normal", ""],
+    ["Bank Floating Average Exchange Rates  (PKR per National Currency)", "TS_GP_ER_FAERPKR_M.E00070", "Average Exchange rate of Pak Rupees per Japanese Yen", "2026-06-30", "1.9231", "PKR", "Normal", ""],
+    ["Bank Floating Average Exchange Rates  (PKR per National Currency)", "TS_GP_ER_FAERPKR_M.E99999", "Average Exchange rate of Pak Rupees per Some Unmapped Currency", "2026-06-30", "5.5", "PKR", "Normal", ""]
+  ]
+}

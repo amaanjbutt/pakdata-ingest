@@ -110,6 +110,7 @@ REVIEWS_PAGE = "https://www.pbs.gov.pk/price-statistics/"
 REVIEWS_TO_FETCH = 3
 _MONTHS = {m.lower(): i for i, m in enumerate(calendar.month_name) if m}
 _REVIEW_ENTRY = re.compile(r'month\s*:\s*"([A-Za-z]+)\s+(\d{4})"\s*,\s*review\s*:\s*"([^"]+\.pdf)"', re.I)
+_REVIEW_HREF = re.compile(r'href="([^"]*/Monthly-Review-([A-Za-z]+)[-_ ]?(\d{4})[^"/]*\.pdf)"', re.I)
 _REVIEW_MONTH = re.compile(r"Consumer Price Index for ([A-Za-z]+),?\s+(\d{4})", re.I)
 _SECTION_TITLES = [  # (page title, measure) - the numbered sections, not the annexures
     (re.compile(r"^\s*I\.\s+National Consumer Price Index", re.M), "national"),
@@ -125,6 +126,13 @@ def review_links(html: str) -> list[tuple[date, str]]:
     """[(month_end, review_pdf_url)] from the /price-statistics/ page, newest first. Pure."""
     out: dict[date, str] = {}
     for mon, year, url in _REVIEW_ENTRY.findall(html):
+        m = _MONTHS.get(mon.lower())
+        if m:
+            out.setdefault(_month_end(int(year), m), url)
+    # The newest review is often linked on its own ("Monthly Price Indices" box) days or weeks
+    # before PBS adds it to the archive array — e.g. Monthly-Review-September2026.pdf on 25-Oct
+    # while the array still ended at August. Take those links too (month/year from the name).
+    for url, mon, year in _REVIEW_HREF.findall(html):
         m = _MONTHS.get(mon.lower())
         if m:
             out.setdefault(_month_end(int(year), m), url)

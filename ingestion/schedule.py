@@ -34,12 +34,11 @@ DAY = timedelta(days=1)
 SCHEDULES: list[Schedule] = [
     # NOTE: easydata_sync + the SBP jobs (sbp_kibor / sbp_policy_rate / sbp_auctions)
     # are NOT scheduled here — their sources (easydata.sbp.org.pk, sbp.org.pk) block
-    # the VPS/WARP datacenter IP, so they run on GitHub Actions (Azure IPs reach them)
-    # writing to this DB over an SSH tunnel. See the pakdata-ingest repo. They remain
-    # registered so a manual `python -m ingestion.run <job> --force` still works as a
-    # fallback via the residential tunnel.
-    # FX now flows through easydata_sync (monthly EasyData exchange-rate series);
-    # the daily SBP M2M scrape was retired when SBP removed the source page.
+    # the VPS datacenter IP, so they run on GitHub Actions (Azure IPs reach them)
+    # writing to this DB over an SSH tunnel (ops/gha-ingest/workflows/ingest.yml).
+    # They stay registered so `python -m ingestion.run <job> --force` works anywhere.
+    # Daily interbank FX (M2M + bid/offer) is parsed by sbp_kibor from kibor.asp;
+    # monthly FX history flows through easydata_sync.
     # Weekly SPI now runs on GitHub Actions (pbs.yml, Fri + Sat) — see MONITORED_EXTERNAL.
     # Derived per-city cost-of-living index — recompute shortly after each SPI
     # ingest (reads the DB, no external fetch).
@@ -140,6 +139,16 @@ MONITORED_EXTERNAL: list[Schedule] = [
     Schedule("mufap_tfc_valuations", {}, expected_interval=timedelta(days=7)),
     Schedule("mufap_fund_portfolio", {}, expected_interval=timedelta(days=10)),
 ]
+
+
+# Registered jobs run by hand from a workstation (the publishers block the VPS and/or
+# GitHub's runners, or the source is annual/one-off): fetch + parse on the PC, then load
+# the records inside the api container (docs/ingestion.md). Not scheduled, not monitored.
+WORKSTATION: frozenset[str] = frozenset({
+    "nepra_generation", "pbs_census_2023", "pbs_census_history", "pbs_economic_census",
+    "pbs_agri_census", "pbs_lfs", "pbs_hies", "pbs_pslm", "pbs_trade_hs", "ismo_power",
+    "ismo_merit_order",
+})
 
 
 def expected_intervals() -> dict[str, timedelta]:

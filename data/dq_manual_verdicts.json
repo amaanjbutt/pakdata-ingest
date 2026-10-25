@@ -1,0 +1,8 @@
+[
+ {"series_id": "banking.investment_to_deposits_ratio.monthly", "obs_date": "2018-12-31", "verdict": "confirmed_as_published", "source_value": 56.79,
+  "evidence": "SBP Monthly Statistical Bulletin, issues Feb-2019 to Feb-2020 (all print 56.79)"},
+ {"series_id": "banking.investment_to_deposits_ratio.monthly", "obs_date": "2019-01-31", "verdict": "confirmed_as_published", "source_value": 40.0,
+  "evidence": "SBP Monthly Statistical Bulletin, issues Mar-2019 to Mar-2020 (all print 40.0)"},
+ {"series_id": "rates.kibor.1m.month_end", "obs_date": "2008-06-30", "verdict": "confirmed_as_published", "source_value": 13.39,
+  "evidence": "SBP Monthly Statistical Bulletin, issues Aug-2008 to Jul-2009 (all print 13.39)"}
+]

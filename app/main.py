@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -10,7 +10,7 @@ from app.api import (account, admin, agri, amcs, auth, billing, calendar, catalo
                      status, trade, usage, webhooks)
 
 app = FastAPI(
-    title="PakData API",
+    title="PakDataHub API",
     version="1.0.0",
     description="Self-serve REST API for Pakistani financial & economic data.",
 )
@@ -40,15 +40,19 @@ app.include_router(auth.router)
 async def ratelimit_headers(request: Request, call_next):
     import time
 
-    from app.services import metrics
+    from app.services import metrics, reqlog
 
     start = time.perf_counter()
+    ctx = reqlog.begin()
     response = await call_next(request)
+    ms = (time.perf_counter() - start) * 1000
     # Record real latency/availability for the status page (best-effort). Exclude
     # /v1/status itself — its heavy aggregation query would skew its own p95.
     path = request.url.path
     if path.startswith("/v1/") and path != "/v1/status":
-        metrics.record((time.perf_counter() - start) * 1000, response.status_code)
+        metrics.record(ms, response.status_code)
+    # Per-request log (endpoint, caller, status, latency) → Redis stream → api_requests.
+    reqlog.record(request, response, ms, ctx)
     remaining = getattr(request.state, "ratelimit_remaining", None)
     if remaining is not None:
         response.headers["X-RateLimit-Remaining"] = str(remaining)
@@ -89,6 +93,27 @@ def validation_exception_handler(request: Request, exc: RequestValidationError):
             "error": {"code": "invalid_params", "message": str(exc.errors())},
         },
     )
+
+
+_INDEX = {
+    "success": True,
+    "name": "PakDataHub API",
+    "docs": "https://pakdatahub.com/docs",
+    "reference": "https://api.pakdatahub.com/docs",
+    "openapi": "https://api.pakdatahub.com/openapi.json",
+    "status": "https://api.pakdatahub.com/v1/status",
+    "get_a_key": "https://pakdatahub.com/signup",
+}
+
+
+@app.get("/", include_in_schema=False)
+@app.get("/v1", include_in_schema=False)
+@app.get("/v1/", include_in_schema=False)
+def index(request: Request):
+    """The bare host used to 404. A browser goes to the docs; an API client gets the links."""
+    if "text/html" in request.headers.get("accept", ""):
+        return RedirectResponse("https://pakdatahub.com/docs", status_code=302)
+    return _INDEX
 
 
 @app.get("/health", tags=["ops"])

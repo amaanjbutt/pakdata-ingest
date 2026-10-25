@@ -7,7 +7,6 @@ exercised by running 4 workers over many series.
 """
 from __future__ import annotations
 
-import threading
 
 from ingestion.easydata_config import EasyDataSeries
 from ingestion.jobs import easydata_sync as eds
@@ -87,3 +86,28 @@ def test_non_429_error_skips_only_that_series(monkeypatch):
     job = _job(monkeypatch, raise_err_on={"s.5"})
     status, rows, processed = job._process_series_concurrent(_series(10), FakeQuota(1000), False, {}, 4)
     assert processed == 9 and rows == 9  # the one bad series skipped, rest fine
+
+
+def test_db_state_overlays_refresh_date_and_module(monkeypatch):
+    """The static config's refresh date and module must not drive selection: the DB's
+    later refresh date wins (else advanced datasets are re-pulled forever) and the DB
+    module sets the pull priority."""
+    from ingestion.easydata_config import EasyDataSeries
+    from ingestion.jobs import easydata_sync as es
+
+    def mk(key, sid, ref):
+        return EasyDataSeries(easydata_key=key, id=sid, module="economic", name=sid, description="",
+                              unit="", frequency="monthly", source="SBP", tier="basic", min_value=None,
+                              max_value=None, max_step=None, backfill_start="2000-01-01",
+                              easydata_dataset_code="TS_X", easydata_last_refresh=ref)
+
+    cfg = [mk("TS_X.A", "social.a", "2026-07-27"), mk("TS_X.B", "x.b", "2026-09-01"), mk("TS_X.C", "x.c", None)]
+    monkeypatch.setattr(es.db, "query", lambda sql, params=None: [
+        {"id": "social.a", "module": "social", "easydata_last_refresh": "2026-09-10"},
+        {"id": "x.b", "module": "external", "easydata_last_refresh": "2026-08-01"},  # config is later
+    ])
+    out = {s.id: s for s in es.EasyDataSyncJob._with_db_state(cfg)}
+    assert (out["social.a"].easydata_last_refresh, out["social.a"].module) == ("2026-09-10", "social")
+    assert (out["x.b"].easydata_last_refresh, out["x.b"].module) == ("2026-09-01", "external")
+    assert out["x.c"] == cfg[2]  # not in the DB: unchanged
+    assert es._module_priority(out["social.a"]) < es._module_priority(cfg[0])

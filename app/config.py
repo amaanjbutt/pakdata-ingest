@@ -36,5 +36,20 @@ class Settings:
     lemonsqueezy_variant_pro: str = os.getenv("LEMONSQUEEZY_VARIANT_PRO", "")
     lemonsqueezy_variant_business: str = os.getenv("LEMONSQUEEZY_VARIANT_BUSINESS", "")
 
+    # Google sign-in (server-side OAuth auth-code flow). Empty => button hidden.
+    google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    google_client_secret: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    google_redirect_uri: str = os.getenv(
+        "GOOGLE_REDIRECT_URI", "https://api.pakdatahub.com/auth/google/callback"
+    )
+
+    # Transactional email (Resend). Empty => email sending is skipped (no error).
+    resend_api_key: str = os.getenv("RESEND_API_KEY", "")
+    email_from: str = os.getenv("EMAIL_FROM", "PakDataHub <noreply@pakdatahub.com>")
+
+    # Admin panel access + operational notifications. Comma-separated emails whose
+    # accounts may reach /v1/admin/* and who receive signup/subscription alerts.
+    admin_emails: str = os.getenv("ADMIN_EMAILS", os.getenv("ALERT_EMAIL_TO", "amaanjbutt@gmail.com"))
+
 
 settings = Settings()

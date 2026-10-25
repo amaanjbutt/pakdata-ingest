@@ -31,8 +31,6 @@ from dataclasses import dataclass
 from datetime import date
 
 from app import db
-from app.config import settings
-from ingestion import alerting, storage
 from ingestion.framework import FetchedFile, IngestionJob
 
 INDEX_URL = "https://www.pbs.gov.pk/external-trade-statistics/"

@@ -16,7 +16,8 @@ def account(caller: Caller = Depends(authenticate_session_or_key)):
     """The signed-in user's account: plan, status and counts. Auth = any of the
     user's own API keys."""
     u = db.query_one(
-        "SELECT email, plan, subscription_status, period_end FROM users WHERE id = %(id)s",
+        "SELECT email, plan, subscription_status, period_end, name, company "
+        "FROM users WHERE id = %(id)s",
         {"id": caller.user_id},
     )
     keys = db.query_one(
@@ -30,6 +31,8 @@ def account(caller: Caller = Depends(authenticate_session_or_key)):
     return {
         "success": True,
         "email": u["email"] if u else None,
+        "name": u["name"] if u else None,
+        "company": u["company"] if u else None,
         "plan": caller.plan,
         "subscription_status": u["subscription_status"] if u else None,
         "period_end": u["period_end"] if u else None,
@@ -38,10 +41,36 @@ def account(caller: Caller = Depends(authenticate_session_or_key)):
     }
 
 
+class ProfileUpdate(BaseModel):
+    name: str | None = None
+    company: str | None = None
+
+
+@router.patch("/account")
+def update_account(body: ProfileUpdate, caller: Caller = Depends(authenticate_session_or_key)):
+    """Set the display name / company shown in the dashboard. Partial update: only
+    fields present in the request body are changed; each is trimmed and capped at
+    120 chars, and an empty string clears the field."""
+    def _clean(v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.strip()[:120]
+        return v or None
+
+    updates = {f: _clean(getattr(body, f)) for f in body.model_fields_set if f in ("name", "company")}
+    if updates:
+        set_clause = ", ".join(f"{f} = %({f})s" for f in updates)
+        db.execute(
+            f"UPDATE users SET {set_clause} WHERE id = %(id)s",
+            {**updates, "id": caller.user_id},
+        )
+    return {"success": True, **updates}
+
+
 @router.get("/keys")
 def list_keys(caller: Caller = Depends(authenticate_session_or_key)):
     rows = db.query(
-        "SELECT id, key_prefix, label, created_at, revoked_at FROM api_keys "
+        "SELECT id, key_prefix, label, created_at, revoked_at, last_used_at FROM api_keys "
         "WHERE user_id = %(id)s ORDER BY created_at DESC",
         {"id": caller.user_id},
     )

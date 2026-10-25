@@ -26,7 +26,6 @@ from datetime import date, datetime
 from bs4 import BeautifulSoup
 
 from app import db
-from app.config import settings
 from ingestion import alerting, storage
 from ingestion.framework import IngestionJob
 

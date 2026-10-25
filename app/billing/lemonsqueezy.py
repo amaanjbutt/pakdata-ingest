@@ -106,3 +106,14 @@ def create_checkout(plan: str, signup_token: str, email: str | None = None) -> s
     r = httpx.post(f"{API}/checkouts", headers=_headers(), json=body, timeout=30)
     r.raise_for_status()
     return r.json()["data"]["attributes"]["url"]
+
+
+def customer_portal_url(subscription_id: str) -> str | None:
+    """Fetch the LemonSqueezy customer-portal URL for a subscription so a paying
+    user can update payment method or cancel. Returns None if unavailable."""
+    if not (settings.lemonsqueezy_api_key and subscription_id):
+        return None
+    r = httpx.get(f"{API}/subscriptions/{subscription_id}", headers=_headers(), timeout=30)
+    r.raise_for_status()
+    urls = ((r.json().get("data") or {}).get("attributes") or {}).get("urls") or {}
+    return urls.get("customer_portal") or urls.get("update_payment_method")

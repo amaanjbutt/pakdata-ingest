@@ -23,7 +23,6 @@ from datetime import date, datetime
 import pdfplumber
 
 from app import db
-from app.config import settings
 from ingestion.framework import FetchedFile, IngestionJob
 
 LIST_URL = "https://www.mufap.com.pk/WebRegulations/GetSecpFileById"

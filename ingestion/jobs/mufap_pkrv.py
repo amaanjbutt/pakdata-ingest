@@ -32,7 +32,6 @@ import json
 import re
 from datetime import date, datetime
 
-from app.config import settings
 from ingestion.framework import FetchedFile, IngestionJob, Record
 
 LIST_URL = "https://www.mufap.com.pk/WebRegulations/GetSecpFileById"

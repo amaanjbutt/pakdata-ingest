@@ -8,8 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import secrets
-from typing import Any
 
 from app import db
 from app.billing.lemonsqueezy import LS_STATUS, plan_for_variant
@@ -105,6 +103,16 @@ def handle_event(payload: dict) -> dict:
                 (_hash(s["signup_token"]), user_id),
             )
             claimed = True
+
+    try:
+        from app.services.email import send_admin_notification
+        send_admin_notification(
+            f"Subscription: {s['event_name']}",
+            f"<p><b>{s['email']}</b> — plan <b>{plan}</b>, status <b>{status}</b>."
+            + (f" Subscription {s['subscription_id']}." if s['subscription_id'] else "") + "</p>",
+        )
+    except Exception:  # noqa: BLE001 — a notification must never break provisioning
+        log.warning("billing: admin notification failed", exc_info=True)
 
     return {"handled": True, "user_id": user_id, "plan": plan,
             "status": status, "key_staged": claimed}

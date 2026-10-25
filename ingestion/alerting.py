@@ -20,11 +20,10 @@ _EMAIL_TO = os.getenv("ALERT_EMAIL_TO")
 def alert_unless_403(title: str, message: str) -> None:
     """Like alert(), but SUPPRESS delivery for a transient Cloudflare 403.
 
-    MUFAP sits behind Cloudflare and intermittently 403s the WARP egress IP. Those
-    failures self-heal — the host-side watchdog scripts/mufap_403_autoheal.sh
-    rotates WARP + re-runs within ~20 min, and the hourly staleness_check alerts if
-    a job ever fails to *recover*. Without this guard a 403 that persists across the
-    20-min retry loop emails once per retry → dozens of alert emails for one outage.
+    MUFAP sits behind Cloudflare and 403s most egress IPs. Those failures self-heal —
+    mufap.yml (GitHub Actions) retries on a fresh runner IP several times per slot, and
+    the hourly staleness_check alerts if a job ever fails to *recover*. Without this
+    guard every blocked attempt would email → dozens of alert emails for one outage.
     So a 403 is only logged here; every other failure alerts immediately.
     """
     if "403" in message:

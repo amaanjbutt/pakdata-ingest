@@ -25,9 +25,9 @@ from ingestion.framework import IngestionJob
 # The payouts report is date-ranged: with datefrom/datetill it returns every
 # payout event in the window (not just the latest per fund). We fetch a rolling
 # recent window each run so ongoing capture stays deep; deep history is seeded
-# once by scripts/backfill_payouts.py.
+# once by scripts/archive/backfill_payouts.py.
 PAYOUTS_BASE = "https://www.mufap.com.pk/Industry/IndustryStatDaily?tab=4"
-# Runs daily, so 45 days of overlap is plenty (deep history: scripts/backfill_payouts.py).
+# Runs daily, so 45 days of overlap is plenty (deep history: scripts/archive/backfill_payouts.py).
 # Was 150: daily-dividend funds make that window thousands of rows, and the job
 # started blowing the 300s GHA per-job timeout (2026-09-19 -> 09-24, payouts+TER stale).
 PAYOUTS_WINDOW_DAYS = 45

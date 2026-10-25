@@ -39,7 +39,6 @@ from dataclasses import dataclass
 from datetime import date, datetime
 
 from app import db
-from app.config import settings
 from ingestion.framework import FetchedFile, IngestionJob
 
 LIST_URL = "https://www.mufap.com.pk/WebRegulations/GetSecpFileById"

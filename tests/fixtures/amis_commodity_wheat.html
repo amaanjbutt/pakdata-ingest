@@ -1,0 +1,954 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<meta name="keywords" content="Agriculture Commodity Daily Prices in Punjab Pakistan, Grains,Vegetables,Fruit Prices,rice,wheat,sugarcane,cotton,potato,tomato,ginger,garlic,groundnut,white grain, black grain,mash,moong, masoor puls,mango,apple,grapes,banana" />
+<meta name="copyright" content="www.amis.pk" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+<head id="ctl00_theHead"><link rel="stylesheet" href="css/w3.css" type="text/css" /><link href="css/StyleSheet.css" rel="stylesheet" type="text/css" />
+
+<script type="text/javascript" src="js/global.js"></script>
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-66071340-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+     <script type="text/javascript">
+         function price_addelement() {
+
+             var eleprice = document.getElementById("Prices");
+
+
+             if (eleprice.style.display == "block") {
+                 eleprice.style.display = "none";
+
+             } else {
+                 if (document.getElementById("pub1").style.display == "block" || document.getElementById("stakeholder").style.display == "block" || document.getElementById("import").style.display == "block") {
+                     document.getElementById("pub1").style.display = "none";
+                     document.getElementById("stakeholder").style.display = "none";
+                     document.getElementById("import").style.display = "none";
+                     // document.getElementById("contacts").style.display = "none"
+                 }
+                 eleprice.style.display = "block";
+
+             }
+             //alert(myUL);
+         }
+
+         function pub() {
+
+
+
+             var i;
+             var ele = document.getElementById("pub1");
+
+
+             if (ele.style.display == "block") {
+                 ele.style.display = "none";
+             } else {
+                 if (document.getElementById("Prices").style.display == "block" || document.getElementById("stakeholder").style.display == "block" || document.getElementById("import").style.display == "block") {
+                     document.getElementById("Prices").style.display = "none";
+                     document.getElementById("stakeholder").style.display = "none";
+                     document.getElementById("import").style.display = "none";
+                     //   document.getElementById("contacts").style.display = "none"
+                 }
+
+                 ele.style.display = "block";
+             }
+
+
+
+         }
+
+         function stake() {
+
+
+
+
+             var stakeele = document.getElementById("stakeholder");
+
+
+             if (stakeele.style.display == "block") {
+                 stakeele.style.display = "none";
+             } else {
+
+                 if (document.getElementById("Prices").style.display == "block" || document.getElementById("pub1").style.display == "block" || document.getElementById("import").style.display == "block") {
+                     document.getElementById("Prices").style.display = "none";
+                     document.getElementById("pub1").style.display = "none";
+                     document.getElementById("import").style.display = "none";
+                     //document.getElementById("contacts").style.display = "none"
+                 }
+                 stakeele.style.display = "block";
+             }
+
+
+
+         }
+
+            function stat() {
+    
+    
+    
+    
+                var contactele = document.getElementById("stats");
+    
+    
+                if (contactele.style.display == "block") {
+                    contactele.style.display = "none";
+                } else {
+                
+                            if (document.getElementById("Prices").style.display == "block" || document.getElementById("pub1").style.display == "block" || document.getElementById("import").style.display == "block" || document.getElementById("stakeholder").style.display == "block") {
+                    document.getElementById("Prices").style.display = "none";
+                    document.getElementById("pub1").style.display = "none";
+                    document.getElementById("import").style.display = "none";
+                    document.getElementById("stakeholder").style.display = "none"
+                }
+                    contactele.style.display = "block";
+                }
+    
+    
+    
+            }
+         function importe() {
+
+
+
+
+             var contactele = document.getElementById("import");
+
+
+             if (contactele.style.display == "block") {
+                 contactele.style.display = "none";
+             } else {
+                 if (document.getElementById("Prices").style.display == "block" || document.getElementById("pub1").style.display == "block" ) {
+                     document.getElementById("Prices").style.display = "none";
+                     document.getElementById("pub1").style.display = "none";
+                     document.getElementById("contacts").style.display = "none";
+                     //document.getElementById("stakeholder").style.display = "none"
+                 }
+                 contactele.style.display = "block";
+             }
+
+
+
+         }
+        </script>
+     <style>
+* {
+  box-sizing: border-box;
+}
+
+.row::after {
+  content: "";
+  clear: both;
+  display: table;
+}
+
+[class*="col-"] {
+  float: left;
+  padding: 05px;
+}
+
+html {
+  font-family: "Lucida Sans", sans-serif;
+}
+
+.header {
+  background-color: #9933cc;
+  color: #ffffff;
+  padding: 05px;
+}
+
+.menu ul {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+}
+
+
+
+.aside {
+  background-color: #33b5e5;
+  padding: 05px;
+  color: #ffffff;
+  text-align: center;
+  font-size: 14px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+}
+
+.footer {
+  background-color: #0099cc;
+  color: #ffffff;
+  text-align: center;
+  font-size: 12px;
+  padding: 00px;
+}
+
+/* For mobile phones: */
+[class*="col-"] {
+  width: 100%;
+}
+
+@media only screen and (min-width: 550px) {
+  /* For tablets: */
+  .col-s-1 {width: 8.33%;}
+  .col-s-2 {width: 16.66%;}
+  .col-s-3 {width: 25%;}
+  .col-s-4 {width: 33.33%;}
+  .col-s-5 {width: 41.66%;}
+  .col-s-6 {width: 50%;}
+  .col-s-7 {width: 58.33%;}
+  .col-s-8 {width: 66.66%;}
+  .col-s-9 {width: 75%;}
+  .col-s-10 {width: 83.33%;}
+  .col-s-11 {width: 91.66%;}
+  .col-s-12 {width: 100%;}
+}
+@media only screen and (min-width: 800px) {
+  /* For desktop: */
+  .col-1 {width: 8.33%;}
+  .col-2 {width: 16.66%;}
+  .col-3 {width: 25%;}
+  .col-4 {width: 33.33%;}
+  .col-5 {width: 41.66%;}
+  .col-6 {width: 50%;}
+  .col-7 {width: 58.33%;}
+  .col-8 {width: 66.66%;}
+  .col-9 {width: 75%;}
+  .col-10 {width: 83.33%;}
+  .col-11 {width: 91.66%;}
+  .col-12 {width: 100%;}
+}
+</style>
+
+<title>
+	Agricultural Commodity Prices
+</title></head>
+<BODY id =home>
+
+<SCRIPT language=javascript 
+src="AJAX/CommunityBar.ashx" 
+type=text/javascript>
+</SCRIPT>
+
+
+
+<form method="post" action="./ViewPrices.aspx?searchType=0&amp;commodityId=1" id="aspnetForm">
+<div class="aspNetHidden">
+<input type="hidden" name="__EVENTTARGET" id="__EVENTTARGET" value="" />
+<input type="hidden" name="__EVENTARGUMENT" id="__EVENTARGUMENT" value="" />
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="/wEPDwULLTE4OTU0Mzk1MzMPFgIeE1ZhbGlkYXRlUmVxdWVzdE1vZGUCARYCZg9kFgICAw9kFgQCEA9kFgQCCg8QZBAVjwEGWWF6bWFuCVdhemlyYWJhZAlXYXJiZXJ0ZW4GVmVoYXJpB1RUU2luZ2gMVGF1bnNhc2hhcmlmDFRhbmRsaWFud2FsYQhUQUxBR0FORwlTdW1tYW5kcmkHU3VraGVrZQtTcmFpYWxhbWdpcgpTaWxsYW53YWxpB1NpYWxrb3QJU2h1amFBYmFkB1Nob3Jrb3QLU2hlaWtodXB1cmEKU2hha2FyZ2FyaAtTaGFoclN1bHRhbgpTaGFoamV3YW5hCFNhcmdvZGhhClNhbmdsYWhpbGwIU2FtYnJpYWwHU2FoaXdhbApTYWZkYXJhYmFkCVNhZGlxQWJhZAZSdWpoYW4LUmVuYWxhS2h1cmQKUmF3YWxwaW5kaQhSYWphblB1cgdSYWl3aW5kDFJhaGltWWFyS2hhbgZRdWV0dGEJUXVhaWRhYmFkDlFpbGFkZWRhcnNpbmdoDVFhZGlycHVycmF3YW4IUGlyTWFoYWwGUGlwbGFuDVBpbmRpYmhhdHRpYW4IUGluYW53YWwJUGh1bGFyd2FuClBob29sTmFnYXIGUGF0b2tpB1Bhc3Jvb3IJUGFrUGF0dGFuBU9rYXJhDk5vc2hlaHJhd2lya2FuB05hcm93YWwLTmFyYW5nbWFuZGkHTmFua2FuYQtNdXphZmFyR2hhcgZNdXJyZWUHTXVyaWRrZRBNdWx0YW5Sb2FkTGFob3JlBk11bHRhbgtNaXRoYXRpd2FuYQtNaW5jaGFuYWJhZAhNaWFud2FsaQpNaWFuQ2hhbm51DU1hbmRpQmFoYXVkaW4JTWFuYW53YWxhC01hbXVua2FuamFuCE1hbGFrd2FsBk1haWxzaQdMb2RocmFuCUxpYXFhdFB1cgZMYXl5YWgGTGFsaWFuCExhbGFNdXNhEUxhaG9yZShTaW5naHB1cmEpBkxhaG9yZQ5Lb3RyYWRoYWtpc2hhbghrb3Rtb21hbglLb3RDaHV0dGEGS290QWR1B0todXNoYWIHS2h1ZGlhbgdLaGFucHVyDUtoYW5rYWhkb2dyYW4IS2hhbmV3YWwQS2hhaXJwdXJ0YW1ld2FsaQxLYXRjaGFMYWhvcmUFS2FzdXIIS2Fzc293YWwHS2FyYWNoaQlLYW5nYW5wdXIGS2Ftb2tlB0thbWFsaWEIS2FsdXJrb3QLS2Focm9ycGFjY2EIS2FjaGFLaHUJS2FiaXJXYWxhBkpoZWx1bQVKaGFuZwpKYXVoYXJhYmFkCUphcmFud2FsYQZKYW1QdXIPamFsYWxwdXJwaXJ3YWxhDkphbGFsUHVySmF0dGFuCEphaGFuaWFuCUh5ZGVyYWJhZA9IdWpyYVNoYWhtdXFlZW0FSGF6cm8LSGF2ZWxpbGFraGEKSGFzYW5hYmRhbAhIYXNhbFB1cgpIYXJvb25BYmFkCUhhZml6YWJhZAZHd2FkYXIGR3VqcmF0Ckd1anJhbndhbGEJR3VqYXJLaGFuBUdvanJhB0doYWtoYXIIRm9ydGFiYXMIRmF0ZWhwdXIKRmFyb29xYWJhZApGYWlzYWxhYmFkCEVtaW5hYmFkCER1bnlhUHVyBURpbmdhBkRHS0hBTghEZXBhbHB1cgVEYXNrYQdDaHVuaWFuDkNodWFTYWlkYW5TaGFoCENoaXN0aWFuB0NoaW5pb3QLQ2hpY2hhd2F0bmkHQ2hha3dhbAtDaGFja0podW1yYQhCdXJld2FsYQdCaGFsd2FsB0JoYWtoYXIIQmFzaXJwdXIKQmFoYXdhbFB1cgxCYWhhd2FsTmFnYXIJQmFkb21hbGhpBkF0dG9jawhBcmlmV2FsYQxBbGlQdXJDaGF0dGEGQWxpcHVyDEFobWFkUHVyRWFzdApBYmR1bGhha2ltFY8BAjc2AzEwNQMxMDACMTQCMjEDMTQwAjc0Ajg3AjczAzEwNwMxMjcCOTQCNTcCNDcCODICNzgDMTI1AjU1AzEzNQE1Ajk3AzEyMwIxMwMxMTMCNjYDMTQ1AjY5ATYCNjMCOTgBOAI2NQMxMzMDMTE5AzEzNgI0NgMxMzQDMTA2AzEyOAMxMjkCMzgCMjMCOTYCMjYBNAMxMjACNTgDMTA4AjcwAjE5AzE0NgI4MwMxMDkBNwMxMzIDMTM5AjYyAjUwAjQxAzExNAI3NQMxMjECMzICMjgCNzECMTYDMTAxAjM5AzExMAExAzExNQMxNDICNTQCNjgCNjEDMTE3AjY3AzExMgIxOAMxMzgDMTExAjExAzEzNwI4NgMxMTYCODACNDUCODQCMzMCNTECMjICNjACNjQDMTMxAjI1AjU2AjQ4AjQyAjQ5AjkzAjkyAzEyNgMxMDICOTkCNTMCMjkDMTA0AzE0MwIxNwEzAjMxAjQ0AzExOAI4NQI3NwI5MAEyAjkxAjM1AzEyMgIzNgI3OQI0MwIzNwI4OQIzMAI4MQIzNAI1OQI3MgIxNQIxMAE5AzEwMwIyMAIyNwMxMjQDMTQ0AjI0Ajg4AzE0MQI1MgI5NRQrA48BZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dkZAIUDxYCHglpbm5lcmh0bWwF+I0CIDx0YWJsZSBib3JkZXI9JzAnICBjZWxscGFkZGluZz0nMCcgY2VsbHNwYWNpbmc9JzAnIHdpZHRoPSclMTAwJz48dHIgc3R5bGU9ImJhY2tncm91bmQtY29sb3I6I0ZGRkZFMDtmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjaztmb250LWZhbWlseTp2ZXJkYW5hOyI+Jm5ic3A7RGF0ZWQ6MDUtMTAtMjAyNjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjaztmb250LWZhbWlseTp2ZXJkYW5hOyI+Jm5ic3A7R3JhcGg8L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Zm9udC1mYW1pbHk6dmVyZGFuYTsiPiZuYnNwO01pbjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjaztmb250LWZhbWlseTp2ZXJkYW5hOzsiPiZuYnNwO01heDwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjaztmb250LWZhbWlseTp2ZXJkYW5hOyI+Jm5ic3A7RlFQPC90ZD48dGQgc3R5bGU9ImZvbnQtZmFtaWx5OnZlcmRhbmE7Ij4mbmJzcDtRdWFudGl0eTwvdGQ+PC90cj48dHIgc3R5bGU9ImZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+MSZuYnNwPGEgaHJlZj0naHR0cDovL3d3dy5hbWlzLnBrL1ZpZXdQcmljZXMuYXNweD9zZWFyY2hUeXBlPTEmY29tbW9kaXR5SWQ9MSc+TGFob3JlPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTEiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJiYWNrZ3JvdW5kLWNvbG9yOiNDQ0NDQ0M7Zm9udC1mYW1pbHk6dmVyZGFuYTsiPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs8Yj4yJm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD0yJz5GYWlzYWxhYmFkPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTIiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzExNTAwPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7MTIwMDA8L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsxMTc1MDwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjMmbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTQnPk9rYXJhPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTQiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJiYWNrZ3JvdW5kLWNvbG9yOiNDQ0NDQ0M7Zm9udC1mYW1pbHk6dmVyZGFuYTsiPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs8Yj40Jm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD01Jz5TYXJnb2RoYTwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT01Ij5HcmFwaDwvYT48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsxMTI1MDwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzExNzUwPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7MTE1MDA8L3RkPjx0ZD4mbmJzcDstPC90ZD48L3RyPjx0ciBzdHlsZT0iZm9udC1mYW1pbHk6dmVyZGFuYTsiPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs8Yj41Jm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD02Jz5SYXdhbHBpbmRpPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTYiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzExNTAwPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7MTIwMDA8L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsxMTc1MDwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJiYWNrZ3JvdW5kLWNvbG9yOiNDQ0NDQ0M7Zm9udC1mYW1pbHk6dmVyZGFuYTsiPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs8Yj42Jm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD03Jz5NdWx0YW48L2E+PC9iPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOyA8YSBocmVmPSJodHRwOi8vd3d3LmFtaXMucGsvcmVwb3J0cy9Db21tb2RpdHlDaGFydC5hc3B4P2NtZD0xJmNpdHk9NyI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+NyZuYnNwPGEgaHJlZj0naHR0cDovL3d3dy5hbWlzLnBrL1ZpZXdQcmljZXMuYXNweD9zZWFyY2hUeXBlPTEmY29tbW9kaXR5SWQ9OCc+UmFoaW1ZYXJLaGFuPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTgiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJiYWNrZ3JvdW5kLWNvbG9yOiNDQ0NDQ0M7Zm9udC1mYW1pbHk6dmVyZGFuYTsiPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs8Yj44Jm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD05Jz5CaGFraGFyPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTkiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzExNTAwPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7MTE2MDA8L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsxMTU1MDwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjkmbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTEzJz5TYWhpd2FsPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTEzIj5HcmFwaDwvYT48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsxMDUwMDwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzEwNzAwPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7MTA2MDA8L3RkPjx0ZD4mbmJzcDstPC90ZD48L3RyPjx0ciBzdHlsZT0iYmFja2dyb3VuZC1jb2xvcjojQ0NDQ0NDO2ZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+MTAmbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTE0Jz5WZWhhcmk8L2E+PC9iPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOyA8YSBocmVmPSJodHRwOi8vd3d3LmFtaXMucGsvcmVwb3J0cy9Db21tb2RpdHlDaGFydC5hc3B4P2NtZD0xJmNpdHk9MTQiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjExJm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD0xNic+TGF5eWFoPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTE2Ij5HcmFwaDwvYT48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsxMDUwMDwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzExNzAwPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7MTExMDA8L3RkPjx0ZD4mbmJzcDstPC90ZD48L3RyPjx0ciBzdHlsZT0iYmFja2dyb3VuZC1jb2xvcjojQ0NDQ0NDO2ZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+MTImbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTE3Jz5HdWpyYXQ8L2E+PC9iPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOyA8YSBocmVmPSJodHRwOi8vd3d3LmFtaXMucGsvcmVwb3J0cy9Db21tb2RpdHlDaGFydC5hc3B4P2NtZD0xJmNpdHk9MTciPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjEzJm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD0yMCc+QmFoYXdhbFB1cjwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT0yMCI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7OTUwMDwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzk2MDA8L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs5NTUwPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImJhY2tncm91bmQtY29sb3I6I0NDQ0NDQztmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjE0Jm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD0yMSc+VFRTaW5naDwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT0yMSI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7ODUwMDwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzk1MDA8L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs5MDAwPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+MTUmbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTI0Jz5BcmlmV2FsYTwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT0yNCI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImJhY2tncm91bmQtY29sb3I6I0NDQ0NDQztmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjE2Jm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD0yNic+UGFrUGF0dGFuPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTI2Ij5HcmFwaDwvYT48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsxMTAwMDwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzExMjUwPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7MTExMjU8L3RkPjx0ZD4mbmJzcDstPC90ZD48L3RyPjx0ciBzdHlsZT0iZm9udC1mYW1pbHk6dmVyZGFuYTsiPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs8Yj4xNyZuYnNwPGEgaHJlZj0naHR0cDovL3d3dy5hbWlzLnBrL1ZpZXdQcmljZXMuYXNweD9zZWFyY2hUeXBlPTEmY29tbW9kaXR5SWQ9MjcnPkJhaGF3YWxOYWdhcjwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT0yNyI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImJhY2tncm91bmQtY29sb3I6I0NDQ0NDQztmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjE4Jm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD0yOCc+TG9kaHJhbjwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT0yOCI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7MTA3MDA8L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsxMTUwMDwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzExMTAwPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+MTkmbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTMxJz5HdWphcktoYW48L2E+PC9iPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOyA8YSBocmVmPSJodHRwOi8vd3d3LmFtaXMucGsvcmVwb3J0cy9Db21tb2RpdHlDaGFydC5hc3B4P2NtZD0xJmNpdHk9MzEiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJiYWNrZ3JvdW5kLWNvbG9yOiNDQ0NDQ0M7Zm9udC1mYW1pbHk6dmVyZGFuYTsiPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs8Yj4yMCZuYnNwPGEgaHJlZj0naHR0cDovL3d3dy5hbWlzLnBrL1ZpZXdQcmljZXMuYXNweD9zZWFyY2hUeXBlPTEmY29tbW9kaXR5SWQ9MzInPk1haWxzaTwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT0zMiI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+MjEmbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTMzJz5LYWhyb3JwYWNjYTwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT0zMyI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImJhY2tncm91bmQtY29sb3I6I0NDQ0NDQztmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjIyJm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD0zNCc+Q2hpY2hhd2F0bmk8L2E+PC9iPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOyA8YSBocmVmPSJodHRwOi8vd3d3LmFtaXMucGsvcmVwb3J0cy9Db21tb2RpdHlDaGFydC5hc3B4P2NtZD0xJmNpdHk9MzQiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzExMzc1PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7MTE1MDA8L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsxMTQzODwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjIzJm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD0zNSc+RHVueWFQdXI8L2E+PC9iPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOyA8YSBocmVmPSJodHRwOi8vd3d3LmFtaXMucGsvcmVwb3J0cy9Db21tb2RpdHlDaGFydC5hc3B4P2NtZD0xJmNpdHk9MzUiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJiYWNrZ3JvdW5kLWNvbG9yOiNDQ0NDQ0M7Zm9udC1mYW1pbHk6dmVyZGFuYTsiPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs8Yj4yNCZuYnNwPGEgaHJlZj0naHR0cDovL3d3dy5hbWlzLnBrL1ZpZXdQcmljZXMuYXNweD9zZWFyY2hUeXBlPTEmY29tbW9kaXR5SWQ9MzYnPkRHS0hBTjwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT0zNiI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7OTI1MDwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzk1MDA8L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs5Mzc1PC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+MjUmbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTQxJz5NYW5kaUJhaGF1ZGluPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTQxIj5HcmFwaDwvYT48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZD4mbmJzcDstPC90ZD48L3RyPjx0ciBzdHlsZT0iYmFja2dyb3VuZC1jb2xvcjojQ0NDQ0NDO2ZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+MjYmbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTQ1Jz5LYW1hbGlhPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTQ1Ij5HcmFwaDwvYT48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsxMTUwMDwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzExNjI1PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7MTE1NjM8L3RkPjx0ZD4mbmJzcDstPC90ZD48L3RyPjx0ciBzdHlsZT0iZm9udC1mYW1pbHk6dmVyZGFuYTsiPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs8Yj4yNyZuYnNwPGEgaHJlZj0naHR0cDovL3d3dy5hbWlzLnBrL1ZpZXdQcmljZXMuYXNweD9zZWFyY2hUeXBlPTEmY29tbW9kaXR5SWQ9NDYnPlBpck1haGFsPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTQ2Ij5HcmFwaDwvYT48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZD4mbmJzcDstPC90ZD48L3RyPjx0ciBzdHlsZT0iYmFja2dyb3VuZC1jb2xvcjojQ0NDQ0NDO2ZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+MjgmbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTQ4Jz5qYWxhbHB1cnBpcndhbGE8L2E+PC9iPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOyA8YSBocmVmPSJodHRwOi8vd3d3LmFtaXMucGsvcmVwb3J0cy9Db21tb2RpdHlDaGFydC5hc3B4P2NtZD0xJmNpdHk9NDgiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjI5Jm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD00OSc+SmFoYW5pYW48L2E+PC9iPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOyA8YSBocmVmPSJodHRwOi8vd3d3LmFtaXMucGsvcmVwb3J0cy9Db21tb2RpdHlDaGFydC5hc3B4P2NtZD0xJmNpdHk9NDkiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJiYWNrZ3JvdW5kLWNvbG9yOiNDQ0NDQ0M7Zm9udC1mYW1pbHk6dmVyZGFuYTsiPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs8Yj4zMCZuYnNwPGEgaHJlZj0naHR0cDovL3d3dy5hbWlzLnBrL1ZpZXdQcmljZXMuYXNweD9zZWFyY2hUeXBlPTEmY29tbW9kaXR5SWQ9NTInPkFobWFkUHVyRWFzdDwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT01MiI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+MzEmbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTU2Jz5KYW1QdXI8L2E+PC9iPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOyA8YSBocmVmPSJodHRwOi8vd3d3LmFtaXMucGsvcmVwb3J0cy9Db21tb2RpdHlDaGFydC5hc3B4P2NtZD0xJmNpdHk9NTYiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJiYWNrZ3JvdW5kLWNvbG9yOiNDQ0NDQ0M7Zm9udC1mYW1pbHk6dmVyZGFuYTsiPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs8Yj4zMiZuYnNwPGEgaHJlZj0naHR0cDovL3d3dy5hbWlzLnBrL1ZpZXdQcmljZXMuYXNweD9zZWFyY2hUeXBlPTEmY29tbW9kaXR5SWQ9NTcnPlNpYWxrb3Q8L2E+PC9iPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOyA8YSBocmVmPSJodHRwOi8vd3d3LmFtaXMucGsvcmVwb3J0cy9Db21tb2RpdHlDaGFydC5hc3B4P2NtZD0xJmNpdHk9NTciPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjMzJm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD01OCc+TmFyb3dhbDwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT01OCI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImJhY2tncm91bmQtY29sb3I6I0NDQ0NDQztmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjM0Jm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD01OSc+Q2hha3dhbDwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT01OSI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+MzUmbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTYwJz5KaGVsdW08L2E+PC9iPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOyA8YSBocmVmPSJodHRwOi8vd3d3LmFtaXMucGsvcmVwb3J0cy9Db21tb2RpdHlDaGFydC5hc3B4P2NtZD0xJmNpdHk9NjAiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJiYWNrZ3JvdW5kLWNvbG9yOiNDQ0NDQ0M7Zm9udC1mYW1pbHk6dmVyZGFuYTsiPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs8Yj4zNiZuYnNwPGEgaHJlZj0naHR0cDovL3d3dy5hbWlzLnBrL1ZpZXdQcmljZXMuYXNweD9zZWFyY2hUeXBlPTEmY29tbW9kaXR5SWQ9NjInPk1pYW53YWxpPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTYyIj5HcmFwaDwvYT48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZD4mbmJzcDstPC90ZD48L3RyPjx0ciBzdHlsZT0iZm9udC1mYW1pbHk6dmVyZGFuYTsiPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs8Yj4zNyZuYnNwPGEgaHJlZj0naHR0cDovL3d3dy5hbWlzLnBrL1ZpZXdQcmljZXMuYXNweD9zZWFyY2hUeXBlPTEmY29tbW9kaXR5SWQ9NjMnPlJhamFuUHVyPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTYzIj5HcmFwaDwvYT48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZD4mbmJzcDstPC90ZD48L3RyPjx0ciBzdHlsZT0iYmFja2dyb3VuZC1jb2xvcjojQ0NDQ0NDO2ZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+MzgmbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTY0Jz5KaGFuZzwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT02NCI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+MzkmbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTY4Jz5Lb3RBZHU8L2E+PC9iPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOyA8YSBocmVmPSJodHRwOi8vd3d3LmFtaXMucGsvcmVwb3J0cy9Db21tb2RpdHlDaGFydC5hc3B4P2NtZD0xJmNpdHk9NjgiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJiYWNrZ3JvdW5kLWNvbG9yOiNDQ0NDQ0M7Zm9udC1mYW1pbHk6dmVyZGFuYTsiPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs8Yj40MCZuYnNwPGEgaHJlZj0naHR0cDovL3d3dy5hbWlzLnBrL1ZpZXdQcmljZXMuYXNweD9zZWFyY2hUeXBlPTEmY29tbW9kaXR5SWQ9NzAnPk5hbmthbmE8L2E+PC9iPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOyA8YSBocmVmPSJodHRwOi8vd3d3LmFtaXMucGsvcmVwb3J0cy9Db21tb2RpdHlDaGFydC5hc3B4P2NtZD0xJmNpdHk9NzAiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjQxJm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD03MSc+TGlhcWF0UHVyPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTcxIj5HcmFwaDwvYT48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZD4mbmJzcDstPC90ZD48L3RyPjx0ciBzdHlsZT0iYmFja2dyb3VuZC1jb2xvcjojQ0NDQ0NDO2ZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+NDImbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTcyJz5DaGFja0podW1yYTwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT03MiI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+NDMmbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTczJz5TdW1tYW5kcmk8L2E+PC9iPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOyA8YSBocmVmPSJodHRwOi8vd3d3LmFtaXMucGsvcmVwb3J0cy9Db21tb2RpdHlDaGFydC5hc3B4P2NtZD0xJmNpdHk9NzMiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJiYWNrZ3JvdW5kLWNvbG9yOiNDQ0NDQ0M7Zm9udC1mYW1pbHk6dmVyZGFuYTsiPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs8Yj40NCZuYnNwPGEgaHJlZj0naHR0cDovL3d3dy5hbWlzLnBrL1ZpZXdQcmljZXMuYXNweD9zZWFyY2hUeXBlPTEmY29tbW9kaXR5SWQ9NzQnPlRhbmRsaWFud2FsYTwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT03NCI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+NDUmbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTc1Jz5NYW11bmthbmphbjwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT03NSI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImJhY2tncm91bmQtY29sb3I6I0NDQ0NDQztmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjQ2Jm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD03OSc+RGVwYWxwdXI8L2E+PC9iPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOyA8YSBocmVmPSJodHRwOi8vd3d3LmFtaXMucGsvcmVwb3J0cy9Db21tb2RpdHlDaGFydC5hc3B4P2NtZD0xJmNpdHk9NzkiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjQ3Jm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD04MSc+Q2hpbmlvdDwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT04MSI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImJhY2tncm91bmQtY29sb3I6I0NDQ0NDQztmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjQ4Jm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD04Mic+U2hvcmtvdDwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT04MiI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+NDkmbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTg0Jz5LYWx1cmtvdDwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT04NCI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7MTEwMDA8L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsxMTQwMDwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzExMjAwPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImJhY2tncm91bmQtY29sb3I6I0NDQ0NDQztmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjUwJm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD04Nyc+VEFMQUdBTkc8L2E+PC9iPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOyA8YSBocmVmPSJodHRwOi8vd3d3LmFtaXMucGsvcmVwb3J0cy9Db21tb2RpdHlDaGFydC5hc3B4P2NtZD0xJmNpdHk9ODciPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjUxJm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD05NSc+QWJkdWxoYWtpbTwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT05NSI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImJhY2tncm91bmQtY29sb3I6I0NDQ0NDQztmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjUyJm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD05Nyc+U2FuZ2xhaGlsbDwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT05NyI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+NTMmbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTk5Jz5IYXNhbmFiZGFsPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTk5Ij5HcmFwaDwvYT48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZD4mbmJzcDstPC90ZD48L3RyPjx0ciBzdHlsZT0iYmFja2dyb3VuZC1jb2xvcjojQ0NDQ0NDO2ZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+NTQmbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTEwNCc+SGFmaXphYmFkPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTEwNCI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+NTUmbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTEwNic+UGluZGliaGF0dGlhbjwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT0xMDYiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJiYWNrZ3JvdW5kLWNvbG9yOiNDQ0NDQ0M7Zm9udC1mYW1pbHk6dmVyZGFuYTsiPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs8Yj41NiZuYnNwPGEgaHJlZj0naHR0cDovL3d3dy5hbWlzLnBrL1ZpZXdQcmljZXMuYXNweD9zZWFyY2hUeXBlPTEmY29tbW9kaXR5SWQ9MTE2Jz5LYW5nYW5wdXI8L2E+PC9iPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOyA8YSBocmVmPSJodHRwOi8vd3d3LmFtaXMucGsvcmVwb3J0cy9Db21tb2RpdHlDaGFydC5hc3B4P2NtZD0xJmNpdHk9MTE2Ij5HcmFwaDwvYT48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZD4mbmJzcDstPC90ZD48L3RyPjx0ciBzdHlsZT0iZm9udC1mYW1pbHk6dmVyZGFuYTsiPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs8Yj41NyZuYnNwPGEgaHJlZj0naHR0cDovL3d3dy5hbWlzLnBrL1ZpZXdQcmljZXMuYXNweD9zZWFyY2hUeXBlPTEmY29tbW9kaXR5SWQ9MTE3Jz5LaHVkaWFuPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTExNyI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImJhY2tncm91bmQtY29sb3I6I0NDQ0NDQztmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjU4Jm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD0xMjMnPlNhbWJyaWFsPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTEyMyI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImZvbnQtZmFtaWx5OnZlcmRhbmE7Ij48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7PGI+NTkmbmJzcDxhIGhyZWY9J2h0dHA6Ly93d3cuYW1pcy5way9WaWV3UHJpY2VzLmFzcHg/c2VhcmNoVHlwZT0xJmNvbW1vZGl0eUlkPTEyNSc+U2hha2FyZ2FyaDwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT0xMjUiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJiYWNrZ3JvdW5kLWNvbG9yOiNDQ0NDQ0M7Zm9udC1mYW1pbHk6dmVyZGFuYTsiPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs8Yj42MCZuYnNwPGEgaHJlZj0naHR0cDovL3d3dy5hbWlzLnBrL1ZpZXdQcmljZXMuYXNweD9zZWFyY2hUeXBlPTEmY29tbW9kaXR5SWQ9MTI2Jz5IYXpybzwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT0xMjYiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjYxJm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD0xMjcnPlNyYWlhbGFtZ2lyPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTEyNyI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImJhY2tncm91bmQtY29sb3I6I0NDQ0NDQztmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjYyJm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD0xMzEnPkphdWhhcmFiYWQ8L2E+PC9iPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOyA8YSBocmVmPSJodHRwOi8vd3d3LmFtaXMucGsvcmVwb3J0cy9Db21tb2RpdHlDaGFydC5hc3B4P2NtZD0xJmNpdHk9MTMxIj5HcmFwaDwvYT48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsxMDcwMDwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzExMDAwPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7MTA4NTA8L3RkPjx0ZD4mbmJzcDstPC90ZD48L3RyPjx0ciBzdHlsZT0iZm9udC1mYW1pbHk6dmVyZGFuYTsiPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDs8Yj42MyZuYnNwPGEgaHJlZj0naHR0cDovL3d3dy5hbWlzLnBrL1ZpZXdQcmljZXMuYXNweD9zZWFyY2hUeXBlPTEmY29tbW9kaXR5SWQ9MTM2Jz5RYWRpcnB1cnJhd2FuPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTEzNiI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48dHIgc3R5bGU9ImJhY2tncm91bmQtY29sb3I6I0NDQ0NDQztmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjY0Jm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD0xNDAnPlRhdW5zYXNoYXJpZjwvYT48L2I+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7IDxhIGhyZWY9Imh0dHA6Ly93d3cuYW1pcy5way9yZXBvcnRzL0NvbW1vZGl0eUNoYXJ0LmFzcHg/Y21kPTEmY2l0eT0xNDAiPkdyYXBoPC9hPjwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkPiZuYnNwOy08L3RkPjwvdHI+PHRyIHN0eWxlPSJmb250LWZhbWlseTp2ZXJkYW5hOyI+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOzxiPjY1Jm5ic3A8YSBocmVmPSdodHRwOi8vd3d3LmFtaXMucGsvVmlld1ByaWNlcy5hc3B4P3NlYXJjaFR5cGU9MSZjb21tb2RpdHlJZD0xNDInPmtvdG1vbWFuPC9hPjwvYj48L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDsgPGEgaHJlZj0iaHR0cDovL3d3dy5hbWlzLnBrL3JlcG9ydHMvQ29tbW9kaXR5Q2hhcnQuYXNweD9jbWQ9MSZjaXR5PTE0MiI+R3JhcGg8L2E+PC90ZD48dGQgc3R5bGU9ImJvcmRlci1yaWdodDogMXB4IHNvbGlkIGJsYWNrOyI+Jm5ic3A7LTwvdGQ+PHRkIHN0eWxlPSJib3JkZXItcmlnaHQ6IDFweCBzb2xpZCBibGFjazsiPiZuYnNwOy08L3RkPjx0ZCBzdHlsZT0iYm9yZGVyLXJpZ2h0OiAxcHggc29saWQgYmxhY2s7Ij4mbmJzcDstPC90ZD48dGQ+Jm5ic3A7LTwvdGQ+PC90cj48L3RhYmxlPmQCEg9kFgRmD2QWAmYPDxYCHghJbWFnZVVybAUraHR0cDovL3d3dy5hbWlzLnBrL2ltYWdlcy9hbWlzLXVyZHUtbmV3LnBuZ2RkAgEPDxYCHwIFI2h0dHA6Ly93d3cuYW1pcy5way9pbWFnZXMvbmV3MzguZ2lmZGQYAQUeX19Db250cm9sc1JlcXVpcmVQb3N0QmFja0tleV9fFpABBRhjdGwwMCRjcGhQYWdlJExpc3RCb3gyJDAFGGN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMQUYY3RsMDAkY3BoUGFnZSRMaXN0Qm94MiQyBRhjdGwwMCRjcGhQYWdlJExpc3RCb3gyJDMFGGN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNAUYY3RsMDAkY3BoUGFnZSRMaXN0Qm94MiQ1BRhjdGwwMCRjcGhQYWdlJExpc3RCb3gyJDYFGGN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNwUYY3RsMDAkY3BoUGFnZSRMaXN0Qm94MiQ4BRhjdGwwMCRjcGhQYWdlJExpc3RCb3gyJDkFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTAFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTEFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTIFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTMFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTQFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTUFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTYFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTcFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTgFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTkFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMjAFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMjEFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMjIFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMjMFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMjQFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMjUFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMjYFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMjcFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMjgFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMjkFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMzAFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMzEFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMzIFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMzMFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMzQFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMzUFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMzYFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMzcFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMzgFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMzkFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNDAFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNDEFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNDIFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNDMFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNDQFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNDUFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNDYFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNDcFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNDgFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNDkFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNTAFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNTEFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNTIFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNTMFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNTQFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNTUFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNTYFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNTcFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNTgFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNTkFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNjAFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNjEFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNjIFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNjMFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNjQFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNjUFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNjYFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNjcFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNjgFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNjkFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNzAFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNzEFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNzIFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNzMFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNzQFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNzUFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNzYFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNzcFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNzgFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkNzkFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkODAFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkODEFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkODIFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkODMFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkODQFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkODUFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkODYFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkODcFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkODgFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkODkFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkOTAFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkOTEFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkOTIFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkOTMFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkOTQFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkOTUFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkOTYFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkOTcFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkOTgFGWN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkOTkFGmN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTAwBRpjdGwwMCRjcGhQYWdlJExpc3RCb3gyJDEwMQUaY3RsMDAkY3BoUGFnZSRMaXN0Qm94MiQxMDIFGmN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTAzBRpjdGwwMCRjcGhQYWdlJExpc3RCb3gyJDEwNAUaY3RsMDAkY3BoUGFnZSRMaXN0Qm94MiQxMDUFGmN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTA2BRpjdGwwMCRjcGhQYWdlJExpc3RCb3gyJDEwNwUaY3RsMDAkY3BoUGFnZSRMaXN0Qm94MiQxMDgFGmN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTA5BRpjdGwwMCRjcGhQYWdlJExpc3RCb3gyJDExMAUaY3RsMDAkY3BoUGFnZSRMaXN0Qm94MiQxMTEFGmN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTEyBRpjdGwwMCRjcGhQYWdlJExpc3RCb3gyJDExMwUaY3RsMDAkY3BoUGFnZSRMaXN0Qm94MiQxMTQFGmN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTE1BRpjdGwwMCRjcGhQYWdlJExpc3RCb3gyJDExNgUaY3RsMDAkY3BoUGFnZSRMaXN0Qm94MiQxMTcFGmN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTE4BRpjdGwwMCRjcGhQYWdlJExpc3RCb3gyJDExOQUaY3RsMDAkY3BoUGFnZSRMaXN0Qm94MiQxMjAFGmN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTIxBRpjdGwwMCRjcGhQYWdlJExpc3RCb3gyJDEyMgUaY3RsMDAkY3BoUGFnZSRMaXN0Qm94MiQxMjMFGmN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTI0BRpjdGwwMCRjcGhQYWdlJExpc3RCb3gyJDEyNQUaY3RsMDAkY3BoUGFnZSRMaXN0Qm94MiQxMjYFGmN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTI3BRpjdGwwMCRjcGhQYWdlJExpc3RCb3gyJDEyOAUaY3RsMDAkY3BoUGFnZSRMaXN0Qm94MiQxMjkFGmN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTMwBRpjdGwwMCRjcGhQYWdlJExpc3RCb3gyJDEzMQUaY3RsMDAkY3BoUGFnZSRMaXN0Qm94MiQxMzIFGmN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTMzBRpjdGwwMCRjcGhQYWdlJExpc3RCb3gyJDEzNAUaY3RsMDAkY3BoUGFnZSRMaXN0Qm94MiQxMzUFGmN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTM2BRpjdGwwMCRjcGhQYWdlJExpc3RCb3gyJDEzNwUaY3RsMDAkY3BoUGFnZSRMaXN0Qm94MiQxMzgFGmN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTM5BRpjdGwwMCRjcGhQYWdlJExpc3RCb3gyJDE0MAUaY3RsMDAkY3BoUGFnZSRMaXN0Qm94MiQxNDEFGmN0bDAwJGNwaFBhZ2UkTGlzdEJveDIkMTQyBRpjdGwwMCRjcGhQYWdlJExpc3RCb3gyJDE0MuAFWi7A4fWQTvQbNtAtbdPC0gI8" />
+</div>
+
+<script type="text/javascript">
+//<![CDATA[
+var theForm = document.forms['aspnetForm'];
+if (!theForm) {
+    theForm = document.aspnetForm;
+}
+function __doPostBack(eventTarget, eventArgument) {
+    if (!theForm.onsubmit || (theForm.onsubmit() != false)) {
+        theForm.__EVENTTARGET.value = eventTarget;
+        theForm.__EVENTARGUMENT.value = eventArgument;
+        theForm.submit();
+    }
+}
+//]]>
+</script>
+
+
+<script src="/WebResource.axd?d=5d5KGRMAyLvBqg6D0Z6Xhj3Bik0iH8Qt5h7ZqLwbqRWMcG_QNGx9uHHYTzhIEQhPxWH_P8u88WPt72kX0&amp;t=639092540354321730" type="text/javascript"></script>
+
+
+<script src="/ScriptResource.axd?d=E5Nh7CGv-JXsD7TGCbMnp9X0NZfqQumN5CHzc1IN0NOJCLO7bbHbvtjjio7SjPVmndNdjUC3o24MT6V2CVqAr1dLFFem5rGRj4SPdyKL1RPihJi2Etsi3gfyhI3_-_NF6791cbEpEwEtRkQN5nfPIXxhjFEalneJHd7xkQ2&amp;t=d41bf5a" type="text/javascript"></script>
+<script type="text/javascript">
+//<![CDATA[
+if (typeof(Sys) === 'undefined') throw new Error('ASP.NET Ajax client-side framework failed to load.');
+//]]>
+</script>
+
+<script src="/ScriptResource.axd?d=VwJ6-9zxk6gcOeAm1Dpq8bTY_bQZb84Nz4E9dE1qUfIp5ZX5B9m3NWeMMVZFVkaUcjI1wgWg6YF6kFn0YlEKdq7idmJSUsvGqhTBbtGJOAqxV6JTmMGE4NvYeDgdvkT3JhgIIpWqSLVpSnD9fTUvPMHfNkKzu8SoDBugrzpPdgZMyRFZ0&amp;t=d41bf5a" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=LfKTKBRe0feZeq6q97EaKGl5dOOwUE7ZFjh2AI_oHvdMy9VbV49Yke5u5BYbn3TD80Rlx1mi11LIQBqu5Y2vM8o5KptMzYb5aWBgIm7MBn4-tY8PaX32sJozeA3xlC__WU-pdg2&amp;t=ffffffffb56adc1f" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=tQ0CnYVsPzy-qNo8X9OQOE0DinAASDAKMsZq3bhEFk4qeIPzGQxK7uSZf3wuOyLOcQMevyfsi9Q7nxV6NgwY_8HYrJgPH-hHeFTzaWW2IFuegScJ0&amp;t=ffffffffb56adc1f" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=C9SI8VZMAC2baWswoXTKXsKdvkW1QIhO0h_X_BQ_VIq_Sua3ILIrip0nEeeLt12AmMdgEpvgPpbliswPtGtMziVcf-G0Ouec3in2KQx6LxN97oEj87HL_fVF_S41&amp;t=ffffffffb56adc1f" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=zbYCUyfWHaI9LKA2e_XBicIa-7ceGYNhc5sNifBhT7cjm0kfHZ0EC_vs6ktYztWJU_4_S85E734ma4Nyww3crIuS1ATgUYpzoicrR2zxLEGTgYOV8AggeVJjWxM1&amp;t=ffffffffb56adc1f" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=XV3xR7ftMh8qUPcFUEUtuxvoFq36fgHmKw3jcRsWcn4w7DUeeK-2oreQvLVkZiippPtaBDDBb8toDakaDeN0J6t0cmZOzK47C2XhG4MRAxykiPrA-Fw-scPEPsU1&amp;t=ffffffffb56adc1f" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=cgU3Wh6H-EzuHc_qsIGnY7pFtti2iChGsIUHZwSIVGQtaAWAvG9mFEBPekYnpojxk5XqXoegFah8mVc5r6aJ-DC5c3MxuMDKPOWDImXXtKSdX2VBm9fh8tRhIGY1&amp;t=ffffffffb56adc1f" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=9sv0y0PaGAAGrQ5LA_ObtHoGBthJYmjQHJk4h-cbZFrrbXZsEodWdrgt8YVKYOoHI99vNcUQABnnvtD0217gNSpLTP2wRqLrlkws8rZf5m5oyed10&amp;t=ffffffffb56adc1f" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=8e3OrtgamKueLYq_29eUM_hmTyKV7VQU2If451FF3odLwhfPAOxSAUFQ0-_dekA0uaO8sIVaR1Wxi7BPGvKNtRxIXpiCjNvHKqyvL4RwQZo5Rw6G0&amp;t=ffffffffb56adc1f" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=SF_wbjZasrYdNRS2vZKc_n1kI--26mubiEfrRcYV9X7oyuU3XMj606jEg98zeJk__iPOxP7i5n0eKqm4ZNXChbK0fbSxj5pnE5g7kqkhmlfPGzb0ggB7sQjBsmU1&amp;t=ffffffffb56adc1f" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=wRL9GHZFEkLqKd5dmfyR6nBmiCHdkDAl2gAdbRwkerKi5dXnII934yERrB_d2kf_KS1txFksDt_R76BeIXdjkdyQRYPA5gPHdZkoFxzg4J63trPiGXAWpDJ4lxw1&amp;t=ffffffffb56adc1f" type="text/javascript"></script>
+<div class="aspNetHidden">
+
+	<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="DD2094E3" />
+</div>
+
+<DIV id=wrapper1>
+<DIV id=container style="text-align: left">
+   
+      <!-- BEGIN PAGE HEADER MODULE -->
+     
+    <div id="content-header-wrapper"><span class="site-breadcrumb" 
+id="ctl00_ctlSiteTabsTop_SiteMapPath1" ><span  ></span><span style="padding-left:15%"> <a href="../Default.aspx" style="padding-right:-20%">AMIS Home</a>
+&gt; </span><span></span><a 
+id="ctl00_ctlSiteTabsTop_SiteMapPath1_SkipLink"></a></span> 
+                      <div id="picklanguage" style =" margin-top:-13%">                  <p ><a id="ctl00_hyperlinkEnglish" class="language-poster-button-active" href="default.aspx">English</a>  <a id="ctl00_hyperlinkUrdu" href="Defaulturdu.aspx">اردو</a> </p>
+                          </div>
+         <div id="nav-utility1">
+<p>
+
+              
+                    <div style="text-align:right">    Not logged in |
+						<a id="ctl00_LoginView2_linkLogin" class="infoTextSmall" href="/login.aspx?ReturnUrl=%2fViewPrices.aspx%3fsearchType%3d0%26commodityId%3d1"></a>
+                        |
+                        <a id="ctl00_LoginView2_linkRegister" class="infoTextSmall" href="/account/Register.aspx"></a>
+                    </div>
+					
+
+                                            
+                                            </p></div>
+        </div>
+    <img src="/images/Header.jpg" style="width:100%" />
+<DIV id=colcx1 style="text-align: left">
+    <div> <br/>
+        <br />
+        <br />
+    </div>
+
+  <div class="row">
+  <div class="col-3 col-s-3 menu"> 
+            <div class="sidebar">
+                <div class="sidebarheader">Services</div>
+                <div id="master_sidebarServices" class="sidebarcontent" style="text-align: left;padding-top:0;padding-bottom:0; padding-left:0" >
+                 
+
+
+                        <div id="navigation1">
+ <ul id="mainmanu" >
+
+ <li  onclick ="price_addelement()" id ="pricehead"><a href="javascript:void(0);">Auction/WholeSale Prices</a>
+ <ul class ="content1" id ="Prices">
+ <li>
+                     <a href= "http://www.amis.pk/DistrictCities.aspx">Prices By City</a>
+</li>
+     <li>
+                    
+                    <a href="http://www.amis.pk/BrowsePrices.aspx?searchType=0">Prices by Commodity</a>
+               </li>
+     <li>
+                    
+                    <a href= "http://www.amis.pk/Daily%20Market%20Changes.aspx">Daily Price Change</a>
+                   </li>
+     <li>
+                   
+                    <a href= "http://www.amis.pk/Reports/DistrictMC.aspx">Prices of 36 District Markets</a>
+                    </li>
+     <li>
+                    <a href="http://www.amis.pk/Reports/DistrictMajor.aspx">Prices of 10 Major Markets</a>
+                    
+         </li>
+         <li>
+                    
+                    <a href="http://www.amis.pk/DailyTrendAcrossPunjab.aspx">Commodity Price Trend across Punjab</a>
+                    </li>
+
+     <li>
+                   
+                    <a href= "http://www.amis.pk/Price%20Trends.aspx">Commodity Price Trend over Day</a>
+                    </li>
+     <li>
+                   
+                    <a href= "http://www.amis.pk/Prices.aspx?toptabid=1&tabid=0">Price Reports</a>
+                    </li>
+
+     <li>
+                   
+                    <a href= "http://www.amis.pk/HistoricalPrices.aspx">Historical Prices</a>
+                    </li>
+   
+ </ul>
+ </li>
+<li><a href="http://www.amis.pk/Arrivalreports">Arrival Quantity Reports</a></li>
+       <li><a href="http://www.amis.pk/Reports/districtretail.aspx">RetailPrices</a></li>
+<li onclick="stat()" ><a href="javascript:void(0);">Agri Statistics</a>
+   <ul  class ="content1" id ="stats"> 
+     <li><a href="http://www.amis.pk/Agristatistics/Statistics.aspx">Crop Wise Statistics</a></li>
+     <li><a href="http://www.amis.pk/Agristatistics/Condiments.aspx">Fruit & Vegetable Condiments</a></li>
+ </ul>
+         </li>
+      <li><a href="http://www.amis.pk/Agristatistics/DistrictWise/DistrictWiseData.aspx">District Wise Crop Data</a></li>
+      
+      <li>
+                             
+                    <a href="http://www.amis.pk/Reports/InternationCommodityPriceReports.aspx">International Commodity Prices</a>
+                    </li>
+  
+             
+     <li><a href="http://www.amis.pk/Crop%20Data/Select%20Year.aspx">World Crop Data</a></li>
+       
+     <li onclick="importe()" ><a href="javascript:void(0);">Import/Export</a>
+   <ul  class ="content1" id ="import"> 
+     <li><a href="/Import and Export of Agricultural Commodities/ImportAndExport.html">Import/Export of Agri Commodities</a></li>
+     <li><a href="http://www.amis.pk/FBS/PBS.aspx">Import and Export Statistics</a></li>
+ </ul>
+         </li>
+     <li><a href="http://www.amis.pk/Agristatistics/SupportPrice/Default.aspx">Support Price</a></li>
+ 
+<li ><a href="/PostHarvestPractise.aspx">Post Harvest Practices</a></li>
+<li ><a href="/PrefeasibilityStudies.aspx">Pre-Feasibility Studies</a></li>
+<li ><a href="/QualityStandards.aspx">Quality Standards</a></li>
+ <li ><a href="/pdf/CropPattern.pdf">Crop Harvest Calendar</a></li>
+     <li ><a href="http://www.amis.pk/FoodProcessing.aspx">Food Processing</a></li>
+<li ><a href="/Laws.aspx">Laws/Ordinance/Notifications</a></li>
+
+     
+     <li onclick="pub()"> <a href="javascript:void(0);">Publications</a>
+   <ul  class ="content1" id ="pub1"> 
+<li ><a href="http://www.amis.pk/Marketingroundupyearwise.aspx">Market Roundups</a></li>
+<li ><a href="http://www.amis.pk/Market%20Analysis.aspx">Supply and Price Analysis</a></li>
+<li ><a href="http://www.amis.pk/Publications.aspx">Research Reports</a></li>
+       <li ><a href="http://www.amis.pk/Trainingmanual.aspx">Training Manual</a></li>
+
+   </ul> 
+</li>
+      <li><a href="/FoodInFocus.aspx">Food In Focus</a></li> 
+     <li><a href="javascript:window.open('https://play.google.com/store/apps/details?id=pitb.gov.pk.amis','Android'); void(0);">Download Android Application</a></li>
+   <li><a href="/PAMRA.aspx">PAMRA</a></li> 
+       
+      <li ><a href="/Contacts.aspx">Departmental Contact</a>
+    
+</li>
+
+    
+   
+       <li ><a href="http://www.amis.pk/PDF/Markets in the Punjab.pdf">Fruit, Vagetable and Grain Markets</a></li> 
+    
+      <li onclick="stake()" ><a href="javascript:void(0);">StakeHolders Contact</a>
+   <ul  class ="content1" id ="stakeholder"> 
+<li ><a href="/ListOfStakeholders/list_of_traders_and_exporters.html">List of Exporters and Traders</a></li>
+<li ><a href="/AgriMarketingStakeholders/AgriMarketingStakeholders.aspx">List of AgriMarketing Stakeholders</a></li>
+<li ><a href="/AgroIndustries.aspx">Agro-Based Industries</a></li>
+   </ul> </li>
+    <li ><a href="/Aboutus.aspx">About Us</a></li>
+
+         
+ 
+    
+
+ </ul>
+ 
+ </div>  
+                </div>
+            </div>
+            
+            
+            
+            <div class="sidebar">
+                <div class="sidebarheader">Markets</div>
+                <div id="master_sidebarWalkthroughs" class="sidebarcontent" style="text-align: left;padding-top:0;padding-bottom:0; padding-left:0">
+             
+
+
+                    <div id="navigationdataentry1">
+ 
+  <ul>
+ <li>
+                     <a href= "/Markets/Dashboard.aspx" title="Data Entry MC DashBoard">Data Entry MC DashBoard</a></li>
+   
+   
+
+     
+
+
+<li>
+                     <a href= "/IntlCommodityPrices/CommodityPrices.aspx" title="Enter International market prices">Enter International Market Prices</a></li>
+     
+<li>
+                     <a href= "/Todays Unavailable Commodities.aspx" >Today's Unavailable Commodities</a></li>
+     <li>
+                     <a href= "/RateStatistics.aspx" >Daily Rate Upload Time</a></li>
+
+      
+
+     </ul>
+     </div>
+                </div>
+            </div>
+     
+      </div>
+<div class="col-9 col-s-9">
+<div class=colpadding >
+<div id=master_content>
+
+            <div id="master_contentplaceholder">
+    
+<script type="text/javascript">
+    
+</script>
+    <div class="demoarea"><b> Auction/Wholesale Price List of Agricultural Commodities of Today/Selected Date at Wholesale Market/Mandi</b>
+   <DIV class=miniRatings id=ctl00_tb1_Panel1>
+<DIV class=miniRatings_left id=ctl00_tb1_miniRatings_left> 
+
+    <A href='Printer.aspx?searchType=0&commodityId=1'><IMG id='ctl00_tb1_imgPrint' style='BORDER-TOP-WIDTH: 0px; BORDER-LEFT-WIDTH: 0px; BORDER-BOTTOM-WIDTH: 0px; BORDER-RIGHT-WIDTH: 0px'src='images/rtg_print.gif' />Printer Friendly Version</A>
+</DIV>
+
+</DIV>
+        
+  
+
+     
+           
+ <b>   Enter date to select old prices:</b> <input name="ctl00$cphPage$DateTextBox" type="text" value="10/05/2026" id="ctl00_cphPage_DateTextBox" style="width:80px;" />
+
+    
+    <br />
+
+    Select Commodity or Markets(*No need to select for all)&nbsp;<br /> <div style="width:150px; height:150px; padding:2px; overflow:auto; border: 1px solid #ccc; background-color:white; ">   <table id="ctl00_cphPage_ListBox2" style="width:140px;">
+	<tr>
+		<td><input id="ctl00_cphPage_ListBox2_0" type="checkbox" name="ctl00$cphPage$ListBox2$0" value="76" /><label for="ctl00_cphPage_ListBox2_0">Yazman</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_1" type="checkbox" name="ctl00$cphPage$ListBox2$1" value="105" /><label for="ctl00_cphPage_ListBox2_1">Wazirabad</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_2" type="checkbox" name="ctl00$cphPage$ListBox2$2" value="100" /><label for="ctl00_cphPage_ListBox2_2">Warberten</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_3" type="checkbox" name="ctl00$cphPage$ListBox2$3" value="14" /><label for="ctl00_cphPage_ListBox2_3">Vehari</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_4" type="checkbox" name="ctl00$cphPage$ListBox2$4" value="21" /><label for="ctl00_cphPage_ListBox2_4">TTSingh</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_5" type="checkbox" name="ctl00$cphPage$ListBox2$5" value="140" /><label for="ctl00_cphPage_ListBox2_5">Taunsasharif</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_6" type="checkbox" name="ctl00$cphPage$ListBox2$6" value="74" /><label for="ctl00_cphPage_ListBox2_6">Tandlianwala</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_7" type="checkbox" name="ctl00$cphPage$ListBox2$7" value="87" /><label for="ctl00_cphPage_ListBox2_7">TALAGANG</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_8" type="checkbox" name="ctl00$cphPage$ListBox2$8" value="73" /><label for="ctl00_cphPage_ListBox2_8">Summandri</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_9" type="checkbox" name="ctl00$cphPage$ListBox2$9" value="107" /><label for="ctl00_cphPage_ListBox2_9">Sukheke</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_10" type="checkbox" name="ctl00$cphPage$ListBox2$10" value="127" /><label for="ctl00_cphPage_ListBox2_10">Sraialamgir</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_11" type="checkbox" name="ctl00$cphPage$ListBox2$11" value="94" /><label for="ctl00_cphPage_ListBox2_11">Sillanwali</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_12" type="checkbox" name="ctl00$cphPage$ListBox2$12" value="57" /><label for="ctl00_cphPage_ListBox2_12">Sialkot</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_13" type="checkbox" name="ctl00$cphPage$ListBox2$13" value="47" /><label for="ctl00_cphPage_ListBox2_13">ShujaAbad</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_14" type="checkbox" name="ctl00$cphPage$ListBox2$14" value="82" /><label for="ctl00_cphPage_ListBox2_14">Shorkot</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_15" type="checkbox" name="ctl00$cphPage$ListBox2$15" value="78" /><label for="ctl00_cphPage_ListBox2_15">Sheikhupura</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_16" type="checkbox" name="ctl00$cphPage$ListBox2$16" value="125" /><label for="ctl00_cphPage_ListBox2_16">Shakargarh</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_17" type="checkbox" name="ctl00$cphPage$ListBox2$17" value="55" /><label for="ctl00_cphPage_ListBox2_17">ShahrSultan</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_18" type="checkbox" name="ctl00$cphPage$ListBox2$18" value="135" /><label for="ctl00_cphPage_ListBox2_18">Shahjewana</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_19" type="checkbox" name="ctl00$cphPage$ListBox2$19" value="5" /><label for="ctl00_cphPage_ListBox2_19">Sargodha</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_20" type="checkbox" name="ctl00$cphPage$ListBox2$20" value="97" /><label for="ctl00_cphPage_ListBox2_20">Sanglahill</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_21" type="checkbox" name="ctl00$cphPage$ListBox2$21" value="123" /><label for="ctl00_cphPage_ListBox2_21">Sambrial</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_22" type="checkbox" name="ctl00$cphPage$ListBox2$22" value="13" /><label for="ctl00_cphPage_ListBox2_22">Sahiwal</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_23" type="checkbox" name="ctl00$cphPage$ListBox2$23" value="113" /><label for="ctl00_cphPage_ListBox2_23">Safdarabad</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_24" type="checkbox" name="ctl00$cphPage$ListBox2$24" value="66" /><label for="ctl00_cphPage_ListBox2_24">SadiqAbad</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_25" type="checkbox" name="ctl00$cphPage$ListBox2$25" value="145" /><label for="ctl00_cphPage_ListBox2_25">Rujhan</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_26" type="checkbox" name="ctl00$cphPage$ListBox2$26" value="69" /><label for="ctl00_cphPage_ListBox2_26">RenalaKhurd</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_27" type="checkbox" name="ctl00$cphPage$ListBox2$27" value="6" /><label for="ctl00_cphPage_ListBox2_27">Rawalpindi</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_28" type="checkbox" name="ctl00$cphPage$ListBox2$28" value="63" /><label for="ctl00_cphPage_ListBox2_28">RajanPur</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_29" type="checkbox" name="ctl00$cphPage$ListBox2$29" value="98" /><label for="ctl00_cphPage_ListBox2_29">Raiwind</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_30" type="checkbox" name="ctl00$cphPage$ListBox2$30" value="8" /><label for="ctl00_cphPage_ListBox2_30">RahimYarKhan</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_31" type="checkbox" name="ctl00$cphPage$ListBox2$31" value="65" /><label for="ctl00_cphPage_ListBox2_31">Quetta</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_32" type="checkbox" name="ctl00$cphPage$ListBox2$32" value="133" /><label for="ctl00_cphPage_ListBox2_32">Quaidabad</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_33" type="checkbox" name="ctl00$cphPage$ListBox2$33" value="119" /><label for="ctl00_cphPage_ListBox2_33">Qiladedarsingh</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_34" type="checkbox" name="ctl00$cphPage$ListBox2$34" value="136" /><label for="ctl00_cphPage_ListBox2_34">Qadirpurrawan</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_35" type="checkbox" name="ctl00$cphPage$ListBox2$35" value="46" /><label for="ctl00_cphPage_ListBox2_35">PirMahal</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_36" type="checkbox" name="ctl00$cphPage$ListBox2$36" value="134" /><label for="ctl00_cphPage_ListBox2_36">Piplan</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_37" type="checkbox" name="ctl00$cphPage$ListBox2$37" value="106" /><label for="ctl00_cphPage_ListBox2_37">Pindibhattian</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_38" type="checkbox" name="ctl00$cphPage$ListBox2$38" value="128" /><label for="ctl00_cphPage_ListBox2_38">Pinanwal</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_39" type="checkbox" name="ctl00$cphPage$ListBox2$39" value="129" /><label for="ctl00_cphPage_ListBox2_39">Phularwan</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_40" type="checkbox" name="ctl00$cphPage$ListBox2$40" value="38" /><label for="ctl00_cphPage_ListBox2_40">PhoolNagar</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_41" type="checkbox" name="ctl00$cphPage$ListBox2$41" value="23" /><label for="ctl00_cphPage_ListBox2_41">Patoki</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_42" type="checkbox" name="ctl00$cphPage$ListBox2$42" value="96" /><label for="ctl00_cphPage_ListBox2_42">Pasroor</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_43" type="checkbox" name="ctl00$cphPage$ListBox2$43" value="26" /><label for="ctl00_cphPage_ListBox2_43">PakPattan</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_44" type="checkbox" name="ctl00$cphPage$ListBox2$44" value="4" /><label for="ctl00_cphPage_ListBox2_44">Okara</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_45" type="checkbox" name="ctl00$cphPage$ListBox2$45" value="120" /><label for="ctl00_cphPage_ListBox2_45">Noshehrawirkan</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_46" type="checkbox" name="ctl00$cphPage$ListBox2$46" value="58" /><label for="ctl00_cphPage_ListBox2_46">Narowal</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_47" type="checkbox" name="ctl00$cphPage$ListBox2$47" value="108" /><label for="ctl00_cphPage_ListBox2_47">Narangmandi</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_48" type="checkbox" name="ctl00$cphPage$ListBox2$48" value="70" /><label for="ctl00_cphPage_ListBox2_48">Nankana</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_49" type="checkbox" name="ctl00$cphPage$ListBox2$49" value="19" /><label for="ctl00_cphPage_ListBox2_49">MuzafarGhar</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_50" type="checkbox" name="ctl00$cphPage$ListBox2$50" value="146" /><label for="ctl00_cphPage_ListBox2_50">Murree</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_51" type="checkbox" name="ctl00$cphPage$ListBox2$51" value="83" /><label for="ctl00_cphPage_ListBox2_51">Muridke</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_52" type="checkbox" name="ctl00$cphPage$ListBox2$52" value="109" /><label for="ctl00_cphPage_ListBox2_52">MultanRoadLahore</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_53" type="checkbox" name="ctl00$cphPage$ListBox2$53" value="7" /><label for="ctl00_cphPage_ListBox2_53">Multan</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_54" type="checkbox" name="ctl00$cphPage$ListBox2$54" value="132" /><label for="ctl00_cphPage_ListBox2_54">Mithatiwana</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_55" type="checkbox" name="ctl00$cphPage$ListBox2$55" value="139" /><label for="ctl00_cphPage_ListBox2_55">Minchanabad</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_56" type="checkbox" name="ctl00$cphPage$ListBox2$56" value="62" /><label for="ctl00_cphPage_ListBox2_56">Mianwali</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_57" type="checkbox" name="ctl00$cphPage$ListBox2$57" value="50" /><label for="ctl00_cphPage_ListBox2_57">MianChannu</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_58" type="checkbox" name="ctl00$cphPage$ListBox2$58" value="41" /><label for="ctl00_cphPage_ListBox2_58">MandiBahaudin</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_59" type="checkbox" name="ctl00$cphPage$ListBox2$59" value="114" /><label for="ctl00_cphPage_ListBox2_59">Mananwala</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_60" type="checkbox" name="ctl00$cphPage$ListBox2$60" value="75" /><label for="ctl00_cphPage_ListBox2_60">Mamunkanjan</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_61" type="checkbox" name="ctl00$cphPage$ListBox2$61" value="121" /><label for="ctl00_cphPage_ListBox2_61">Malakwal</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_62" type="checkbox" name="ctl00$cphPage$ListBox2$62" value="32" /><label for="ctl00_cphPage_ListBox2_62">Mailsi</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_63" type="checkbox" name="ctl00$cphPage$ListBox2$63" value="28" /><label for="ctl00_cphPage_ListBox2_63">Lodhran</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_64" type="checkbox" name="ctl00$cphPage$ListBox2$64" value="71" /><label for="ctl00_cphPage_ListBox2_64">LiaqatPur</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_65" type="checkbox" name="ctl00$cphPage$ListBox2$65" value="16" /><label for="ctl00_cphPage_ListBox2_65">Layyah</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_66" type="checkbox" name="ctl00$cphPage$ListBox2$66" value="101" /><label for="ctl00_cphPage_ListBox2_66">Lalian</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_67" type="checkbox" name="ctl00$cphPage$ListBox2$67" value="39" /><label for="ctl00_cphPage_ListBox2_67">LalaMusa</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_68" type="checkbox" name="ctl00$cphPage$ListBox2$68" value="110" /><label for="ctl00_cphPage_ListBox2_68">Lahore(Singhpura)</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_69" type="checkbox" name="ctl00$cphPage$ListBox2$69" value="1" /><label for="ctl00_cphPage_ListBox2_69">Lahore</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_70" type="checkbox" name="ctl00$cphPage$ListBox2$70" value="115" /><label for="ctl00_cphPage_ListBox2_70">Kotradhakishan</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_71" type="checkbox" name="ctl00$cphPage$ListBox2$71" value="142" /><label for="ctl00_cphPage_ListBox2_71">kotmoman</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_72" type="checkbox" name="ctl00$cphPage$ListBox2$72" value="54" /><label for="ctl00_cphPage_ListBox2_72">KotChutta</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_73" type="checkbox" name="ctl00$cphPage$ListBox2$73" value="68" /><label for="ctl00_cphPage_ListBox2_73">KotAdu</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_74" type="checkbox" name="ctl00$cphPage$ListBox2$74" value="61" /><label for="ctl00_cphPage_ListBox2_74">Khushab</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_75" type="checkbox" name="ctl00$cphPage$ListBox2$75" value="117" /><label for="ctl00_cphPage_ListBox2_75">Khudian</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_76" type="checkbox" name="ctl00$cphPage$ListBox2$76" value="67" /><label for="ctl00_cphPage_ListBox2_76">Khanpur</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_77" type="checkbox" name="ctl00$cphPage$ListBox2$77" value="112" /><label for="ctl00_cphPage_ListBox2_77">Khankahdogran</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_78" type="checkbox" name="ctl00$cphPage$ListBox2$78" value="18" /><label for="ctl00_cphPage_ListBox2_78">Khanewal</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_79" type="checkbox" name="ctl00$cphPage$ListBox2$79" value="138" /><label for="ctl00_cphPage_ListBox2_79">Khairpurtamewali</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_80" type="checkbox" name="ctl00$cphPage$ListBox2$80" value="111" /><label for="ctl00_cphPage_ListBox2_80">KatchaLahore</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_81" type="checkbox" name="ctl00$cphPage$ListBox2$81" value="11" /><label for="ctl00_cphPage_ListBox2_81">Kasur</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_82" type="checkbox" name="ctl00$cphPage$ListBox2$82" value="137" /><label for="ctl00_cphPage_ListBox2_82">Kassowal</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_83" type="checkbox" name="ctl00$cphPage$ListBox2$83" value="86" /><label for="ctl00_cphPage_ListBox2_83">Karachi</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_84" type="checkbox" name="ctl00$cphPage$ListBox2$84" value="116" /><label for="ctl00_cphPage_ListBox2_84">Kanganpur</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_85" type="checkbox" name="ctl00$cphPage$ListBox2$85" value="80" /><label for="ctl00_cphPage_ListBox2_85">Kamoke</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_86" type="checkbox" name="ctl00$cphPage$ListBox2$86" value="45" /><label for="ctl00_cphPage_ListBox2_86">Kamalia</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_87" type="checkbox" name="ctl00$cphPage$ListBox2$87" value="84" /><label for="ctl00_cphPage_ListBox2_87">Kalurkot</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_88" type="checkbox" name="ctl00$cphPage$ListBox2$88" value="33" /><label for="ctl00_cphPage_ListBox2_88">Kahrorpacca</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_89" type="checkbox" name="ctl00$cphPage$ListBox2$89" value="51" /><label for="ctl00_cphPage_ListBox2_89">KachaKhu</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_90" type="checkbox" name="ctl00$cphPage$ListBox2$90" value="22" /><label for="ctl00_cphPage_ListBox2_90">KabirWala</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_91" type="checkbox" name="ctl00$cphPage$ListBox2$91" value="60" /><label for="ctl00_cphPage_ListBox2_91">Jhelum</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_92" type="checkbox" name="ctl00$cphPage$ListBox2$92" value="64" /><label for="ctl00_cphPage_ListBox2_92">Jhang</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_93" type="checkbox" name="ctl00$cphPage$ListBox2$93" value="131" /><label for="ctl00_cphPage_ListBox2_93">Jauharabad</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_94" type="checkbox" name="ctl00$cphPage$ListBox2$94" value="25" /><label for="ctl00_cphPage_ListBox2_94">Jaranwala</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_95" type="checkbox" name="ctl00$cphPage$ListBox2$95" value="56" /><label for="ctl00_cphPage_ListBox2_95">JamPur</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_96" type="checkbox" name="ctl00$cphPage$ListBox2$96" value="48" /><label for="ctl00_cphPage_ListBox2_96">jalalpurpirwala</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_97" type="checkbox" name="ctl00$cphPage$ListBox2$97" value="42" /><label for="ctl00_cphPage_ListBox2_97">JalalPurJattan</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_98" type="checkbox" name="ctl00$cphPage$ListBox2$98" value="49" /><label for="ctl00_cphPage_ListBox2_98">Jahanian</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_99" type="checkbox" name="ctl00$cphPage$ListBox2$99" value="93" /><label for="ctl00_cphPage_ListBox2_99">Hyderabad</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_100" type="checkbox" name="ctl00$cphPage$ListBox2$100" value="92" /><label for="ctl00_cphPage_ListBox2_100">HujraShahmuqeem</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_101" type="checkbox" name="ctl00$cphPage$ListBox2$101" value="126" /><label for="ctl00_cphPage_ListBox2_101">Hazro</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_102" type="checkbox" name="ctl00$cphPage$ListBox2$102" value="102" /><label for="ctl00_cphPage_ListBox2_102">Havelilakha</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_103" type="checkbox" name="ctl00$cphPage$ListBox2$103" value="99" /><label for="ctl00_cphPage_ListBox2_103">Hasanabdal</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_104" type="checkbox" name="ctl00$cphPage$ListBox2$104" value="53" /><label for="ctl00_cphPage_ListBox2_104">HasalPur</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_105" type="checkbox" name="ctl00$cphPage$ListBox2$105" value="29" /><label for="ctl00_cphPage_ListBox2_105">HaroonAbad</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_106" type="checkbox" name="ctl00$cphPage$ListBox2$106" value="104" /><label for="ctl00_cphPage_ListBox2_106">Hafizabad</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_107" type="checkbox" name="ctl00$cphPage$ListBox2$107" value="143" /><label for="ctl00_cphPage_ListBox2_107">Gwadar</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_108" type="checkbox" name="ctl00$cphPage$ListBox2$108" value="17" /><label for="ctl00_cphPage_ListBox2_108">Gujrat</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_109" type="checkbox" name="ctl00$cphPage$ListBox2$109" value="3" /><label for="ctl00_cphPage_ListBox2_109">Gujranwala</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_110" type="checkbox" name="ctl00$cphPage$ListBox2$110" value="31" /><label for="ctl00_cphPage_ListBox2_110">GujarKhan</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_111" type="checkbox" name="ctl00$cphPage$ListBox2$111" value="44" /><label for="ctl00_cphPage_ListBox2_111">Gojra</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_112" type="checkbox" name="ctl00$cphPage$ListBox2$112" value="118" /><label for="ctl00_cphPage_ListBox2_112">Ghakhar</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_113" type="checkbox" name="ctl00$cphPage$ListBox2$113" value="85" /><label for="ctl00_cphPage_ListBox2_113">Fortabas</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_114" type="checkbox" name="ctl00$cphPage$ListBox2$114" value="77" /><label for="ctl00_cphPage_ListBox2_114">Fatehpur</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_115" type="checkbox" name="ctl00$cphPage$ListBox2$115" value="90" /><label for="ctl00_cphPage_ListBox2_115">Farooqabad</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_116" type="checkbox" name="ctl00$cphPage$ListBox2$116" value="2" /><label for="ctl00_cphPage_ListBox2_116">Faisalabad</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_117" type="checkbox" name="ctl00$cphPage$ListBox2$117" value="91" /><label for="ctl00_cphPage_ListBox2_117">Eminabad</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_118" type="checkbox" name="ctl00$cphPage$ListBox2$118" value="35" /><label for="ctl00_cphPage_ListBox2_118">DunyaPur</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_119" type="checkbox" name="ctl00$cphPage$ListBox2$119" value="122" /><label for="ctl00_cphPage_ListBox2_119">Dinga</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_120" type="checkbox" name="ctl00$cphPage$ListBox2$120" value="36" /><label for="ctl00_cphPage_ListBox2_120">DGKHAN</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_121" type="checkbox" name="ctl00$cphPage$ListBox2$121" value="79" /><label for="ctl00_cphPage_ListBox2_121">Depalpur</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_122" type="checkbox" name="ctl00$cphPage$ListBox2$122" value="43" /><label for="ctl00_cphPage_ListBox2_122">Daska</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_123" type="checkbox" name="ctl00$cphPage$ListBox2$123" value="37" /><label for="ctl00_cphPage_ListBox2_123">Chunian</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_124" type="checkbox" name="ctl00$cphPage$ListBox2$124" value="89" /><label for="ctl00_cphPage_ListBox2_124">ChuaSaidanShah</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_125" type="checkbox" name="ctl00$cphPage$ListBox2$125" value="30" /><label for="ctl00_cphPage_ListBox2_125">Chistian</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_126" type="checkbox" name="ctl00$cphPage$ListBox2$126" value="81" /><label for="ctl00_cphPage_ListBox2_126">Chiniot</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_127" type="checkbox" name="ctl00$cphPage$ListBox2$127" value="34" /><label for="ctl00_cphPage_ListBox2_127">Chichawatni</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_128" type="checkbox" name="ctl00$cphPage$ListBox2$128" value="59" /><label for="ctl00_cphPage_ListBox2_128">Chakwal</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_129" type="checkbox" name="ctl00$cphPage$ListBox2$129" value="72" /><label for="ctl00_cphPage_ListBox2_129">ChackJhumra</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_130" type="checkbox" name="ctl00$cphPage$ListBox2$130" value="15" /><label for="ctl00_cphPage_ListBox2_130">Burewala</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_131" type="checkbox" name="ctl00$cphPage$ListBox2$131" value="10" /><label for="ctl00_cphPage_ListBox2_131">Bhalwal</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_132" type="checkbox" name="ctl00$cphPage$ListBox2$132" value="9" /><label for="ctl00_cphPage_ListBox2_132">Bhakhar</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_133" type="checkbox" name="ctl00$cphPage$ListBox2$133" value="103" /><label for="ctl00_cphPage_ListBox2_133">Basirpur</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_134" type="checkbox" name="ctl00$cphPage$ListBox2$134" value="20" /><label for="ctl00_cphPage_ListBox2_134">BahawalPur</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_135" type="checkbox" name="ctl00$cphPage$ListBox2$135" value="27" /><label for="ctl00_cphPage_ListBox2_135">BahawalNagar</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_136" type="checkbox" name="ctl00$cphPage$ListBox2$136" value="124" /><label for="ctl00_cphPage_ListBox2_136">Badomalhi</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_137" type="checkbox" name="ctl00$cphPage$ListBox2$137" value="144" /><label for="ctl00_cphPage_ListBox2_137">Attock</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_138" type="checkbox" name="ctl00$cphPage$ListBox2$138" value="24" /><label for="ctl00_cphPage_ListBox2_138">ArifWala</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_139" type="checkbox" name="ctl00$cphPage$ListBox2$139" value="88" /><label for="ctl00_cphPage_ListBox2_139">AliPurChatta</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_140" type="checkbox" name="ctl00$cphPage$ListBox2$140" value="141" /><label for="ctl00_cphPage_ListBox2_140">Alipur</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_141" type="checkbox" name="ctl00$cphPage$ListBox2$141" value="52" /><label for="ctl00_cphPage_ListBox2_141">AhmadPurEast</label></td>
+	</tr><tr>
+		<td><input id="ctl00_cphPage_ListBox2_142" type="checkbox" name="ctl00$cphPage$ListBox2$142" value="95" /><label for="ctl00_cphPage_ListBox2_142">Abdulhakim</label></td>
+	</tr>
+</table></div>
+      
+    <div id="ctl00_cphPage_Panel3" class="popupControl">
+	
+        <script type="text/javascript">
+//<![CDATA[
+Sys.WebForms.PageRequestManager._initialize('ctl00$cphPage$ScriptManager1', 'aspnetForm', ['tctl00$cphPage$UpdatePanel1','','tctl00$cphPage$UpdatePanel3',''], [], [], 90, 'ctl00');
+	//]]>
+</script>
+
+       
+<input type="hidden" name="ctl00$cphPage$height" id="ctl00_cphPage_height" />
+        <div id="ctl00_cphPage_UpdatePanel1">
+		
+
+               <center>
+                    <table id="ctl00_cphPage_Calendar1" cellspacing="0" cellpadding="1" title="Calendar" style="color:Black;background-color:White;border-color:#999999;border-width:1px;border-style:solid;font-family:Verdana;font-size:8pt;width:160px;border-collapse:collapse;">
+			<tr><td colspan="7" style="background-color:#999999;border-color:Black;"><table cellspacing="0" style="color:Black;font-family:Verdana;font-size:7pt;font-weight:bold;width:100%;border-collapse:collapse;">
+				<tr><td valign="bottom" style="width:15%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','V9740')" style="color:Black" title="Go to the previous month">&lt;</a></td><td align="center" style="width:70%;">October 2026</td><td align="right" valign="bottom" style="width:15%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','V9801')" style="color:Black" title="Go to the next month">&gt;</a></td></tr>
+			</table></td></tr><tr><th align="center" abbr="Sunday" scope="col" style="background-color:#CCCCCC;font-size:7pt;font-weight:bold;">Su</th><th align="center" abbr="Monday" scope="col" style="background-color:#CCCCCC;font-size:7pt;font-weight:bold;">Mo</th><th align="center" abbr="Tuesday" scope="col" style="background-color:#CCCCCC;font-size:7pt;font-weight:bold;">Tu</th><th align="center" abbr="Wednesday" scope="col" style="background-color:#CCCCCC;font-size:7pt;font-weight:bold;">We</th><th align="center" abbr="Thursday" scope="col" style="background-color:#CCCCCC;font-size:7pt;font-weight:bold;">Th</th><th align="center" abbr="Friday" scope="col" style="background-color:#CCCCCC;font-size:7pt;font-weight:bold;">Fr</th><th align="center" abbr="Saturday" scope="col" style="background-color:#CCCCCC;font-size:7pt;font-weight:bold;">Sa</th></tr><tr><td align="center" style="color:Gray;background-color:#FFFFCC;width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9766')" style="color:Gray" title="September 27">27</a></td><td align="center" style="color:Gray;width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9767')" style="color:Gray" title="September 28">28</a></td><td align="center" style="color:Gray;width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9768')" style="color:Gray" title="September 29">29</a></td><td align="center" style="color:Gray;width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9769')" style="color:Gray" title="September 30">30</a></td><td align="center" style="width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9770')" style="color:Black" title="October 1">1</a></td><td align="center" style="width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9771')" style="color:Black" title="October 2">2</a></td><td align="center" style="background-color:#FFFFCC;width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9772')" style="color:Black" title="October 3">3</a></td></tr><tr><td align="center" style="background-color:#FFFFCC;width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9773')" style="color:Black" title="October 4">4</a></td><td align="center" style="color:Black;background-color:#CCCCCC;width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9774')" style="color:Black" title="October 5">5</a></td><td align="center" style="width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9775')" style="color:Black" title="October 6">6</a></td><td align="center" style="width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9776')" style="color:Black" title="October 7">7</a></td><td align="center" style="width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9777')" style="color:Black" title="October 8">8</a></td><td align="center" style="width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9778')" style="color:Black" title="October 9">9</a></td><td align="center" style="background-color:#FFFFCC;width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9779')" style="color:Black" title="October 10">10</a></td></tr><tr><td align="center" style="background-color:#FFFFCC;width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9780')" style="color:Black" title="October 11">11</a></td><td align="center" style="width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9781')" style="color:Black" title="October 12">12</a></td><td align="center" style="width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9782')" style="color:Black" title="October 13">13</a></td><td align="center" style="width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9783')" style="color:Black" title="October 14">14</a></td><td align="center" style="width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9784')" style="color:Black" title="October 15">15</a></td><td align="center" style="width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9785')" style="color:Black" title="October 16">16</a></td><td align="center" style="background-color:#FFFFCC;width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9786')" style="color:Black" title="October 17">17</a></td></tr><tr><td align="center" style="background-color:#FFFFCC;width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9787')" style="color:Black" title="October 18">18</a></td><td align="center" style="width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9788')" style="color:Black" title="October 19">19</a></td><td align="center" style="width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9789')" style="color:Black" title="October 20">20</a></td><td align="center" style="width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9790')" style="color:Black" title="October 21">21</a></td><td align="center" style="width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9791')" style="color:Black" title="October 22">22</a></td><td align="center" style="width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9792')" style="color:Black" title="October 23">23</a></td><td align="center" style="background-color:#FFFFCC;width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9793')" style="color:Black" title="October 24">24</a></td></tr><tr><td align="center" style="background-color:#FFFFCC;width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9794')" style="color:Black" title="October 25">25</a></td><td align="center" style="width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9795')" style="color:Black" title="October 26">26</a></td><td align="center" style="width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9796')" style="color:Black" title="October 27">27</a></td><td align="center" style="width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9797')" style="color:Black" title="October 28">28</a></td><td align="center" style="width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9798')" style="color:Black" title="October 29">29</a></td><td align="center" style="width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9799')" style="color:Black" title="October 30">30</a></td><td align="center" style="background-color:#FFFFCC;width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9800')" style="color:Black" title="October 31">31</a></td></tr><tr><td align="center" style="color:Gray;background-color:#FFFFCC;width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9801')" style="color:Gray" title="November 1">1</a></td><td align="center" style="color:Gray;width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9802')" style="color:Gray" title="November 2">2</a></td><td align="center" style="color:Gray;width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9803')" style="color:Gray" title="November 3">3</a></td><td align="center" style="color:Gray;width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9804')" style="color:Gray" title="November 4">4</a></td><td align="center" style="color:Gray;width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9805')" style="color:Gray" title="November 5">5</a></td><td align="center" style="color:Gray;width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9806')" style="color:Gray" title="November 6">6</a></td><td align="center" style="color:Gray;background-color:#FFFFCC;width:14%;"><a href="javascript:__doPostBack('ctl00$cphPage$Calendar1','9807')" style="color:Gray" title="November 7">7</a></td></tr>
+		</table>
+                    
+                </center>
+                  
+            
+	</div>
+    
+</div>
+
+
+    <br />
+ 
+    </p> 
+    
+   
+<p class="separated">
+    <input type="submit" name="ctl00$cphPage$ReminderButton" value="Show prices" id="ctl00_cphPage_ReminderButton" />
+</p>
+ </asp:Panel>
+ <div id="ctl00_cphPage_UpdatePanel3">
+	
+<BR /><DIV id="selectedcommodity"><H2>Commodity:  <B><span id="ctl00_cphPage_lblMsg">Wheat</span> <span id="ctl00_cphPage_lblquintal" style="color:Red;font-size:8pt;">[ All Prices are in Rs/100Kg specified otherwise ]</span></B></H2></DIV><P><a id="ctl00_cphPage_LinkButton1" href="javascript:__doPostBack(&#39;ctl00$cphPage$LinkButton1&#39;,&#39;&#39;)"></a><div id="ctl00_cphPage_Panel4" class="modalPopup" style="DISPLAY: none">
+		
+        <p></p>
+        <p ><input type="radio" name="Radio" id="RadioA" onclick="styleToSelect = 'sampleStyleA';" checked="checked" /><label for="RadioA" class="sampleStyleA" style="padding:3px;">Weakly continuation chart</label></p>
+        <p ><input type="radio" name="Radio" id="RadioB" onclick="styleToSelect = 'sampleStyleB';" /><label for="RadioB" class="sampleStyleB" style="padding:3px;">Monthly continuation chart</label></p>
+        <p ><input type="radio" name="Radio" id="RadioC" onclick="styleToSelect = 'sampleStyleC';" /><label for="RadioC" class="sampleStyleC" style="padding:3px;">Yearly continuation chart</label></p>
+   
+        <p style="text-align:center;">
+        <input type="submit" name="ctl00$cphPage$OkButton" value="OK" id="ctl00_cphPage_OkButton" />
+        <input type="submit" name="ctl00$cphPage$CancelButton" value="Cancel" id="ctl00_cphPage_CancelButton" />
+           
+            <input type="hidden" name="ctl00$cphPage$myInput" id="ctl00_cphPage_myInput" />
+            
+        </p>
+    
+	</div>
+</div>
+<DIV id=amis_prices >
+     
+ 
+    
+    </table>  
+
+</FooterTemplate>             
+       </asp:Repeater> 
+
+</DIV>
+         <table id="ctl00_cphPage_tabletext">
+
+</table>
+  <table>
+      <tr> <td id="ctl00_cphPage_Grd"> <table border='0'  cellpadding='0' cellspacing='0' width='%100'><tr style="background-color:#FFFFE0;font-family:verdana;"><td style="border-right: 1px solid black;font-family:verdana;">&nbsp;Dated:05-10-2026</td><td style="border-right: 1px solid black;font-family:verdana;">&nbsp;Graph</td><td style="border-right: 1px solid black;font-family:verdana;">&nbsp;Min</td><td style="border-right: 1px solid black;font-family:verdana;;">&nbsp;Max</td><td style="border-right: 1px solid black;font-family:verdana;">&nbsp;FQP</td><td style="font-family:verdana;">&nbsp;Quantity</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>1&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=1'>Lahore</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=1">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>2&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=2'>Faisalabad</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=2">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;11500</td><td style="border-right: 1px solid black;">&nbsp;12000</td><td style="border-right: 1px solid black;">&nbsp;11750</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>3&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=4'>Okara</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=4">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>4&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=5'>Sargodha</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=5">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;11250</td><td style="border-right: 1px solid black;">&nbsp;11750</td><td style="border-right: 1px solid black;">&nbsp;11500</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>5&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=6'>Rawalpindi</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=6">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;11500</td><td style="border-right: 1px solid black;">&nbsp;12000</td><td style="border-right: 1px solid black;">&nbsp;11750</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>6&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=7'>Multan</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=7">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>7&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=8'>RahimYarKhan</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=8">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>8&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=9'>Bhakhar</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=9">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;11500</td><td style="border-right: 1px solid black;">&nbsp;11600</td><td style="border-right: 1px solid black;">&nbsp;11550</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>9&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=13'>Sahiwal</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=13">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;10500</td><td style="border-right: 1px solid black;">&nbsp;10700</td><td style="border-right: 1px solid black;">&nbsp;10600</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>10&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=14'>Vehari</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=14">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>11&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=16'>Layyah</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=16">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;10500</td><td style="border-right: 1px solid black;">&nbsp;11700</td><td style="border-right: 1px solid black;">&nbsp;11100</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>12&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=17'>Gujrat</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=17">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>13&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=20'>BahawalPur</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=20">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;9500</td><td style="border-right: 1px solid black;">&nbsp;9600</td><td style="border-right: 1px solid black;">&nbsp;9550</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>14&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=21'>TTSingh</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=21">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;8500</td><td style="border-right: 1px solid black;">&nbsp;9500</td><td style="border-right: 1px solid black;">&nbsp;9000</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>15&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=24'>ArifWala</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=24">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>16&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=26'>PakPattan</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=26">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;11000</td><td style="border-right: 1px solid black;">&nbsp;11250</td><td style="border-right: 1px solid black;">&nbsp;11125</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>17&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=27'>BahawalNagar</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=27">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>18&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=28'>Lodhran</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=28">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;10700</td><td style="border-right: 1px solid black;">&nbsp;11500</td><td style="border-right: 1px solid black;">&nbsp;11100</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>19&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=31'>GujarKhan</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=31">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>20&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=32'>Mailsi</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=32">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>21&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=33'>Kahrorpacca</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=33">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>22&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=34'>Chichawatni</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=34">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;11375</td><td style="border-right: 1px solid black;">&nbsp;11500</td><td style="border-right: 1px solid black;">&nbsp;11438</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>23&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=35'>DunyaPur</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=35">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>24&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=36'>DGKHAN</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=36">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;9250</td><td style="border-right: 1px solid black;">&nbsp;9500</td><td style="border-right: 1px solid black;">&nbsp;9375</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>25&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=41'>MandiBahaudin</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=41">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>26&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=45'>Kamalia</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=45">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;11500</td><td style="border-right: 1px solid black;">&nbsp;11625</td><td style="border-right: 1px solid black;">&nbsp;11563</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>27&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=46'>PirMahal</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=46">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>28&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=48'>jalalpurpirwala</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=48">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>29&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=49'>Jahanian</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=49">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>30&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=52'>AhmadPurEast</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=52">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>31&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=56'>JamPur</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=56">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>32&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=57'>Sialkot</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=57">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>33&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=58'>Narowal</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=58">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>34&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=59'>Chakwal</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=59">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>35&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=60'>Jhelum</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=60">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>36&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=62'>Mianwali</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=62">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>37&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=63'>RajanPur</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=63">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>38&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=64'>Jhang</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=64">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>39&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=68'>KotAdu</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=68">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>40&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=70'>Nankana</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=70">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>41&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=71'>LiaqatPur</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=71">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>42&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=72'>ChackJhumra</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=72">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>43&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=73'>Summandri</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=73">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>44&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=74'>Tandlianwala</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=74">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>45&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=75'>Mamunkanjan</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=75">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>46&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=79'>Depalpur</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=79">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>47&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=81'>Chiniot</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=81">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>48&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=82'>Shorkot</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=82">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>49&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=84'>Kalurkot</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=84">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;11000</td><td style="border-right: 1px solid black;">&nbsp;11400</td><td style="border-right: 1px solid black;">&nbsp;11200</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>50&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=87'>TALAGANG</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=87">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>51&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=95'>Abdulhakim</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=95">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>52&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=97'>Sanglahill</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=97">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>53&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=99'>Hasanabdal</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=99">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>54&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=104'>Hafizabad</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=104">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>55&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=106'>Pindibhattian</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=106">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>56&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=116'>Kanganpur</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=116">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>57&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=117'>Khudian</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=117">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>58&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=123'>Sambrial</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=123">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>59&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=125'>Shakargarh</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=125">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>60&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=126'>Hazro</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=126">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>61&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=127'>Sraialamgir</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=127">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>62&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=131'>Jauharabad</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=131">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;10700</td><td style="border-right: 1px solid black;">&nbsp;11000</td><td style="border-right: 1px solid black;">&nbsp;10850</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>63&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=136'>Qadirpurrawan</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=136">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="background-color:#CCCCCC;font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>64&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=140'>Taunsasharif</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=140">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr><tr style="font-family:verdana;"><td style="border-right: 1px solid black;">&nbsp;<b>65&nbsp<a href='http://www.amis.pk/ViewPrices.aspx?searchType=1&commodityId=142'>kotmoman</a></b></td><td style="border-right: 1px solid black;">&nbsp; <a href="http://www.amis.pk/reports/CommodityChart.aspx?cmd=1&city=142">Graph</a></td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td style="border-right: 1px solid black;">&nbsp;-</td><td>&nbsp;-</td></tr></table></td>
+</tr>
+  </table>
+ 
+    </div>
+     
+    <div class="demobottom"></div>
+    
+    <h2><strong>1 Quintal = 100 Kg</strong></h2>
+    
+
+
+</div>
+      
+            </DIV> 
+                                 </DIV> 
+    </div>
+   
+ <link href="~/css/StyleSheet.css" rel="stylesheet" type="text/css" />
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) return;
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/sdk.js#xfbml=1&version=v2.8";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+<DIV class=md id=footer>
+    <a id="ctl00_ModuleFooter_HyperLink1" href="Default.aspx"><img id="ctl00_ModuleFooter_Image1" src="http://www.amis.pk/images/amis-urdu-new.png" longdesc="Default.aspx" /><br />
+    </a>
+    <br />
+<UL id=overture>
+  <LI class=first><A 
+  href="/Advertise.aspx">Advertisements/Tenders </A>
+  
+      <img id="ctl00_ModuleFooter_imagefooter" src="http://www.amis.pk/images/new38.gif" />
+  <LI><A 
+  href="/Search.aspx">Search 
+  Marketing</A> 
+  
+  
+  <LI><A 
+  href="/Contactus.aspx">Contact Us</A>
+  </LI>
+  <LI><A 
+  href="https://play.google.com/store/apps/details?id=pitb.gov.pk.amis">Download Android Application <img src="images/giphy.gif" style="height:2%;width:2%;" /> </A>
+  </LI>
+  </UL>
+<UL id=copyright>
+  <LI class=first>Copyright © 2006-2026 Agriculture Marketing Information Service(AMIS), Directorate of Agriculture (Economics & Marketing) Punjab, Lahore. All rights reserved.
+  
+  <A 
+  href="/Default.aspx">AMIS Home</A> 
+  
+  </UL>
+  like us<br/><div class="fb-like" data-href="https://www.facebook.com/Agriculture-Marketing-Information-Service-1681750532067935" data-width="50%" data-layout="standard" data-action="like" data-show-faces="true" data-share="true"></div>
+  
+
+
+</DIV>
+ 
+
+  
+
+                      
+    </DIV> </DIV>
+</DIV> 
+</DIV> 
+    </DIV>
+    </div>
+
+
+
+<script type="text/javascript">
+//<![CDATA[
+Sys.Application.add_init(function() {
+    $create(Sys.Extended.UI.PopupControlBehavior, {"dynamicServicePath":"/ViewPrices.aspx","id":"ctl00_cphPage_PopupControlExtender1","popupControlID":"ctl00_cphPage_Panel3","position":3}, null, null, $get("ctl00_cphPage_DateTextBox"));
+});
+//]]>
+</script>
+</form>
+
+</BODY></HTML>

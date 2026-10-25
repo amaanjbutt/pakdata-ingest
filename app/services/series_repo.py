@@ -73,38 +73,6 @@ def get_notes(series_id: str, dates: list[date]) -> list[dict]:
     return [{"date": r["obs_date"], "dims": r["dims"] or {}, "note": r["note"], "kind": r["kind"]} for r in rows]
 
 
-def search_series(q: str, module: str | None = None, limit: int = 20) -> list[dict]:
-    """Ranked catalog search for the ⌘K palette. Orders exact-id, then id-prefix,
-    then name, then description matches, so the most relevant series come first."""
-    params: dict[str, Any] = {
-        "q": q,
-        "like": f"%{q}%",
-        "prefix": f"{q}%",
-        "limit": limit,
-    }
-    clauses = ["is_active = true", "(id ILIKE %(like)s OR name ILIKE %(like)s OR description ILIKE %(like)s)"]
-    if module:
-        clauses.append("module = %(module)s")
-        params["module"] = module
-    sql = f"""
-        SELECT id, module, name, unit, frequency, source, tier
-        FROM series
-        WHERE {' AND '.join(clauses)}
-        ORDER BY
-            CASE
-                WHEN lower(id) = lower(%(q)s)   THEN 0
-                WHEN id ILIKE %(prefix)s        THEN 1
-                WHEN name ILIKE %(prefix)s      THEN 2
-                WHEN name ILIKE %(like)s        THEN 3
-                ELSE 4
-            END,
-            length(id),
-            name
-        LIMIT %(limit)s
-    """
-    return db.query(sql, params)
-
-
 def get_observations(
     series_id: str,
     date_from: date | None = None,

@@ -108,19 +108,29 @@ def delete_session(token: str | None) -> None:
 
 # ---- plan limits ------------------------------------------------------------
 
+# The free tier's monthly request allowance (2026-10-04; was a one-time allotment
+# from 2026-08-20). Resets at the start of each calendar month. Shown in /v1/plans
+# & /v1/usage. Keep in sync with the DEFAULT on users.credits_remaining in db/schema.sql.
+FREE_CREDITS = 500
+
+
 @dataclass(frozen=True)
 class PlanLimits:
     per_min: int
     per_day: int
     history_years: int | None  # None = full history
     allow_pro: bool
+    credits: int | None = None  # free tier: monthly allowance; paid: None (not metered)
 
 
-# Four public tiers (PRODUCT.md §7). `allow_pro` = access to tier='pro' series
-# (funds + alternate data); only Free is excluded. history_years=None = full
-# history to 1947.
+# Four public tiers (PRODUCT.md §7). Tiers are sold on value — history depth,
+# vintages, webhooks, and the right to display data in your own product
+# (Business) — not on request volume: the paid per-day numbers are generous
+# fair-use ceilings. history_years=None = full history to 1947. Free is metered by
+# a monthly allowance (`credits`); its per_day is only a burst ceiling.
 PLAN_LIMITS = {
-    "free": PlanLimits(per_min=10, per_day=100, history_years=1, allow_pro=False),
+    # Free reaches every dataset (funds + alternate included, decided 2026-09-25).
+    "free": PlanLimits(per_min=10, per_day=FREE_CREDITS, history_years=1, allow_pro=True, credits=FREE_CREDITS),
     "developer": PlanLimits(per_min=60, per_day=10_000, history_years=10, allow_pro=True),
     "pro": PlanLimits(per_min=300, per_day=100_000, history_years=None, allow_pro=True),
     "business": PlanLimits(per_min=600, per_day=500_000, history_years=None, allow_pro=True),
@@ -181,7 +191,7 @@ def authenticate(
     key = _resolve_key(x_api_key, api_key)
     row = db.query_one(
         """
-        SELECT u.id AS user_id, u.plan, u.subscription_status, u.period_end
+        SELECT u.id AS user_id, k.id AS key_id, u.plan, u.subscription_status, u.period_end
         FROM api_keys k JOIN users u ON u.id = k.user_id
         WHERE k.key_hash = %(h)s AND k.revoked_at IS NULL
         """,
@@ -189,6 +199,10 @@ def authenticate(
     )
     if not row:
         raise HTTPException(status_code=401, detail="invalid API key")
+    # who is calling, for the request log (app/services/reqlog) — set before any 402/429
+    request.state.user_id = str(row["user_id"])
+    request.state.key_id = str(row["key_id"]) if row.get("key_id") else ""
+    request.state.auth = "key"
     plan = resolve_plan(row["plan"])
     if plan is None:
         raise HTTPException(status_code=402, detail="no active subscription")
@@ -203,7 +217,55 @@ def authenticate(
 
     caller = Caller(user_id=str(row["user_id"]), plan=plan, limits=PLAN_LIMITS[plan])
     _enforce_rate_limit(request, caller)
+    # Credit-metered free tier: a rate-limit rejection (429) above never reaches
+    # here, so a throttled request costs no credit. Only a request we will actually
+    # serve consumes one.
+    _consume_credit(caller)
+    _touch_key_last_used(key)
     return caller
+
+
+def _consume_credit(caller: Caller) -> None:
+    """Consume one request credit for credit-metered (free) callers. Atomic — the
+    UPDATE only succeeds while a credit remains, so concurrent requests can't drive
+    the balance negative. The first request in a new calendar month refills the
+    allowance in the same statement. Paid plans (credits is None) are skipped.
+    Raises 402 `credits_exhausted` when this month's allowance is spent."""
+    if caller.limits.credits is None:
+        return
+    row = db.query_one(
+        """
+        UPDATE users SET
+            credits_remaining = CASE WHEN credits_period < date_trunc('month', now())::date
+                                     THEN %(allot)s - 1 ELSE credits_remaining - 1 END,
+            credits_period = date_trunc('month', now())::date
+        WHERE id = %(id)s
+          AND (credits_period < date_trunc('month', now())::date OR credits_remaining > 0)
+        RETURNING credits_remaining
+        """,
+        {"id": caller.user_id, "allot": caller.limits.credits},
+    )
+    if row is None:
+        exc = HTTPException(
+            status_code=402,
+            detail="free monthly credits used up — they reset on the 1st, or upgrade to a paid plan",
+        )
+        exc.error_code = "credits_exhausted"  # surfaced by the envelope handler
+        raise exc
+
+
+def _touch_key_last_used(key: str) -> None:
+    """Record when a key was last used, throttled to ~1 write/min/key so the hot
+    auth path isn't a write per request. Best-effort — never breaks auth."""
+    try:
+        db.execute(
+            "UPDATE api_keys SET last_used_at = now() "
+            "WHERE key_hash = %(h)s "
+            "AND (last_used_at IS NULL OR last_used_at < now() - interval '60 seconds')",
+            {"h": hash_key(key)},
+        )
+    except Exception:  # noqa: BLE001 — telemetry must never fail a request
+        pass
 
 
 def authenticate_session_or_key(
@@ -225,6 +287,8 @@ def authenticate_session_or_key(
         if not row:
             raise HTTPException(status_code=401, detail="invalid session")
         plan = resolve_plan(row["plan"]) or "free"
+        request.state.user_id = str(user_id)
+        request.state.auth = "session"
         return Caller(user_id=user_id, plan=plan, limits=PLAN_LIMITS[plan])
     # Fall back to API-key auth (rate-limited).
     return authenticate(request, x_api_key, api_key)

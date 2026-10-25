@@ -24,6 +24,9 @@ def status(response: Response):
     def build() -> dict:
         return {
             "success": True,
+            # Canonical headline counts (series/funds/AMCs/securities) — the site,
+            # docs and llms.txt all read these instead of hand-typed numbers.
+            "totals": series_repo.catalog_totals(),
             "modules": series_repo.module_status(),
             "datasets": series_repo.dataset_status(),
             "jobs": series_repo.job_status(),

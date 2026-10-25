@@ -31,4 +31,18 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["app", "app.api", "app.services", "ingestion", "ingestion.jobs", "db"]
+packages = ["app", "app.api", "app.billing", "app.services", "ingestion", "ingestion.jobs", "db", "scripts"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 130
+extend-exclude = ["scripts/archive"]
+
+[tool.ruff.lint]
+# Real-bug rules only (syntax errors, undefined names, unused imports, duplicate keys…). The codebase
+# has its own layout style, so the formatter is not enforced.
+select = ["E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+# pytest fixtures are imported into test modules and then shadowed by parameters
+"tests/*" = ["F811"]

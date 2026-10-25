@@ -1,6 +1,6 @@
 """Commodity price endpoints (Phase 3) over the PBS weekly SPI data.
 
-Ergonomic wrappers over the generic series store for the `commodity.*` series,
+Ergonomic wrappers over the generic series store for the `commodities.*` series,
 which carry a `{"city": <key>}` dimension. `city=national` is the derived
 unweighted mean across reporting cities.
 
@@ -22,14 +22,21 @@ from ingestion.commodities_config import load_cities, load_items
 
 router = APIRouter(prefix="/v1/commodities", tags=["commodities"])
 
-ITEM_PREFIX = "commodity."
+# Series ids were renamed `commodity.*` -> `commodities.*` (2026-07-30 id pass).
+# The old constant made BOTH documented forms 404, so accept all three spellings.
+ITEM_PREFIX = "commodities."
+_LEGACY_PREFIX = "commodity."
 MAX_LIMIT = 10000
 
 
 def _series_id(item: str) -> str:
-    """Accept either 'wheat_flour' or 'commodity.wheat_flour'."""
+    """Accept 'wheat_flour', 'commodities.wheat_flour' or legacy 'commodity.wheat_flour'."""
     item = item.strip()
-    return item if item.startswith(ITEM_PREFIX) else f"{ITEM_PREFIX}{item}"
+    if item.startswith(ITEM_PREFIX):
+        return item
+    if item.startswith(_LEGACY_PREFIX):
+        item = item[len(_LEGACY_PREFIX):]
+    return f"{ITEM_PREFIX}{item}"
 
 
 def _observations(rows: list[dict]) -> list[Observation]:

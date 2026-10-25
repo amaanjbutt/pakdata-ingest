@@ -13,10 +13,8 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-import httpx
 
 from app import db
-from app.config import settings
 from ingestion import alerting, storage
 
 log = logging.getLogger("pakdata.ingest")
@@ -350,9 +348,9 @@ class IngestionJob:
         except Exception as exc:
             msg = self.redact(str(exc))
             self._finish(run_id, "failed", 0, msg, raw_path)
-            # A transient Cloudflare 403 (MUFAP via WARP) self-heals: the host-side
-            # watchdog scripts/mufap_403_autoheal.sh rotates WARP + re-runs within
-            # ~20 min, and the staleness checker alerts if it ever fails to recover.
+            # A transient Cloudflare 403 (MUFAP) self-heals: mufap.yml retries on a fresh
+            # runner IP within the same slot, and the staleness checker alerts if it
+            # ever fails to recover.
             # So skip the immediate per-run email for a 403 — it's noise on a failure
             # that fixes itself. All other failures still alert right away.
             alerting.alert_unless_403(f"{self.name}: job failed", msg)

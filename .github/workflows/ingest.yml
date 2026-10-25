@@ -1,10 +1,13 @@
 name: ingest
 # EasyData + SBP ingestion from GitHub's Azure runners (which reach easydata.sbp.org.pk
-# and sbp.org.pk, unlike the VPS/WARP). Writes to the VPS Postgres over a restricted
-# SSH tunnel. MUFAP + PBS keep running on the VPS.
+# and sbp.org.pk, unlike the VPS). Writes to the VPS Postgres over a restricted SSH tunnel.
+# Source of truth: amaanjbutt/pakdata ops/gha-ingest/workflows/ — synced here on every merge.
 on:
   schedule:
-    - cron: '0 1,13 * * *'   # twice daily (~450 calls/day, well under EasyData 2000/day). Every-3h (8 runs) saturated the rolling 24h quota window -> 429s.
+    # 4 runs/day. The 07/19 slots were the amaanu01 mirror's until 2026-10-25 (retired:
+    # public repos get unlimited minutes). Every-3h (8 runs) saturated the rolling 24h
+    # quota window -> 429s, so keep it at 4.
+    - cron: '0 1,7,13,19 * * *'
   workflow_dispatch:
 concurrency:
   group: ingest

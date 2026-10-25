@@ -164,8 +164,8 @@ ABBREV = {
     "bord": "boards", "artcl": "articles", "artcle": "articles", "artic": "articles", "sew": "sewing",
     "move": "movements", "nit": "knitted", "vin": "vinyl", "dentst": "dentistry",
     "pains": "paints", "rbd": "RBD", "vanccines": "vaccines", "medici": "medicines", "ststic": "static",
-    "handlom": "handloom", "kn": "knitted", "trou": "trousers", "glov": "gloves", "mitten": "mittens",
-    "ruber": "rubber", "pcas": "PVC", "battries": "batteries", "turb": "turbines", "thre": "thread", "fab": "fabrics", "drin": "drinking",
+    "handlom": "handloom", "kn": "knitted", "glov": "gloves", "mitten": "mittens",
+    "pcas": "PVC", "battries": "batteries", "turb": "turbines", "thre": "thread", "fab": "fabrics", "drin": "drinking",
     "gla": "glasses", "polyestr": "polyesters", "filanent": "filament", "mileo": "mileo", "thi": "thick", "thik": "thick", "thic": "thick", "thn": "thin",
 }
 # Multi-character shorthands with punctuation, applied before word-level expansion.

@@ -13,6 +13,7 @@ import json
 from typing import Callable, TypeVar
 
 from app.security import get_redis
+from app.services import reqlog
 
 T = TypeVar("T")
 
@@ -25,6 +26,7 @@ def cached_json(key: str, ttl: int, producer: Callable[[], T]) -> T:
     try:
         r = get_redis()
         hit = r.get(rkey)
+        reqlog.mark_cache(hit is not None)
         if hit is not None:
             return json.loads(hit)
     except Exception:

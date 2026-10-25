@@ -37,6 +37,7 @@ def list_funds(
                 "fund_id": r["fund_id"], "name": r["name"], "amc": r["amc"],
                 "sector": r["sector"], "category": r["category"],
                 "inception_date": r["inception_date"], "trustee": r["trustee"],
+                "note": r["note"],
                 "latest_nav": {
                     "date": r["nav_date"], "nav": _fnum(r["nav"]),
                     "offer": _fnum(r["offer"]), "repurchase": _fnum(r["repurchase"]),
@@ -48,6 +49,36 @@ def list_funds(
 
     key = f"funds:{amc}:{category}:{sector}:{q}:{limit}"
     return cache.cached_json(key, 300, build)
+
+
+@router.get("/screener")
+def funds_screener(caller: Caller = Depends(authenticate)):
+    """Ranked, one-call snapshot of every active fund for the Fund Screener tool:
+    latest NAV, trailing returns (YTD / 3M=d90 / 1Y=d365), TER (YTD), rating and
+    benchmark. One aggregate query (no per-fund fan-out); cached an hour. Powers
+    the ungated `/tools/fund-screener` page (fetched server-side with the SSR key)."""
+
+    def build() -> dict:
+        rows = series_repo.fund_screener()
+        data = [
+            {
+                "fund_id": r["fund_id"], "name": r["name"], "amc": r["amc"],
+                "category": r["category"], "sector": r["sector"],
+                "rating": r["rating"], "benchmark": r["benchmark"],
+                "nav": {"date": r["nav_date"], "value": _fnum(r["nav"])} if r["nav_date"] else None,
+                "returns": {
+                    "as_of": r["returns_date"],
+                    "ytd": _fnum(r["ytd"]), "m3": _fnum(r["d90"]), "y1": _fnum(r["d365"]),
+                } if r["returns_date"] else None,
+                "ter_ytd": _fnum(r["ter_ytd"]),
+                "ter_as_of": r["expenses_date"],
+                "note": r["note"],
+            }
+            for r in rows
+        ]
+        return {"success": True, "data": data, "count": len(data)}
+
+    return cache.cached_json("funds_screener:v1", 3600, build)
 
 
 @router.get("/{fund_id}")
@@ -62,6 +93,7 @@ def get_fund(fund_id: int, caller: Caller = Depends(authenticate)):
             "fund_id": f["fund_id"], "name": f["name"], "amc": f["amc"],
             "sector": f["sector"], "category": f["category"],
             "inception_date": f["inception_date"], "trustee": f["trustee"],
+            "note": f.get("note"),
         },
         "latest_nav": {
             "date": latest[0]["obs_date"], "nav": _fnum(latest[0]["nav"]),
@@ -99,6 +131,25 @@ def fund_returns(
         ],
         "count": len(rows),
     }
+
+
+@router.get("/{fund_id}/analytics")
+def fund_analytics(fund_id: int, caller: Caller = Depends(authenticate)):
+    """Derived performance analytics computed from the deep NAV history: trailing
+    total returns (1m…5y, YTD, since inception), annualized (CAGR) 3y/5y returns,
+    since-inception CAGR, annualized volatility, and max drawdown. Computed on the
+    full NAV series within your plan's history window."""
+    if not series_repo.get_fund(fund_id):
+        raise HTTPException(status_code=404, detail="unknown fund")
+    floor = history_floor(caller)
+
+    def build() -> dict:
+        from app.services.fund_analytics import compute_fund_analytics
+        rows = series_repo.fund_navs(fund_id, date_from=floor, date_to=None,
+                                     limit=50000, sort="asc")
+        return {"success": True, "fund_id": fund_id, **compute_fund_analytics(rows)}
+
+    return cache.cached_json(f"fund_analytics:{fund_id}:{floor}", 3600, build)
 
 
 @router.get("/{fund_id}/payouts")

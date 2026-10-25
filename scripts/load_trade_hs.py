@@ -9,6 +9,8 @@ database credentials never leave the box):
   # VPS:
   docker compose -f docker-compose.server.yml cp trade_hs.csv.gz api:/tmp/
   docker compose -f docker-compose.server.yml exec -T api python -m scripts.load_trade_hs load /tmp/trade_hs.csv.gz [--commit]
+  # recompute the readable names (ingestion/trade_names) for every stored code:
+  docker compose -f docker-compose.server.yml exec -T api python -m scripts.load_trade_hs names [--commit]
 
 Files are applied in publication order, so a later file's (revised) figure for a year wins.
 """
@@ -91,17 +93,35 @@ def _csv(rows) -> str:
     return b.getvalue()
 
 
+_CODE_COLS = ("code", "classification", "description", "unit", "first_fy", "last_fy",
+              "display_name", "short_name", "hs_heading", "unit_clean")
+
+
+def with_names(codes) -> list[tuple]:
+    """Append ingestion/trade_names' readable fields to (code, cl, desc, unit, fy0, fy1) rows."""
+    from ingestion.trade_names import REF_DIR, clean, reference_available
+
+    if not reference_available():
+        raise SystemExit(f"HS/SITC reference files missing in {REF_DIR} (data/reference/H*.json, S3.json)")
+    out = []
+    for c in codes:
+        n = clean(c[0], c[1], c[2], c[3])
+        out.append(tuple(c) + (n["display_name"], n["short_name"], n["hs_heading"], n["unit_clean"]))
+    return out
+
+
 def copy_in(codes, data, chunk: int = 50_000) -> int:
     """Upsert codes then rows. `data` may be any iterable (streamed in chunks, so a 3M-row load
     never sits in memory at once)."""
     from app import db
 
+    cols = ", ".join(_CODE_COLS)
     with db.connection() as conn:
         with conn.cursor() as cur:
             cur.execute("CREATE TEMP TABLE _hs (LIKE trade_hs) ON COMMIT DROP")
-            cur.execute("CREATE TEMP TABLE _hc (LIKE trade_hs_codes) ON COMMIT DROP")
-            with cur.copy("COPY _hc FROM STDIN WITH (FORMAT csv, NULL '')") as cp:
-                cp.write(_csv(codes))
+            cur.execute(f"CREATE TEMP TABLE _hc ON COMMIT DROP AS SELECT {cols} FROM trade_hs_codes LIMIT 0")
+            with cur.copy(f"COPY _hc ({cols}) FROM STDIN WITH (FORMAT csv, NULL '')") as cp:
+                cp.write(_csv(with_names(codes)))
             with cur.copy("COPY _hs (flow, code, fy, country, quantity, value_pkr_th) FROM STDIN "
                           "WITH (FORMAT csv, NULL '')") as cp:
                 buf: list = []
@@ -112,18 +132,49 @@ def copy_in(codes, data, chunk: int = 50_000) -> int:
                         buf = []
                 if buf:
                     cp.write(_csv(buf))
-            cur.execute("""INSERT INTO trade_hs_codes SELECT * FROM _hc
+            cur.execute(f"""INSERT INTO trade_hs_codes ({cols}) SELECT {cols} FROM _hc
                            ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description,
                              unit = COALESCE(NULLIF(EXCLUDED.unit, ''), trade_hs_codes.unit),
                              classification = EXCLUDED.classification,
                              first_fy = LEAST(trade_hs_codes.first_fy, EXCLUDED.first_fy),
-                             last_fy = GREATEST(trade_hs_codes.last_fy, EXCLUDED.last_fy)""")
+                             last_fy = GREATEST(trade_hs_codes.last_fy, EXCLUDED.last_fy),
+                             display_name = EXCLUDED.display_name, short_name = EXCLUDED.short_name,
+                             hs_heading = EXCLUDED.hs_heading,
+                             unit_clean = COALESCE(EXCLUDED.unit_clean, trade_hs_codes.unit_clean)""")
             cur.execute("""INSERT INTO trade_hs SELECT * FROM _hs
                            ON CONFLICT (flow, code, fy, country) DO UPDATE SET
                              quantity = EXCLUDED.quantity, value_pkr_th = EXCLUDED.value_pkr_th
                            WHERE (trade_hs.quantity, trade_hs.value_pkr_th)
                                  IS DISTINCT FROM (EXCLUDED.quantity, EXCLUDED.value_pkr_th)""")
             return cur.rowcount
+
+
+def names(commit: bool, sample: int = 25) -> None:
+    """Recompute display_name / short_name / hs_heading / unit_clean for every stored code."""
+    from app import db
+
+    rows = db.query("SELECT code, classification, description, unit, first_fy, last_fy, display_name "
+                    "FROM trade_hs_codes ORDER BY code")
+    fresh = with_names([(r["code"], r["classification"], r["description"], r["unit"],
+                         r["first_fy"], r["last_fy"]) for r in rows])
+    changed = [f for f, r in zip(fresh, rows) if f[6] != r["display_name"]]
+    print(f"{len(rows)} codes, {len(changed)} display names change")
+    for f in changed[:sample]:
+        print(f"  {f[0]:9} {f[2][:34]:34} -> {f[6][:80]}")
+    if not commit:
+        print("dry run - re-run with --commit to write")
+        return
+    with db.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("CREATE TEMP TABLE _nm (code text, display_name text, short_name text, "
+                        "hs_heading text, unit_clean text) ON COMMIT DROP")
+            with cur.copy("COPY _nm FROM STDIN WITH (FORMAT csv, NULL '')") as cp:
+                cp.write(_csv([(f[0], f[6], f[7], f[8], f[9]) for f in fresh]))
+            cur.execute("""UPDATE trade_hs_codes c SET display_name = n.display_name,
+                             short_name = n.short_name, hs_heading = n.hs_heading,
+                             unit_clean = n.unit_clean
+                           FROM _nm n WHERE n.code = c.code""")
+            print(f"updated {cur.rowcount} codes")
 
 
 def _read(path: str):
@@ -178,6 +229,8 @@ if __name__ == "__main__":
         parse_dir(a[1], a[2])
     elif len(a) == 2 and a[0] == "load":
         load(a[1], "--commit" in sys.argv)
+    elif len(a) == 1 and a[0] == "names":
+        names("--commit" in sys.argv)
     else:
         print(__doc__)
         sys.exit(1)

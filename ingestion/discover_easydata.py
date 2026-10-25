@@ -139,7 +139,7 @@ def _series_suffix(series_code: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", suffix.lower()).strip("_")
 
 
-# Clean-id topic scheme (kept in sync with scripts/generate_id_map.py). Existing
+# Clean-id topic scheme (kept in sync with scripts/archive/generate_id_map.py). Existing
 # series keep their ids via append-only merge; this only shapes NEW series.
 _DATASET_TOPIC = {
     "PSAUTO": "auto", "ELECGEN": "power", "POLSALE": "fuel", "SALEFERT": "agriculture",

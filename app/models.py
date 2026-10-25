@@ -19,6 +19,7 @@ class SeriesMeta(BaseModel):
     first_date: date | None = None
     last_date: date | None = None
     tier: str = "basic"
+    derived: dict[str, Any] | None = None
 
 
 class Observation(BaseModel):
@@ -33,6 +34,12 @@ class ResponseMeta(BaseModel):
     frequency: str
     source: str
     last_updated: date | None = None
+    transform: str | None = None
+    # Set on the PakDataHub derived layer: {"method", "inputs", "version"}; null = official.
+    derived: dict[str, Any] | None = None
+    # Caveats on returned points ([{date, dims, note, kind}]), e.g. a value confirmed as
+    # published by the source but implausible; null when none apply.
+    notes: list[dict[str, Any]] | None = None
 
 
 class Pagination(BaseModel):
