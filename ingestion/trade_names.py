@@ -313,3 +313,62 @@ def clean(code: str, classification: str, description: str, unit: str | None) ->
              and not re.match(r"(?i)^other\b", heading))
     return {"display_name": heading if exact else short, "short_name": short,
             "hs_heading": heading, "unit_clean": u or None}
+
+
+# ---- page names and URL slugs (pakdatahub.com/trade/products/{code}-{slug}) -----------------
+
+def heading_text(code: str) -> str | None:
+    """Official text of an HS chapter (2 digits) or heading (4 digits), from the newest edition
+    that has it."""
+    for ed in HS_EDITIONS:
+        r = _ref(ed).get(code)
+        if r:
+            return _text(r)
+    return None
+
+
+def _cut(s: str, n: int) -> str:
+    """Cut at the last comma that fits, else the last space."""
+    if len(s) <= n:
+        return s
+    at = s.rfind(", ", 0, n)
+    if at <= 0:
+        at = s.rfind(" ", 0, n)
+    return (s[:at] if at > 0 else s[:n]).strip(" ,;")
+
+
+def short_title(text: str, max_len: int = 70) -> str:
+    """An official heading cut to a title: parentheticals dropped, the qualifier after ";" kept
+    when it fits ("Cotton; not carded or combed" -> "Cotton, not carded or combed"), long lists
+    cut at a comma. The full text stays on the page."""
+    t = text or ""
+    while True:
+        u = re.sub(r"\s*\([^()]*\)", "", t)
+        if u == t:
+            break
+        t = u
+    parts = [p.strip(" ,") for p in t.split(";") if p.strip(" ,")]
+    if not parts:
+        return (text or "").strip()
+    head = parts[0]
+    if len(parts) > 1:
+        both = f"{head}, {parts[1]}"
+        if len(both) <= max_len:
+            return both
+        if len(parts[1]) <= 30:
+            room = _cut(head, max_len - 2 - len(parts[1]))
+            if len(room) >= 20:
+                return f"{room}, {parts[1]}"
+    return _cut(head, max_len)
+
+
+def slugify(text: str, max_len: int = 60) -> str:
+    """URL words: lower case, "&" -> "and", apostrophes dropped, any other run of characters a
+    hyphen, cut at a word boundary within max_len. Mirrored by `slugify` in
+    frontend/src/lib/pakdata/trade.ts — change both together."""
+    s = re.sub(r"['\u2019]", "", (text or "").lower().replace("&", " and "))
+    s = re.sub(r"[^a-z0-9]+", "-", s).strip("-")
+    if len(s) > max_len:
+        at = s.rfind("-", 0, max_len + 1)
+        s = s[:at] if at > 0 else s[:max_len]
+    return s

@@ -38,7 +38,16 @@ def _hay(*parts) -> str:
     return " ".join(str(p) for p in parts if p).lower()
 
 
+def _fy_span(f0, f1) -> str:
+    return f"FY{f0 - 1}-{str(f0)[2:]} to FY{f1 - 1}-{str(f1)[2:]}" if f0 and f1 else ""
+
+
 def _rows_trade(cur) -> list[tuple]:
+    """Products (every code, plus each HS-4 heading) and partners, each opening its own page
+    (/trade/products/{code}-{slug}, /trade/partners/{slug})."""
+    from app.api.trade import heading_name, partner_path, product_path
+    from ingestion.trade_names import heading_text
+
     cur.execute("SELECT max(fy) FROM trade_hs")
     fy = (cur.fetchone() or [None])[0]
     cur.execute("""SELECT code, sum(value_pkr_th) FROM trade_hs
@@ -49,17 +58,29 @@ def _rows_trade(cur) -> list[tuple]:
                           hs_heading, first_fy, last_fy
                    FROM trade_hs_codes WHERE classification <> 'total'""")
     out = []
+    headings: dict[str, list] = {}
     for code, cl, name, short, raw, heading, f0, f1 in cur.fetchall():
         label = "HS" if cl == "HS" else "SITC"
-        years = f"FY{f0 - 1}-{str(f0)[2:]} to FY{f1 - 1}-{str(f1)[2:]}" if f0 and f1 else ""
-        out.append(("trade_product", code, name, f"Traded product · {label} {code} · {years}".strip(" ·"),
-                    f"/trade?code={code}", math.log10(1 + value.get(code, 0)),
+        out.append(("trade_product", code, name, f"Traded product · {label} {code} · {_fy_span(f0, f1)}".strip(" ·"),
+                    product_path(code, name), math.log10(1 + value.get(code, 0)),
                     _hay(name, short, raw, heading, code, "export import trade")))
+        if cl == "HS" and len(code) == 8:
+            h = headings.setdefault(code[:4], [f0, f1, 0.0])
+            if f0 and h[0]:
+                h[0] = min(h[0], f0)
+            if f1 and h[1]:
+                h[1] = max(h[1], f1)
+            h[2] += value.get(code, 0)
+    for hs4, (f0, f1, v) in headings.items():
+        name = heading_name(hs4)
+        out.append(("trade_product", hs4, name, f"Product heading · HS {hs4} · {_fy_span(f0, f1)}".strip(" ·"),
+                    product_path(hs4, name), math.log10(1 + v),
+                    _hay(name, heading_text(hs4), hs4, "export import trade heading")))
     cur.execute("SELECT country, min(fy), max(fy) FROM trade_hs WHERE country <> 'All countries' GROUP BY 1")
     for country, f0, f1 in cur.fetchall():
         out.append(("trade_country", country, f"Trade with {country}",
-                    f"Exports and imports by product, FY{f0 - 1}-{str(f0)[2:]} to FY{f1 - 1}-{str(f1)[2:]}",
-                    f"/trade?country={quote(country)}", 3.0, _hay(country, "trade exports imports partner")))
+                    f"Exports and imports by product, {_fy_span(f0, f1)}",
+                    partner_path(country), 3.0, _hay(country, "trade exports imports partner")))
     return out
 
 
