@@ -303,6 +303,8 @@ CREATE TABLE IF NOT EXISTS trade_hs (
 );
 CREATE INDEX IF NOT EXISTS idx_trade_hs_country ON trade_hs(country, flow, fy);
 CREATE INDEX IF NOT EXISTS idx_trade_hs_fy ON trade_hs(flow, fy) WHERE country = 'All countries';
+-- /v1/trade/partners ranks every partner for a year: an index-only scan instead of reading the table
+CREATE INDEX IF NOT EXISTS idx_trade_hs_flow_fy_cover ON trade_hs(flow, fy) INCLUDE (country, code, value_pkr_th);
 CREATE TABLE IF NOT EXISTS trade_hs_codes (
     code            TEXT PRIMARY KEY,
     classification  TEXT NOT NULL,            -- 'HS' | 'SITC' | 'total'

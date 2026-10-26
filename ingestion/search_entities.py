@@ -28,6 +28,12 @@ def _slug(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
 
 
+def amc_slug(name: str) -> str:
+    """/amcs/{slug} — the same rule as amcSlug in frontend/src/lib/pakdata/slugs.ts."""
+    s = re.sub(r"\b(limited|ltd|pvt|private)\b\.?", " ", name.lower().replace("&", " and "))
+    return re.sub(r"[^a-z0-9]+", "-", s).strip("-")
+
+
 def _hay(*parts) -> str:
     return " ".join(str(p) for p in parts if p).lower()
 
@@ -122,7 +128,7 @@ def _rows_funds(cur) -> list[tuple]:
         if amc:
             amcs[amc] = amcs.get(amc, 0) + 1
     for amc, n in amcs.items():
-        out.append(("amc", amc, amc, f"Asset manager · {n} funds", f"/amcs/{quote(amc, safe='')}", 3.5,
+        out.append(("amc", amc, amc, f"Asset manager · {n} funds", f"/amcs/{amc_slug(amc)}", 3.5,
                     _hay(amc, "asset management company amc")))
     cur.execute("SELECT code, security_type, coalesce(name, sbp_code, code) FROM securities")
     for code, typ, name in cur.fetchall():

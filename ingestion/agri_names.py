@@ -82,6 +82,25 @@ def market_district(display: str, region: str, raw_district: str | None = None) 
 
 _URDU = re.compile(r"[؀-ۿ]")
 
+# AMIS's own misspellings, fixed in the display name and the slug (the /mandi/{crop} URL); the raw
+# text stays in `name`. Old slugs keep resolving through SLUG_RENAMES (API) and the site's redirect.
+SPELLING = [(r"\bCocunut\b", "Coconut"), (r"\bSuger\b", "Sugar"), (r"\bDesahri\b", "Dusehri"),
+            (r"\bChounsa\b", "Chaunsa"), (r"\bAnwer Ratol\b|\bAnwertol\b", "Anwar Ratol"), (r"\bJaman\b", "Jamun"),
+            (r"\bPees\b", "Peas")]
+SLUG_RENAMES = {
+    "cocunut": "coconut", "suger_beet": "sugar_beet", "mango_desahri": "mango_dusehri",
+    "mango_chounsa": "mango_chaunsa", "mango_anwer_ratol": "mango_anwar_ratol", "jaman": "jamun",
+    "sindh_mango_anwertol": "sindh_mango_anwar_ratol", "sindh_pees_classic": "sindh_peas_classic",
+    "sindh_pees_grade_1": "sindh_peas_grade_1", "sindh_pees_grade_2": "sindh_peas_grade_2",
+    "sindh_pees_malir": "sindh_peas_malir", "sindh_pees_punjab": "sindh_peas_punjab",
+}
+
+
+def fix_spelling(text: str) -> str:
+    for pat, rep in SPELLING:
+        text = re.sub(pat, rep, text, flags=re.I)
+    return text
+
 
 def commodity_display(name: str) -> tuple[str, str | None]:
     """(English name, Urdu name or None). "Banana(DOZEN)" -> "Banana (per dozen)"."""
@@ -104,6 +123,7 @@ def commodity_display(name: str) -> tuple[str, str | None]:
     s = re.sub(r"\s+", " ", "".join(parts)).strip()
     s = re.sub(r"\(\s*DOZEN\s*\)", "(per dozen)", s, flags=re.I)
     s = re.sub(r"\((\d+)\s*Pcs\)", r"(\1 pieces)", s, flags=re.I)
+    s = fix_spelling(s)
     return (s[:1].upper() + s[1:]), urdu
 
 
@@ -136,18 +156,18 @@ SINDH_CROPS = {
     "green_chickpeas": "green_chickpeas", "green_onion": "green_onion",
     "lady_finger_grade_1": "lady_finger_okra", "lady_finger_grade_2": "lady_finger_okra",
     "moongray": "mongray", "sarson_saag": "mustard_greens",
-    "pees_classic": "peas", "pees_grade_1": "peas", "pees_grade_2": "peas", "pees_malir": "peas", "pees_punjab": "peas",
+    "peas_classic": "peas", "peas_grade_1": "peas", "peas_grade_2": "peas", "peas_malir": "peas", "peas_punjab": "peas",
     "radish": "radish", "mooli_grade_2": "radish",
     "spinach": "spinach", "sindhi_palak": "spinach", "palak_walaiti": "spinach", "english_palak": "spinach",
     "tinda_desi": "tinda_desi", "tinda_grade_2": "tinda_desi", "sindhi_tinda": "tinda_desi",
     "shaljum_with_leaves": "turnip", "shaljum_without_leaves": "turnip",
-    "chukandar_with_leaves": "suger_beet", "chukandar_without_leaves": "suger_beet",
+    "chukandar_with_leaves": "sugar_beet", "chukandar_without_leaves": "sugar_beet",
     "arvi": "cocoyam", "turai_grade_1": "zucchini", "turai_grade_2": "zucchini", "sindhi_turai": "zucchini",
     "english_turai": "zucchini",
     "date_aseel_grade_2": "dates_aseel", "date_irani_grade_1": "dates_irani", "date_irani_grade_2": "dates_irani",
     "guava_hyderabad": "guava", "guava_kusoor": "guava", "guava_larkana": "guava",
-    "jamun": "jaman", "bair": "jujube",
-    "mango_anwertol": "mango_anwer_ratol", "mango_chaunsa": "mango_chounsa", "mango_desi": "mango_desi",
+    "jamun": "jamun", "bair": "jujube",
+    "mango_anwar_ratol": "mango_anwar_ratol", "mango_chaunsa": "mango_chaunsa", "mango_desi": "mango_desi",
     "melon_grade_1": "melon", "melon_grade_2": "melon", "papaya_grade_1": "papaya", "papaya_grade_2": "papaya",
     "peach_grade_1": "peach", "peach_grade_2": "peach", "pear": "pear", "plum": "plum",
     "persimmon_amlok_grade_1": "persimmon", "persimmon_amlok_grade_2": "persimmon",
@@ -198,6 +218,7 @@ def apply_names(conn) -> dict:
         for cid, name, slug, prov in comms:
             if prov == "Sindh":
                 slug = "sindh_" + _slug(name)
+            slug = SLUG_RENAMES.get(slug, slug)
             disp, urdu = commodity_display(name)
             c_rows.append((disp, urdu, crop_key(slug, prov), slug, cid))
         cur.executemany("""UPDATE agri_commodities SET display_name = %s, urdu_name = %s, crop_key = %s,

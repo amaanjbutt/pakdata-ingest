@@ -26,6 +26,7 @@ from fastapi.responses import PlainTextResponse
 from app import db
 from app.security import Caller, authenticate, history_floor
 from app.services import cache
+from ingestion.agri_names import SLUG_RENAMES
 
 router = APIRouter(prefix="/v1/agri", tags=["agri"])
 MAX_LIMIT = 10000
@@ -34,6 +35,8 @@ MAX_LIMIT = 10000
 def _resolve(table: str, key: str, value: str) -> dict:
     col = "market_id" if table == "agri_markets" else "commodity_id"
     v = value.strip()
+    if table == "agri_commodities":
+        v = SLUG_RENAMES.get(v.lower(), v)  # slugs we corrected (cocunut -> coconut) keep working
     row = (db.query_one(f"SELECT * FROM {table} WHERE {col} = %s", (int(v),)) if v.isdigit()
            else db.query_one(f"SELECT * FROM {table} WHERE slug = %s OR lower(name) = lower(%s) "
                              "OR lower(display_name) = lower(%s) "
@@ -162,7 +165,8 @@ def latest(
     crop_ids: list[int] = []
     if crop and not c:
         sql = "SELECT commodity_id FROM agri_commodities WHERE coalesce(crop_key, slug) = %s"
-        args: tuple = (crop.strip().lower(),)
+        crop_slug = crop.strip().lower()
+        args: tuple = (SLUG_RENAMES.get(crop_slug, crop_slug),)
         if province:
             sql += " AND province = %s"
             args += (province.title(),)
@@ -193,7 +197,7 @@ def latest(
     if m:
         extra["market"] = {k: m.get(k) for k in ("market_id", "name", "slug", "province")}
     if crop_ids:
-        extra["crop"] = crop.strip().lower()
+        extra["crop"] = args[0]
         extra["sources"] = {p: SOURCES[p] for p in sorted({r["province"] for r in rows})}
     ref = c or m
     extra["source"] = SOURCES.get((ref.get("province") if ref else None) or "Punjab", SOURCES["Punjab"])

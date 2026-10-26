@@ -74,6 +74,22 @@ def test_slug_unit_and_major_markets():
     assert "lahore" in {slug(m) for m in MAJOR_MARKETS}
 
 
+def test_amis_misspellings_are_fixed_in_names_slugs_and_crops():
+    from ingestion.agri_names import SLUG_RENAMES, commodity_display, crop_key
+
+    assert commodity_display("Cocunut (ناریل)") == ("Coconut", "ناریل")
+    assert commodity_display("Mango, Anwertol")[0] == "Mango, Anwar Ratol"
+    assert commodity_display("Pees (Punjab)")[0] == "Peas (Punjab)"
+    assert SLUG_RENAMES["cocunut"] == "coconut" and SLUG_RENAMES["sindh_pees_punjab"] == "sindh_peas_punjab"
+    # Sindh varieties still land on the (renamed) Punjab crop pages
+    assert crop_key("sindh_peas_punjab", "Sindh") == "peas"
+    assert crop_key("sindh_chukandar_with_leaves", "Sindh") == "sugar_beet"
+    assert crop_key("sindh_mango_anwar_ratol", "Sindh") == "mango_anwar_ratol"
+    assert crop_key("sindh_jamun", "Sindh") == "jamun"
+    punjab_crops = set(SLUG_RENAMES.values())
+    assert {"coconut", "sugar_beet", "mango_dusehri", "mango_chaunsa", "jamun"} <= punjab_crops
+
+
 @pytest.fixture
 def agri_rows():
     from app import db

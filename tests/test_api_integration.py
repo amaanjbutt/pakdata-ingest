@@ -496,6 +496,43 @@ def test_trade_bad_flow_is_422(client, api_key):
     assert r.status_code == 422
 
 
+def test_trade_hs_partner_lookups_match_country_case_insensitively(client, api_key):
+    """partner-products / partner-history / hs resolve the partner to its stored spelling (an exact,
+    indexed match) — "china" still finds "China"."""
+    from app import db
+    from app.services import cache
+
+    def forget():
+        for k in ("hs_countries:export:v1", "partners:export:2099::50", "partner_products:export:2099:Zz-Testland:50",
+                  "partner_history:export:Zz-Testland:0"):
+            try:
+                cache.get_redis().delete("cache:v1:trade:" + k)
+            except Exception:
+                pass
+
+    forget()
+    rows = [("export", 2099, "TOTAL", "All countries", None, 100.0), ("export", 2099, "0101", "All countries", 1, 60.0),
+            ("export", 2099, "0101", "Zz-Testland", 1, 60.0), ("export", 2099, "0202", "Zz-Testland", 2, 40.0)]
+    db.execute("INSERT INTO trade_hs_codes (code, classification, description) VALUES ('0101','HS','LIVE HORSES'), "
+               "('0202','HS','FROZEN BEEF') ON CONFLICT (code) DO NOTHING")
+    with db.connection() as conn, conn.cursor() as cur:
+        cur.executemany("INSERT INTO trade_hs VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING", rows)
+    try:
+        r = client.get("/v1/trade/partner-products", params={"country": "zz-TESTLAND", "fy": 2099},
+                       headers=_auth(api_key))
+        assert r.status_code == 200
+        assert [x["code"] for x in r.json()["data"]] == ["0101", "0202"]
+        r = client.get("/v1/trade/partner-history", params={"country": "zz-testland"}, headers=_auth(api_key))
+        assert [x["value_pkr_th"] for x in r.json()["data"] if x["fy"] == 2099] == [100.0]
+        r = client.get("/v1/trade/hs", params={"code": "0101", "country": "ZZ-testland"}, headers=_auth(api_key))
+        assert [x["country"] for x in r.json()["data"]] == ["Zz-Testland"]
+        r = client.get("/v1/trade/partners", params={"fy": 2099}, headers=_auth(api_key))
+        assert [(x["country"], x["share_pct"]) for x in r.json()["data"]] == [("Zz-Testland", 100.0)]
+    finally:
+        db.execute("DELETE FROM trade_hs WHERE fy = 2099")
+        forget()
+
+
 def test_auctions_endpoint(client, api_key):
     r = client.get("/v1/fixed-income/auctions", params={"type": "tbill"},
                    headers=_auth(api_key))

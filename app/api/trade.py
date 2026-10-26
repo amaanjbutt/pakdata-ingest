@@ -87,6 +87,26 @@ def _check_fy(caller: Caller, fy: int) -> None:
         raise HTTPException(status_code=403, detail=f"your plan's history starts at FY{_fy_label(floor)}")
 
 
+# trade_hs only changes when a year is loaded (which busts `cache:v1:trade:*`), and the ranking
+# queries below aggregate tens of thousands of rows — cache them for hours, not seconds.
+_TTL = 6 * 3600
+
+
+def _countries(flow: str) -> list[dict]:
+    return cache.cached_json(f"trade:hs_countries:{flow}:v1", 3600, lambda: db.query(
+        "SELECT country, min(fy) AS first_fy, max(fy) AS last_fy FROM trade_hs "
+        "WHERE flow = %(flow)s AND country <> %(all)s GROUP BY 1 ORDER BY 1", {"flow": flow, "all": _ALL}))
+
+
+def _canon_country(flow: str, country: str) -> str:
+    """The stored spelling of a partner (matched case-insensitively), so queries can compare
+    `country = …` and use the country index — `lower(country) = …` scanned all 2.9M rows."""
+    c = country.strip()
+    if c.lower() == _ALL.lower():
+        return _ALL
+    return next((r["country"] for r in _countries(flow) if r["country"].lower() == c.lower()), c)
+
+
 def _code_filter(code: str | None, params: dict) -> str:
     if not code:
         return ""
@@ -144,8 +164,8 @@ def hs_flows(flow: str = Query("export", pattern=_HS_FLOWS),
     params: dict = {"flow": flow, "limit": limit, "all": _ALL}
     where = "t.flow = %(flow)s" + _code_filter(code, params)
     if country:
-        where += " AND lower(t.country) = lower(%(country)s)"
-        params["country"] = country.strip()
+        where += " AND t.country = %(country)s"
+        params["country"] = _canon_country(flow, country)
     lo = max(fy_from or 0, _fy_floor(caller) or 0) or None
     if lo:
         where += " AND t.fy >= %(lo)s"
@@ -180,12 +200,12 @@ def hs_partners(flow: str = Query("export", pattern=_HS_FLOWS),
     params: dict = {"flow": flow, "fy": fy, "limit": limit, "all": _ALL}
     where = "t.flow = %(flow)s AND t.fy = %(fy)s AND t.country <> %(all)s AND t.code <> 'TOTAL'"
     where += _code_filter(code, params)
-    rows = db.query(
+    rows = cache.cached_json(f"trade:partners:{flow}:{fy}:{params.get('code', '')}:{limit}", _TTL, lambda: db.query(
         f"""WITH {_FY_RATE},
             p AS (SELECT t.country, sum(t.value_pkr_th) AS v FROM trade_hs t WHERE {where} GROUP BY 1)
             SELECT p.country, p.v AS value_pkr_th, p.v / NULLIF(sum(p.v) OVER (), 0) * 100 AS share,
                    (SELECT pkr_per_usd FROM fy_rate WHERE fy = %(fy)s) AS rate
-            FROM p ORDER BY p.v DESC NULLS LAST LIMIT %(limit)s""", params)
+            FROM p ORDER BY p.v DESC NULLS LAST LIMIT %(limit)s""", params))
     return {"success": True, "fy": fy, "fiscal_year": _fy_label(fy), "data": [
         {"country": r["country"], "value_pkr_th": r["value_pkr_th"], "value_usd_th": _usd(r["value_pkr_th"], r["rate"]),
          "share_pct": round(float(r["share"]), 3) if r["share"] is not None else None} for r in rows],
@@ -197,14 +217,15 @@ def hs_partner_history(country: str = Query(...), flow: str = Query("export", pa
                        caller: Caller = Depends(authenticate)):
     """A partner country's total trade with Pakistan each fiscal year (sum over all products)."""
     floor = _fy_floor(caller)
-    rows = db.query(
+    name = _canon_country(flow, country)
+    rows = cache.cached_json(f"trade:partner_history:{flow}:{name}:{floor or 0}", _TTL, lambda: db.query(
         f"""WITH {_FY_RATE}
             SELECT t.fy, sum(t.value_pkr_th) AS value_pkr_th, max(r.pkr_per_usd) AS rate
             FROM trade_hs t LEFT JOIN fy_rate r ON r.fy = t.fy
-            WHERE t.flow = %(flow)s AND lower(t.country) = lower(%(country)s) AND t.code <> 'TOTAL'
+            WHERE t.flow = %(flow)s AND t.country = %(country)s AND t.code <> 'TOTAL'
               AND t.fy >= %(lo)s
             GROUP BY t.fy ORDER BY t.fy""",
-        {"flow": flow, "country": country.strip(), "lo": floor or 0})
+        {"flow": flow, "country": name, "lo": floor or 0}))
     return {"success": True, "country": country, "flow": flow, "data": [
         {"fy": r["fy"], "fiscal_year": _fy_label(r["fy"]), "value_pkr_th": r["value_pkr_th"],
          "value_usd_th": _usd(r["value_pkr_th"], r["rate"])} for r in rows], "count": len(rows)}
@@ -213,9 +234,7 @@ def hs_partner_history(country: str = Query(...), flow: str = Query("export", pa
 @router.get("/countries")
 def hs_countries(flow: str = Query("export", pattern=_HS_FLOWS)):
     """Partner countries in the customs record, with the years they appear. Public."""
-    rows = cache.cached_json(f"trade:hs_countries:{flow}:v1", 3600, lambda: db.query(
-        "SELECT country, min(fy) AS first_fy, max(fy) AS last_fy FROM trade_hs "
-        "WHERE flow = %(flow)s AND country <> %(all)s GROUP BY 1 ORDER BY 1", {"flow": flow, "all": _ALL}))
+    rows = _countries(flow)
     return {"success": True, "data": rows, "count": len(rows)}
 
 
@@ -225,15 +244,16 @@ def hs_partner_products(country: str = Query(...), flow: str = Query("export", p
                         caller: Caller = Depends(authenticate)):
     """A partner country's products ranked by value for a fiscal year."""
     _check_fy(caller, fy)
-    rows = db.query(
+    name = _canon_country(flow, country)
+    rows = cache.cached_json(f"trade:partner_products:{flow}:{fy}:{name}:{limit}", _TTL, lambda: db.query(
         f"""WITH {_FY_RATE}
             SELECT t.code, c.description, coalesce(c.display_name, c.description) AS name, c.hs_heading,
                    coalesce(c.unit_clean, nullif(c.unit, '')) AS unit, t.quantity, t.value_pkr_th, r.pkr_per_usd
             FROM trade_hs t JOIN trade_hs_codes c USING (code) LEFT JOIN fy_rate r ON r.fy = t.fy
-            WHERE t.flow = %(flow)s AND t.fy = %(fy)s AND lower(t.country) = lower(%(country)s)
+            WHERE t.flow = %(flow)s AND t.fy = %(fy)s AND t.country = %(country)s
               AND t.code <> 'TOTAL'
             ORDER BY t.value_pkr_th DESC NULLS LAST LIMIT %(limit)s""",
-        {"flow": flow, "fy": fy, "country": country.strip(), "limit": limit})
+        {"flow": flow, "fy": fy, "country": name, "limit": limit}))
     return {"success": True, "fy": fy, "fiscal_year": _fy_label(fy), "country": country, "data": [
         {"code": r["code"], "product": r["name"], "product_raw": r["description"], "hs_heading": r["hs_heading"],
          "unit": r["unit"] or None, "quantity": r["quantity"],
