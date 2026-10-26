@@ -35,6 +35,7 @@ from datetime import datetime
 import httpx
 
 from app.config import settings
+from ingestion.easydata_units import scaled_unit
 from ingestion.quota import QuotaCounter
 
 DATASET_META_URL = "https://easydata.sbp.org.pk/api/v1/dataset/{code}/meta"
@@ -410,16 +411,18 @@ def parse_dataset_meta(text: str, dataset_code: str) -> list[dict]:
             continue
         leaf = str(row[c_name]).strip()
         dataset_label = str(row[c_refdataset]).strip() if c_refdataset is not None else ""
+        # id derives from the raw LEAF (unchanged) so existing ids stay stable.
+        series_id = derive_id(dataset_code, series_code, leaf)
         entries.append(
             {
                 "easydata_key": series_code,
-                # id derives from the raw LEAF (unchanged) so existing ids stay stable.
-                "id": derive_id(dataset_code, series_code, leaf),
+                "id": series_id,
                 "module": "economic",
                 "name": compose_name(leaf, dataset_label),
                 "description": compose_description(row[c_desc], leaf, dataset_label),
                 "reference_dataset": clean_dataset_label(dataset_label),
-                "unit": map_unit(row[c_unit], leaf),
+                # EasyData names the currency, not the scale: verified datasets carry SBP's scale
+                "unit": scaled_unit(dataset_code, series_id, map_unit(row[c_unit], leaf)),
                 "frequency": map_frequency(row[c_freq]),
                 "source": "SBP",
                 "tier": "basic",

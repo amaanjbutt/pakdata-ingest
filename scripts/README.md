@@ -21,7 +21,7 @@ GitHub Actions in the public ingestion repo, or on the PC (`docker compose run -
 | `refresh_easydata_metadata.py` | GHA `refresh-meta.yml` | Re-fetch EasyData dataset metas into `series_meta_staging` (names/descriptions) |
 | `disambiguate_series_names.py` | api container | Make active series names unique after a metadata swap (dry run, then `--commit`) |
 | `set_easydata_bounds.py` | api container | Learn validation bounds for EasyData series from their history (idempotent) |
-| `apply_easydata_units.py` | api container | Write the SBP-verified dataset scales (`ingestion/easydata_units.py`) to `series.unit`; dry run, `--commit` backs up first |
+| `apply_easydata_units.py` | api container | Write the SBP-verified dataset scales (`ingestion/easydata_units.py`) to `series.unit` and rescale the merge-spliced history in `ingestion/easydata_splices.csv`; dry run, `--commit` backs up first |
 | `harvest_dataset_codes.py` | PC (Playwright) | Rebuild `ingestion/dataset_codes.json` from the EasyData portal tree |
 | `check_repo.py` | CI | Consistency checks: every job registered, scheduled or monitored, workflows only run registered jobs |
 | `backup.sh`, `backup_loop.sh` | `backup` container | Nightly `pg_dump` + verified scratch restore |
