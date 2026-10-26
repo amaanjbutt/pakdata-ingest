@@ -305,6 +305,15 @@ CREATE INDEX IF NOT EXISTS idx_trade_hs_country ON trade_hs(country, flow, fy);
 CREATE INDEX IF NOT EXISTS idx_trade_hs_fy ON trade_hs(flow, fy) WHERE country = 'All countries';
 -- /v1/trade/partners ranks every partner for a year: an index-only scan instead of reading the table
 CREATE INDEX IF NOT EXISTS idx_trade_hs_flow_fy_cover ON trade_hs(flow, fy) INCLUDE (country, code, value_pkr_th);
+-- ISMO merit-order OCR cache: one row per office-order PDF, written by `scripts.ocr_merit_orders --db`
+-- (GitHub Actions energy.yml) so a run only OCRs orders it hasn't seen; ismo_merit_order parses them all.
+CREATE TABLE IF NOT EXISTS ismo_merit_tokens (
+    url        TEXT PRIMARY KEY,
+    title      TEXT NOT NULL,
+    published  TEXT,                          -- ISMO's upload timestamp as listed ("2026-10-14 11:14:02")
+    pages      JSONB NOT NULL,                -- [{page, angle, width, height, tokens: [{box, text, score}]}]
+    ocr_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS trade_hs_codes (
     code            TEXT PRIMARY KEY,
     classification  TEXT NOT NULL,            -- 'HS' | 'SITC' | 'total'

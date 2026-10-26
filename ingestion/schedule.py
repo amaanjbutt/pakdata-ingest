@@ -96,9 +96,13 @@ SCHEDULES: list[Schedule] = [
     # new SBP Monthly Statistical Bulletin issue; a cheap no-op otherwise.
     Schedule("vintages_refresh", {"hour": 6, "minute": 15},
              expected_interval=timedelta(days=3)),
-    # PTA telecom indicators and SBP's Payment Systems / SME Finance reviews: PTA drops
-    # connections from this VPS and sbp.org.pk 403s it (both since ~Aug-2026), so they
-    # run on GitHub Actions (`publications.yml`) and are monitored below.
+    # SBP's Payment Systems / SME Finance reviews: sbp.org.pk 403s this VPS (since ~Aug-2026),
+    # so they run on GitHub Actions (`publications.yml`) and are monitored below.
+    # PTA telecom indicators: pta.gov.pk drops connections from this VPS and from GitHub's
+    # runners but answers Cloudflare's network, so the job fetches through the relay Worker
+    # (ops/relay/; FETCH_RELAY_URL + FETCH_RELAY_KEY in .env). Monthly source; a daily run is
+    # ten small pages and reads `no_new_data` until PTA publishes the next month.
+    Schedule("pta_telecom", {"hour": 11, "minute": 20}, expected_interval=timedelta(days=40)),
 ]
 
 
@@ -116,8 +120,7 @@ MONITORED_EXTERNAL: list[Schedule] = [
     Schedule("pbs_cpi_groups", {}, expected_interval=timedelta(days=40)),
     Schedule("pbs_lsm", {}, expected_interval=timedelta(days=40)),
     Schedule("pbs_external_trade", {}, expected_interval=timedelta(days=40)),
-    # publications.yml (Mon + Thu): PTA monthly-ish, SBP reviews quarterly with a lag.
-    Schedule("pta_telecom", {}, expected_interval=timedelta(days=40)),
+    # publications.yml (Mon + Thu): SBP reviews, quarterly with a lag.
     Schedule("sbp_payment_systems", {}, expected_interval=timedelta(days=130)),
     Schedule("sbp_sme_finance", {}, expected_interval=timedelta(days=130)),
     # SBP Monthly Statistical Bulletin (publications.yml); a new issue roughly monthly.
@@ -138,6 +141,11 @@ MONITORED_EXTERNAL: list[Schedule] = [
     Schedule("mufap_debt_trades", {}, expected_interval=timedelta(days=7)),
     Schedule("mufap_tfc_valuations", {}, expected_interval=timedelta(days=7)),
     Schedule("mufap_fund_portfolio", {}, expected_interval=timedelta(days=10)),
+    # ISMO (energy.yml, daily): ismo.gov.pk answers GitHub's runners (and lately the VPS); the
+    # merit orders are scanned tables that need OCR, which the api image doesn't ship. Monthly
+    # market workbooks; a new merit order every one to two weeks.
+    Schedule("ismo_power", {}, expected_interval=timedelta(days=45)),
+    Schedule("ismo_merit_order", {}, expected_interval=timedelta(days=30)),
 ]
 
 
@@ -146,8 +154,7 @@ MONITORED_EXTERNAL: list[Schedule] = [
 # the records inside the api container (docs/ingestion.md). Not scheduled, not monitored.
 WORKSTATION: frozenset[str] = frozenset({
     "nepra_generation", "pbs_census_2023", "pbs_census_history", "pbs_economic_census",
-    "pbs_agri_census", "pbs_lfs", "pbs_hies", "pbs_pslm", "pbs_trade_hs", "ismo_power",
-    "ismo_merit_order",
+    "pbs_agri_census", "pbs_lfs", "pbs_hies", "pbs_pslm", "pbs_trade_hs",
 })
 
 

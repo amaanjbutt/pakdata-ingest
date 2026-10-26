@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import os
 import time
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 from app.config import settings
 
@@ -50,6 +50,22 @@ def _parse_map(raw: str) -> list[tuple[str, str]]:
 
 
 _PROXY_MAP = _parse_map(os.getenv("INGEST_PROXY_MAP", ""))
+
+# Relay (ops/relay/, a Cloudflare Worker): hosts that drop connections from every datacenter we have
+# but answer Cloudflare's network — pta.gov.pk since Aug-2026 — are fetched through it when
+# FETCH_RELAY_URL + FETCH_RELAY_KEY are set (VPS .env). FETCH_RELAY_HOSTS: comma-separated host
+# substrings (default pta.gov.pk). Elsewhere (PC, tests) the variables are unset and hosts go direct.
+_RELAY = (os.getenv("FETCH_RELAY_URL") or "").rstrip("/") or None
+_RELAY_KEY = os.getenv("FETCH_RELAY_KEY") or ""
+_RELAY_HOSTS = [h.strip() for h in os.getenv("FETCH_RELAY_HOSTS", "pta.gov.pk").split(",") if h.strip()]
+
+
+def relayed(url: str, headers: dict | None = None) -> tuple[str, dict | None]:
+    """(url, headers) to actually request: the relay's URL + key for relayed hosts, else unchanged."""
+    host = urlsplit(url).hostname or ""
+    if not (_RELAY and _RELAY_KEY and any(h in host for h in _RELAY_HOSTS)):
+        return url, headers
+    return f"{_RELAY}/?url={quote(url, safe='')}", {**(headers or {}), "X-Relay-Key": _RELAY_KEY}
 
 
 # A persistent curl_cffi Session so the Cloudflare `cf_clearance` cookie (and the
@@ -101,6 +117,7 @@ def get(url: str, timeout: int = 30, headers: dict | None = None):
 
     Backs off on 429 (source rate-limit) rather than failing the run — official
     sources throttle bursty callers, so we honour Retry-After and retry twice."""
+    url, headers = relayed(url, headers)
     for attempt in range(4):
         if _HAVE_CFFI:
             resp = _sess().get(url, proxies=_proxies_for(url), timeout=timeout, headers=headers)

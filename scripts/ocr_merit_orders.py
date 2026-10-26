@@ -1,11 +1,13 @@
 """OCR ISMO's scanned Economic Merit Order PDFs into a token bundle for `ismo_merit_order`.
 
-The merit orders are photographed tables (one image per page, no text layer). This script runs
-on a workstation in a venv that has `rapidocr_onnxruntime` and `pymupdf` (the api image does not
-ship an OCR engine):
+The merit orders are photographed tables (one image per page, no text layer). OCR needs
+`rapidocr_onnxruntime` and `pymupdf`, which the api image does not ship, so this runs on GitHub
+Actions (`energy.yml`, from `backend/`):
 
-    python -m venv ocrenv && ocrenv/Scripts/pip install rapidocr_onnxruntime pymupdf curl_cffi pillow
-    ocrenv/Scripts/python scripts/ocr_merit_orders.py ismo_merit_tokens.json [--only-new]
+    pip install rapidocr_onnxruntime pymupdf
+    python -m scripts.ocr_merit_orders --db                      # OCR orders not yet in ismo_merit_tokens
+    python -m scripts.ocr_merit_orders --import-to-db FILE.json  # one-time: seed the table from a file cache
+    python -m scripts.ocr_merit_orders FILE.json [--only-new]    # workstation: file cache instead of the DB
 
 It lists every merit-order document through ISMO's documents API (public bearer token read from
 the site's own bundle, as the dashboard does), renders each table page at 200 dpi, straightens it
@@ -90,5 +92,45 @@ def main(out_path: str, only_new: bool = False) -> None:
     print(len(bundle["documents"]), "documents in", out_path)
 
 
+def main_db() -> None:
+    """OCR every merit order not yet in `ismo_merit_tokens`, one row per order (committed as it goes)."""
+    from psycopg.types.json import Jsonb
+    from rapidocr_onnxruntime import RapidOCR
+
+    from app import db
+
+    done = {r["url"] for r in db.query("SELECT url FROM ismo_merit_tokens")}
+    s, eng, n = _session(), RapidOCR(), 0
+    for d in sorted(list_documents(s), key=lambda d: d.get("date") or ""):
+        url = d["files"][0]
+        if url in done:
+            continue
+        content = s.get(url.replace(" ", "%20"), timeout=300).content
+        print(d.get("date", "")[:10], d["title"], flush=True)
+        db.execute("INSERT INTO ismo_merit_tokens (url, title, published, pages) VALUES (%s, %s, %s, %s) "
+                   "ON CONFLICT (url) DO NOTHING", (url, d["title"], d.get("date"), Jsonb(ocr_pdf(content, eng))))
+        n += 1
+    print(f"{n} new orders OCR'd; {len(done) + n} in ismo_merit_tokens")
+
+
+def import_to_db(path: str) -> None:
+    """Seed `ismo_merit_tokens` from a workstation token file (idempotent)."""
+    from psycopg.types.json import Jsonb
+
+    from app import db
+
+    docs = json.load(open(path, encoding="utf-8"))["documents"]
+    for d in docs:
+        db.execute("INSERT INTO ismo_merit_tokens (url, title, published, pages) VALUES (%s, %s, %s, %s) "
+                   "ON CONFLICT (url) DO NOTHING", (d["url"], d["title"], d.get("date"), Jsonb(d["pages"])))
+    print(len(docs), "orders in", path, "->",
+          db.query_one("SELECT count(*) AS n FROM ismo_merit_tokens")["n"], "rows in ismo_merit_tokens")
+
+
 if __name__ == "__main__":
-    main(sys.argv[1], "--only-new" in sys.argv)
+    if "--db" in sys.argv:
+        main_db()
+    elif "--import-to-db" in sys.argv:
+        import_to_db(sys.argv[sys.argv.index("--import-to-db") + 1])
+    else:
+        main(sys.argv[1], "--only-new" in sys.argv)

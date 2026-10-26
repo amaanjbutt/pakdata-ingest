@@ -1,13 +1,12 @@
 name: publications
-# PTA telecom indicators + SBP's Payment Systems Review and SME Finance Review from
-# GitHub's Azure runners. PTA drops connections from the VPS and sbp.org.pk 403s it
-# (both since ~Aug-2026 — the jobs read as "no new data" for two months). Same
-# restricted SSH tunnel to the VPS Postgres. Releases are monthly/quarterly; twice a
-# week is plenty.
+# SBP's Payment Systems Review, SME Finance Review and Monthly Statistical Bulletin from
+# GitHub's Azure runners: sbp.org.pk 403s the VPS (since ~Aug-2026 — the jobs read as "no new
+# data" for two months). Same restricted SSH tunnel to the VPS Postgres. Releases are
+# monthly/quarterly; twice a week is plenty.
 # GitHub drops scheduled runs under load (Mon 13-Oct-2026 never fired), so each day has a
 # second slot; a repeat run re-reads the same reports and writes nothing new.
-# PTA is not in the default list: pta.gov.pk answers only Pakistani IPs (6/6 GitHub runners
-# timed out on 14-Oct-2026); dispatch with jobs=pta_telecom to try anyway.
+# PTA is not here: pta.gov.pk times out from GitHub's runners (6/6 on 14-Oct-2026); the VPS
+# scheduler fetches it through the relay Worker (ops/relay/) instead.
 on:
   schedule:
     - cron: '30 5 * * 1,4'   # Mon + Thu 10:30 PKT

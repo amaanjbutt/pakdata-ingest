@@ -243,9 +243,17 @@ class IsmoMeritOrderJob(IngestionJob):
     source = "ISMO"
 
     def fetch(self, backfill: bool = False) -> list[FetchedFile]:
-        if not os.path.exists(TOKENS_PATH):
-            return []
-        return [FetchedFile("ismo_merit_tokens.json", open(TOKENS_PATH, "rb").read(), date.today())]
+        # The OCR output lives in `ismo_merit_tokens` (filled by `scripts.ocr_merit_orders --db` on
+        # GitHub Actions, energy.yml); a token file (ISMO_MERIT_TOKENS) still works on a workstation.
+        from app import db
+
+        rows = db.query("SELECT title, published AS date, url, pages FROM ismo_merit_tokens ORDER BY published, url")
+        if rows:
+            bundle = {"documents": [dict(r) for r in rows]}
+            return [FetchedFile("ismo_merit_tokens.json", json.dumps(bundle).encode("utf-8"), date.today())]
+        if os.path.exists(TOKENS_PATH):
+            return [FetchedFile("ismo_merit_tokens.json", open(TOKENS_PATH, "rb").read(), date.today())]
+        raise RuntimeError("no merit-order OCR tokens: ismo_merit_tokens is empty and there is no token file")
 
     def parse(self, f: FetchedFile) -> list[Record]:
         return to_records(json.loads(f.content))

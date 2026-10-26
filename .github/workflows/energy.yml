@@ -1,0 +1,67 @@
+name: energy
+# ISMO power-market data + the merit order from GitHub's Azure runners (ismo.gov.pk answers them;
+# 4/4 runners on 2026-10-26). Was a workstation job. The merit orders are scanned tables: new orders
+# are OCR'd here (rapidocr — the api image ships no OCR engine) into the ismo_merit_tokens table,
+# so each run only OCRs what it hasn't seen. Same restricted SSH tunnel to the VPS Postgres.
+# NEPRA is NOT here: its Cloudflare rule answers only Pakistani traffic (403 to every runner and to
+# the VPS), so nepra_generation stays a once-a-year PC run (ops/deploy/load_from_pc.sh).
+# ismo_power reads the monthly workbooks daily; on Mondays it also re-reads ISMO's documents
+# (hourly plant generation + system demand files, published per fiscal year).
+on:
+  schedule:
+    - cron: '40 3 * * *'     # daily 08:40 PKT
+  workflow_dispatch:
+    inputs:
+      backfill:
+        description: 'Re-read every ISMO workbook and document (ismo_power --backfill)'
+        type: boolean
+        default: false
+concurrency:
+  group: energy
+  cancel-in-progress: false
+jobs:
+  energy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: install deps (+ OCR engine)
+        run: pip install -q -r requirements.txt rapidocr_onnxruntime==1.4.4 pymupdf==1.28.2
+      - name: open DB tunnel to VPS
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_TUNNEL_KEY }}" > ~/.ssh/tunnel_key
+          chmod 600 ~/.ssh/tunnel_key
+          ok=""
+          for i in 1 2 3 4 5; do
+            if ssh -i ~/.ssh/tunnel_key -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes \
+                 -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 \
+                 -o TCPKeepAlive=yes -f -N -L 5432:127.0.0.1:5432 root@${{ secrets.VPS_HOST }}; then
+              ok=1; echo "tunnel up (attempt $i)"; break
+            fi
+            echo "tunnel attempt $i failed; retrying in 20s"; sleep 20
+          done
+          [ -n "$ok" ] || { echo "tunnel failed after 5 attempts"; exit 1; }
+      - name: run jobs
+        env:
+          DATABASE_URL: postgresql://pakdata:${{ secrets.DB_PASSWORD }}@127.0.0.1:5432/pakdata
+          RAW_ARCHIVE_DIR: /tmp/raw
+        run: |
+          mkdir -p /tmp/raw
+          set +e
+          fail=0
+          backfill=""
+          if [ "${{ github.event.inputs.backfill }}" = "true" ] || [ "$(date -u +%u)" = 1 ]; then backfill="--backfill"; fi
+          echo "::group::ismo_power $backfill"
+          python -m ingestion.run ismo_power --force $backfill || fail=1
+          echo "::endgroup::"
+          echo "::group::merit-order OCR (new orders only)"
+          python -m scripts.ocr_merit_orders --db || fail=1
+          echo "::endgroup::"
+          echo "::group::ismo_merit_order"
+          python -m ingestion.run ismo_merit_order --force || fail=1
+          echo "::endgroup::"
+          exit $fail
