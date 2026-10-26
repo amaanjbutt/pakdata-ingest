@@ -83,3 +83,38 @@ def test_observations_are_month_ends():
 def test_garbage_raises():
     with pytest.raises(Exception):
         parse_cpi_groups_pdf(b"not a pdf")
+
+
+# ---- months after the cumulative files come from the monthly CPI reviews ----------------
+REVIEW_FIXTURE = os.path.join(FIX, "fixtures", "pbs_cpi_review_2026_08.pdf")
+
+
+def _review_recs():
+    from ingestion.jobs.pbs_cpi_groups import parse_review_groups
+
+    with open(REVIEW_FIXTURE, "rb") as fh:
+        return parse_review_groups(fh.read())
+
+
+def test_review_annexures_give_every_group_for_the_review_month():
+    recs = _review_recs()
+    assert {r.series_id for r in recs} == set(ALL_SERIES)  # 13 groups x urban + rural
+    assert {r.obs_date for r in recs} == {date(2026, 8, 31)}
+    by = {r.series_id: r.value for r in recs}
+    # values as printed in Annexure A/B of PBS's August 2026 review (and re-printed in
+    # September's "Aug 26" column)
+    assert by["cpi.urban.general"] == 296.24
+    assert by["cpi.urban.food"] == 311.32
+    assert by["cpi.urban.housing"] == 273.36
+    assert by["cpi.rural.general"] == 306.92
+
+
+def test_job_takes_only_months_after_each_cumulative_file():
+    from ingestion.framework import FetchedFile
+    from ingestion.jobs.pbs_cpi_groups import PbsCpiGroupsJob
+
+    job = PbsCpiGroupsJob()
+    job._file_last = {"urban": date(2026, 8, 31), "rural": date(2026, 6, 30)}  # urban file already has Aug
+    with open(REVIEW_FIXTURE, "rb") as fh:
+        recs = job.parse(FetchedFile(filename="cpi_review_2026_08.pdf", content=fh.read(), when=date.today()))
+    assert recs and all(r.series_id.startswith("cpi.rural.") for r in recs)  # one writer per point
