@@ -11,6 +11,16 @@ those rows to our series BY VALUE (labels and bases change over 20 years; values
 builds each point's chain of printed figures across issues and sources, and writes
 `observations.first_seen_at` + `observation_revisions` (tagged with the source).
 
+A row may instead name its point outright — a "pinned" row, for sources whose tables map to
+one series and one set of dims with no guesswork (WAPDA's river-flow tables):
+
+    {"label": "...", "series_id": "water.wapda.river_flow", "dims": {"site": "Tarbela", ...},
+     "scale": 1000, "values": {"2019-02-06": [17.3, 1], ...}}
+
+Pinned rows skip value matching, label families and the blip/outlier filters (they come from
+structured tables, not PDF text); `scale` turns the printed unit into ours; their points carry
+dims. Value-matched rows are untouched by them.
+
     python -m scripts.vintages_core apply  A.json [B.json ...] [--commit]
     python -m scripts.vintages_core candidates A.json [B.json ...] OUT.csv
 
@@ -329,6 +339,68 @@ def build_vintages(issues: list[dict], idx, current: dict[tuple[str, str], float
     return mapping, first_seen, [r[:4] for r in revisions]
 
 
+def split_pinned(issues: list[dict]) -> tuple[list[dict], list[dict]]:
+    """(issues with only their value-matched rows, issues with only their pinned rows); an
+    issue left without rows is dropped from that side. Pure."""
+    plain, pinned = [], []
+    for iss in issues:
+        a = [r for r in iss["rows"] if "series_id" not in r]
+        b = [r for r in iss["rows"] if "series_id" in r]
+        if a:
+            plain.append({**iss, "rows": a})
+        if b:
+            pinned.append({**iss, "rows": b})
+    return plain, pinned
+
+
+def dims_key(dims: dict | None) -> str:
+    return json.dumps(dims or {}, sort_keys=True)
+
+
+def same_print(a: tuple, b: tuple) -> bool:
+    """Two prints (pub, value, dp, scale, ...) of one pinned point show the same figure: within
+    half a unit of the coarser one (147.45 in a workbook and 147.5 on a web page agree; a
+    float-rounding comparison would call that a revision). Pure."""
+    dp = min(a[2], b[2])
+    return abs(a[1] - b[1]) <= 0.5 * 10 ** -dp * max(a[3], b[3]) * (1 + 1e-9)
+
+
+def build_pinned(issues: list[dict], current: dict[tuple[str, str, str], float], track: date):
+    """Pinned rows -> (first_seen {(sid, dims_key, date): pub_date},
+    revisions [(sid, dims_key, date, value, superseded_at, source)]). `current` is keyed like
+    first_seen. The chain rule of value-matched rows: each printed figure was current until the
+    next different one was published; a last print that differs from today's value is recorded
+    as superseded when our own tracking began. Pure."""
+    prints: dict[tuple[str, str, str], list[tuple]] = defaultdict(list)
+    for iss in issues:
+        src = iss.get("source", DEFAULT_SOURCE)
+        for row in iss["rows"]:
+            if "series_id" not in row:
+                continue
+            sid, dk = row["series_id"], dims_key(row.get("dims"))
+            scale = float(row.get("scale", 1.0))
+            for d, (pub, dp) in row["values"].items():
+                prints[(sid, dk, d)].append((iss["published"], pub * scale, dp, scale, src))
+    first_seen: dict[tuple[str, str, str], str] = {}
+    revisions: list[tuple[str, str, str, float, str, str]] = []
+    for key, pts in prints.items():
+        if key not in current:
+            continue  # point not in our data — nothing to date
+        pts.sort()
+        first_seen[key] = pts[0][0]
+        chain: list[tuple] = []
+        for p in pts:
+            if chain and same_print(chain[-1], p):
+                continue
+            chain.append(p)
+        for a, b in zip(chain, chain[1:]):
+            revisions.append((*key, a[1], b[0], a[4]))
+        last = chain[-1]
+        if not same_print(last, (None, current[key], 9, last[3])):
+            revisions.append((*key, last[1], track.isoformat(), last[4]))
+    return first_seen, revisions
+
+
 # ---- database side ---------------------------------------------------------------------
 
 def load_issues(paths: list[str]) -> list[dict]:
@@ -406,19 +478,47 @@ def _db_inputs(issues: list[dict]):
     return dates, freqs, obs, idx, current, index_sids
 
 
+def _pinned_current(issues: list[dict]) -> dict[tuple[str, str, str], float]:
+    from app import db
+
+    sids = sorted({r["series_id"] for i in issues for r in i["rows"]})
+    if not sids:
+        return {}
+    rows = db.query(
+        "SELECT series_id, obs_date, dims, value FROM observations "
+        "WHERE series_id = ANY(%(s)s) AND value IS NOT NULL",
+        {"s": sids},
+    )
+    return {(r["series_id"], dims_key(r["dims"]), r["obs_date"].isoformat()): float(r["value"]) for r in rows}
+
+
 def apply(paths: list[str], commit: bool = False) -> None:
     from app import db
     from app.services.series_repo import VINTAGE_TRACKING_START
 
-    issues = load_issues(paths)
-    sources = sorted({i["source"] for i in issues})
+    all_issues = load_issues(paths)
+    sources = sorted({i["source"] for i in all_issues})
+    issues, pinned = split_pinned(all_issues)
     explicit = explicit_map(load_specs())
-    dates, freqs, obs, idx, current, index_sids = _db_inputs(issues)
-    print(f"{len(issues)} issues from {sources} ({freqs}), periods {dates[0]}..{dates[-1]}")
-    print(f"{len(obs)} candidate observations")
-    mapping, first_seen, revisions, unmatched = build_vintages_detailed(
-        issues, idx, current, VINTAGE_TRACKING_START, index_sids=index_sids, explicit=explicit
-    )
+    if issues:
+        dates, freqs, obs, idx, current, index_sids = _db_inputs(issues)
+        print(f"{len(issues)} issues from {sorted({i['source'] for i in issues})} ({freqs}), "
+              f"periods {dates[0]}..{dates[-1]}")
+        print(f"{len(obs)} candidate observations")
+        mapping, first_seen, revisions, unmatched = build_vintages_detailed(
+            issues, idx, current, VINTAGE_TRACKING_START, index_sids=index_sids, explicit=explicit
+        )
+    else:
+        current, mapping, first_seen, revisions, unmatched = {}, {}, {}, [], []
+    pinned_first, pinned_revs = build_pinned(pinned, _pinned_current(pinned), VINTAGE_TRACKING_START)
+    if pinned:
+        per: dict[str, int] = defaultdict(int)
+        for r in pinned_revs:
+            per[r[0]] += 1
+        print(f"\npinned rows: {len(pinned)} issues from {sorted({i['source'] for i in pinned})}, "
+              f"{len(pinned_first)} points dated, {len(pinned_revs)} superseded values {dict(per)}")
+        for r in pinned_revs[:12]:
+            print("  revision", r)
 
     excluded = sorted(sid for sid, m in mapping.items() if m.get("excluded"))
     print(f"\nmapped {len(mapping) - len(excluded)} series:")
@@ -444,7 +544,7 @@ def apply(paths: list[str], commit: bool = False) -> None:
     for r in revisions:
         by_sid[r[0]] += 1
     print("\nrevisions per series:", dict(sorted(by_sid.items(), key=lambda kv: -kv[1])))
-    earliest = min(first_seen.values()) if first_seen else None
+    earliest = min([*first_seen.values(), *pinned_first.values()], default=None)
     print(f"earliest first print: {earliest}; unmatched rows: {len(unmatched)}")
     if not commit:
         print("\ndry run - re-run with --commit to write")
@@ -463,6 +563,9 @@ def apply(paths: list[str], commit: bool = False) -> None:
                 f"CREATE TABLE IF NOT EXISTS {BAK_TABLE} AS "
                 "SELECT series_id, obs_date, dims, first_seen_at FROM observations WHERE false"
             )
+            # the backup is probed once per dated point below: without an index that is a scan
+            # per point (80k WAPDA points took over ten minutes)
+            cur.execute(f"CREATE INDEX IF NOT EXISTS {BAK_TABLE}_key ON {BAK_TABLE} (series_id, obs_date)")
             # Full rebuild: drop every earlier backfilled revision, and put first_seen_at
             # back (from the backup) on every point an earlier run dated.
             cur.execute("DELETE FROM observation_revisions WHERE source IS NOT NULL")
@@ -471,26 +574,30 @@ def apply(paths: list[str], commit: bool = False) -> None:
                    FROM {BAK_TABLE} b
                    WHERE o.series_id = b.series_id AND o.obs_date = b.obs_date AND o.dims = b.dims"""
             )
+            # value-matched points have no dims; pinned points carry theirs
+            dated = [(sid, "{}", d, p) for (sid, d), p in first_seen.items()]
+            dated += [(sid, dk, d, p) for (sid, dk, d), p in pinned_first.items()]
+            revs = [(sid, "{}", d, v, sup, src) for sid, d, v, sup, src in revisions] + pinned_revs
             cur.executemany(
                 f"""INSERT INTO {BAK_TABLE} (series_id, obs_date, dims, first_seen_at)
                    SELECT series_id, obs_date, dims, first_seen_at FROM observations
-                   WHERE series_id = %s AND obs_date = %s AND dims = '{{}}'::jsonb
+                   WHERE series_id = %s AND obs_date = %s AND dims = %s::jsonb
                      AND NOT EXISTS (SELECT 1 FROM {BAK_TABLE} b
-                                     WHERE b.series_id = %s AND b.obs_date = %s)""",
-                [(sid, d, sid, d) for (sid, d) in first_seen],
+                                     WHERE b.series_id = %s AND b.obs_date = %s AND b.dims = %s::jsonb)""",
+                [(sid, d, dk, sid, d, dk) for sid, dk, d, _p in dated],
             )
             cur.executemany(
                 """UPDATE observations SET first_seen_at = %s::date
-                   WHERE series_id = %s AND obs_date = %s AND dims = '{}'::jsonb
+                   WHERE series_id = %s AND obs_date = %s AND dims = %s::jsonb
                      AND (first_seen_at IS NULL OR first_seen_at > %s::date)""",
-                [(p, sid, d, p) for (sid, d), p in first_seen.items()],
+                [(p, sid, d, dk, p) for sid, dk, d, p in dated],
             )
             cur.executemany(
                 """INSERT INTO observation_revisions (series_id, obs_date, dims, value, superseded_at, source)
-                   VALUES (%s, %s, '{}'::jsonb, %s, %s::date, %s)""",
-                [(sid, d, v, sup, src) for sid, d, v, sup, src in revisions],
+                   VALUES (%s, %s, %s::jsonb, %s, %s::date, %s)""",
+                [(sid, d, dk, v, sup, src) for sid, dk, d, v, sup, src in revs],
             )
-    print(f"\ncommitted: {len(first_seen)} first-seen dates, {len(revisions)} revisions (sources={sources})")
+    print(f"\ncommitted: {len(dated)} first-seen dates, {len(revs)} revisions (sources={sources})")
 
 
 # ---- seed: new series from a vintage document -------------------------------------------
@@ -502,7 +609,7 @@ def seed(paths: list[str], commit: bool = False, only: set[str] | None = None) -
     revisions (the rows are mapped explicitly, by label family)."""
     from app import db
 
-    issues = load_issues(paths)
+    issues = split_pinned(load_issues(paths))[0]  # seeded series come from value-matched rows
     specs = [s for s in load_specs() if not only or s["id"] in only]
     plan = []
     for sp in specs:
@@ -590,7 +697,7 @@ def candidates(paths: list[str], out_csv: str) -> None:
     from app import db
     from app.services.series_repo import VINTAGE_TRACKING_START
 
-    issues = load_issues(paths)
+    issues = split_pinned(load_issues(paths))[0]
     _dates, _freqs, _obs, idx, current, index_sids = _db_inputs(issues)
     _mapping, _fs, _revs, unmatched = build_vintages_detailed(
         issues, idx, current, VINTAGE_TRACKING_START, index_sids=index_sids,

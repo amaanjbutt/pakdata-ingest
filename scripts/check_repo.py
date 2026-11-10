@@ -22,7 +22,8 @@ BACKEND = Path(__file__).resolve().parent.parent
 ROOT = BACKEND.parent
 WORKFLOWS = ROOT / "ops" / "gha-ingest" / "workflows"
 # Tokens in workflows that look like job names but are helpers.
-NOT_JOBS = {"mufap_bundle", "mufap_fetch_bundle", "mufap_jobs_todo", "pta_probe", "ismo_merit_tokens"}
+NOT_JOBS = {"mufap_bundle", "mufap_fetch_bundle", "mufap_jobs_todo", "pta_probe", "ismo_merit_tokens",
+            "wapda_probe", "kpt_probe"}  # helpers, not jobs
 CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 SCAN = [("backend", "*.py"), ("backend", "*.sql"), ("frontend/src", "*.ts"), ("frontend/src", "*.tsx"),
         ("frontend/scripts", "*.mjs"), ("frontend/content", "*.md"), ("docs", "*.md"), ("ops", "*.yml"),

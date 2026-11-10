@@ -15,7 +15,7 @@ from typing import Any
 from app import db
 
 ENTITY_KINDS = ("trade_product", "trade_country", "district", "plant", "mandi_crop", "mandi_market",
-                "fund", "amc", "security")
+                "fund", "amc", "security", "river_site")
 KINDS = ("series",) + ENTITY_KINDS
 
 

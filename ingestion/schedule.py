@@ -73,6 +73,14 @@ SCHEDULES: list[Schedule] = [
              expected_interval=timedelta(days=3), stale_on_run=True),
     Schedule("pso_fuel_prices", {"hour": 19, "minute": 5},
              expected_interval=timedelta(days=3), stale_on_run=True),
+    # Port Qasim's daily shipping and cargo statement (pqa.gov.pk answers the VPS): the signed PDF
+    # as at 08:00 lands in the album during the morning; re-read the newest five twice a day.
+    Schedule("pqa_shipping", {"hour": 11, "minute": 10}, expected_interval=timedelta(days=3)),
+    Schedule("pqa_shipping", {"hour": 17, "minute": 10}, expected_interval=timedelta(days=3)),
+    # PQA's five-year port performance table (terminal × commodity, 000 t): rewritten about once a year,
+    # so a weekly look; quiet weeks are normal.
+    Schedule("pqa_port_performance", {"day_of_week": "mon", "hour": 11, "minute": 40},
+             expected_interval=timedelta(days=400), stale_on_run=True),
     Schedule("derive_indicators", {"hour": 9, "minute": 45},
              expected_interval=timedelta(days=3)),
     Schedule("derive_indicators", {"hour": 23, "minute": 30},
@@ -103,6 +111,10 @@ SCHEDULES: list[Schedule] = [
     # (ops/relay/; FETCH_RELAY_URL + FETCH_RELAY_KEY in .env). Monthly source; a daily run is
     # ten small pages and reads `no_new_data` until PTA publishes the next month.
     Schedule("pta_telecom", {"hour": 11, "minute": 20}, expected_interval=timedelta(days=40)),
+    # PMD Flood Forecasting Division daily flood bulletin (ffd.pmd.gov.pk answers the VPS): issued
+    # ~11:00 PKT from 15 June to mid-October; the run re-reads the newest three bulletins, so it
+    # stays healthy (unchanged rows) between seasons too.
+    Schedule("ffd_river_flows", {"hour": 12, "minute": 50}, expected_interval=timedelta(days=3)),
 ]
 
 
@@ -146,6 +158,9 @@ MONITORED_EXTERNAL: list[Schedule] = [
     # market workbooks; a new merit order every one to two weeks.
     Schedule("ismo_power", {}, expected_interval=timedelta(days=45)),
     Schedule("ismo_merit_order", {}, expected_interval=timedelta(days=30)),
+    # Karachi Port's daily tonnage + container reports (ports.yml, twice a day): KPT's report host
+    # answers GitHub's runners but not the VPS; each report shows only the latest day.
+    Schedule("kpt_shipping", {}, expected_interval=timedelta(days=3)),
 ]
 
 
@@ -154,7 +169,9 @@ MONITORED_EXTERNAL: list[Schedule] = [
 # the records inside the api container (docs/ingestion.md). Not scheduled, not monitored.
 WORKSTATION: frozenset[str] = frozenset({
     "nepra_generation", "pbs_census_2023", "pbs_census_history", "pbs_economic_census",
-    "pbs_agri_census", "pbs_lfs", "pbs_hies", "pbs_pslm", "pbs_trade_hs",
+    "pbs_agri_census", "pbs_lfs", "pbs_hies", "pbs_pslm", "pbs_trade_hs", "kpt_tonnage_history",
+    # WAPDA's river-flow workbook: frozen since 20 Dec 2024, and wapda.gov.pk times out from the VPS
+    "wapda_river_flows",
 })
 
 

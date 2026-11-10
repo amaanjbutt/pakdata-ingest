@@ -1,0 +1,48 @@
+name: ports
+# Karachi Port Trust's daily cargo (tonnage) and container (TEU) reports from GitHub's Azure runners.
+# KPT's report host antares.kpt.gov.pk:90 answers the runners (6/6 on 2026-10-31) and Cloudflare, but
+# times out from the VPS; kpt.gov.pk itself answers neither (kpt_probe.yml). Each report shows only the
+# latest day — there is no archive — so the job runs twice a day and stores what it sees; the second run
+# records any figures KPT restated. Port Qasim (pqa_shipping) runs on the VPS scheduler, not here.
+# Same restricted SSH tunnel to the VPS Postgres as the other workflows.
+on:
+  schedule:
+    - cron: '30 5 * * *'     # daily 10:30 PKT
+    - cron: '30 12 * * *'    # daily 17:30 PKT
+  workflow_dispatch:
+concurrency:
+  group: ports
+  cancel-in-progress: false
+jobs:
+  kpt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: install deps
+        run: pip install -q -r requirements.txt
+      - name: open DB tunnel to VPS
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_TUNNEL_KEY }}" > ~/.ssh/tunnel_key
+          chmod 600 ~/.ssh/tunnel_key
+          ok=""
+          for i in 1 2 3 4 5; do
+            if ssh -i ~/.ssh/tunnel_key -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes \
+                 -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 \
+                 -o TCPKeepAlive=yes -f -N -L 5432:127.0.0.1:5432 root@${{ secrets.VPS_HOST }}; then
+              ok=1; echo "tunnel up (attempt $i)"; break
+            fi
+            echo "tunnel attempt $i failed; retrying in 20s"; sleep 20
+          done
+          [ -n "$ok" ] || { echo "tunnel failed after 5 attempts"; exit 1; }
+      - name: kpt_shipping
+        env:
+          DATABASE_URL: postgresql://pakdata:${{ secrets.DB_PASSWORD }}@127.0.0.1:5432/pakdata
+          RAW_ARCHIVE_DIR: /tmp/raw
+        run: |
+          mkdir -p /tmp/raw
+          python -m ingestion.run kpt_shipping --force

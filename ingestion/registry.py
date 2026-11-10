@@ -14,6 +14,7 @@ from ingestion.jobs.derive_auctions import DeriveAuctionsJob
 from ingestion.jobs.derive_indicators import DeriveIndicatorsJob
 from ingestion.jobs.derive_kibor import DeriveKiborJob
 from ingestion.jobs.easydata_sync import EasyDataSyncJob
+from ingestion.jobs.ffd_river_flows import FfdRiverFlowsJob
 from ingestion.jobs.mufap_fund_navs import MufapFundNavsJob
 from ingestion.jobs.mufap_fund_returns import MufapFundReturnsJob
 from ingestion.jobs.mufap_debt_prices import MufapDebtPricesJob
@@ -39,6 +40,10 @@ from ingestion.jobs.pbs_lfs import PbsLfsJob
 from ingestion.jobs.pbs_lsm import PbsLsmJob
 from ingestion.jobs.pbs_spi_weekly import PbsSpiWeeklyJob
 from ingestion.jobs.pso_fuel_prices import PsoFuelPricesJob
+from ingestion.jobs.kpt_shipping import KptShippingJob
+from ingestion.jobs.kpt_tonnage_history import KptTonnageHistoryJob
+from ingestion.jobs.pqa_port_performance import PqaPortPerformanceJob
+from ingestion.jobs.pqa_shipping import PqaShippingJob
 from ingestion.jobs.pta_telecom import PtaTelecomJob
 from ingestion.jobs.sbp_auctions import SbpAuctionsJob
 from ingestion.jobs.sbp_kibor import SbpKiborJob
@@ -47,6 +52,7 @@ from ingestion.jobs.sbp_payment_systems import SbpPaymentSystemsJob
 from ingestion.jobs.sbp_policy_rate import SbpPolicyRateJob
 from ingestion.jobs.sbp_sme_finance import SbpSmeFinanceJob
 from ingestion.jobs.sindh_amis_prices import SindhAmisPricesJob
+from ingestion.jobs.wapda_river_flows import WapdaRiverFlowsJob
 
 JOBS: dict[str, type[IngestionJob]] = {
     SbpKiborJob.name: SbpKiborJob,
@@ -74,6 +80,11 @@ JOBS: dict[str, type[IngestionJob]] = {
     PbsLsmJob.name: PbsLsmJob,
     PbsCpiGroupsJob.name: PbsCpiGroupsJob,
     PtaTelecomJob.name: PtaTelecomJob,
+    FfdRiverFlowsJob.name: FfdRiverFlowsJob,
+    PqaShippingJob.name: PqaShippingJob,
+    PqaPortPerformanceJob.name: PqaPortPerformanceJob,
+    KptShippingJob.name: KptShippingJob,
+    KptTonnageHistoryJob.name: KptTonnageHistoryJob,  # one-off, from the PC (kpt.gov.pk)
     SbpPaymentSystemsJob.name: SbpPaymentSystemsJob,
     SbpSmeFinanceJob.name: SbpSmeFinanceJob,
     SbpMsbFetchJob.name: SbpMsbFetchJob,
@@ -92,4 +103,5 @@ JOBS: dict[str, type[IngestionJob]] = {
     PbsTradeHsJob.name: PbsTradeHsJob,
     PbsCensusHistoryJob.name: PbsCensusHistoryJob,
     PbsPslmJob.name: PbsPslmJob,
+    WapdaRiverFlowsJob.name: WapdaRiverFlowsJob,
 }

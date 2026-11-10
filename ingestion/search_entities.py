@@ -2,7 +2,7 @@
 
 `/v1/search?kinds=all` (and the site's ⌘K, /coverage and dashboard search) looks these up
 next to the series catalog: trade products and partner countries, districts, power plants,
-mandi crops and markets, mutual funds, AMCs and debt securities. Each row carries the page
+mandi crops and markets, river gauging sites, mutual funds, AMCs and debt securities. Each row carries the page
 it opens (`url`) and a `haystack` of every name it goes by (official text, PBS's abbreviation,
 Urdu names, plant aliases), trigram-indexed.
 
@@ -21,7 +21,7 @@ from app import db
 log = logging.getLogger(__name__)
 
 KINDS = ("trade_product", "trade_country", "district", "plant", "mandi_crop", "mandi_market",
-         "fund", "amc", "security")
+         "fund", "amc", "security", "river_site")
 
 
 def _slug(s: str) -> str:
@@ -114,6 +114,24 @@ def _rows_plants(cur) -> list[tuple]:
     return out
 
 
+def _rows_river_sites(cur) -> list[tuple]:
+    from ingestion.water_pk import SITES
+
+    cur.execute("""SELECT DISTINCT dims->>'site', series_id FROM observations
+                   WHERE series_id IN ('water.ffd.river_flow', 'water.wapda.river_flow')""")
+    series: dict[str, str] = {}
+    for site, sid in sorted(cur.fetchall(), key=lambda r: r[1] != "water.ffd.river_flow"):
+        series.setdefault(site, sid)  # the daily bulletin where it covers the site, else WAPDA's table
+    out = []
+    for s in SITES:
+        if s.name not in series:
+            continue
+        out.append(("river_site", s.name, f"{s.name} — {s.river} river flow", f"{s.kind.capitalize()} · {s.province}",
+                    f"/series/{series[s.name]}", 3.0,
+                    _hay(s.name, s.river, s.kind, *s.aliases, "river flow inflow outflow cusecs dam barrage water")))
+    return out
+
+
 def _rows_mandi(cur) -> list[tuple]:
     cur.execute("""SELECT coalesce(crop_key, slug), province, coalesce(display_name, name), name, urdu_name, category
                    FROM agri_commodities""")
@@ -160,7 +178,7 @@ def _rows_funds(cur) -> list[tuple]:
     return out
 
 
-BUILDERS = (_rows_trade, _rows_districts, _rows_plants, _rows_mandi, _rows_funds)
+BUILDERS = (_rows_trade, _rows_districts, _rows_plants, _rows_mandi, _rows_funds, _rows_river_sites)
 
 
 def refresh() -> dict:

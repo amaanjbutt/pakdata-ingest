@@ -14,6 +14,8 @@ the database:
 The parsed sources live in the database (`vintage_source_files`), the one place both
 sides can reach — never in the public ingestion repo. Load them once with
 `python -m ingestion.jobs.sbp_msb_vintages load <msb_2005_2026.json> <msb_na.json>`.
+Every source stored there goes into the rebuild — other publishers' vintage files too
+(`wapda_web.json`, scripts/vintages_wapda.py), loaded the same way.
 """
 from __future__ import annotations
 
@@ -146,12 +148,12 @@ class VintagesRefreshJob(IngestionJob):
                 return {"status": "no_new_data", "rows": 0}
             with tempfile.TemporaryDirectory() as tmp:
                 paths = {}
-                for name in (IND_SOURCE, NA_SOURCE):
+                for name in sorted(rows):  # every stored source: apply rebuilds them all
                     paths[name] = str(Path(tmp) / name)
                     Path(paths[name]).write_text(json.dumps(rows[name]["payload"]), encoding="utf-8")
                 try:
                     core.seed([paths[IND_SOURCE]], commit=True)
-                    core.apply([paths[IND_SOURCE], paths[NA_SOURCE]], commit=True)
+                    core.apply(list(paths.values()), commit=True)
                 except SystemExit as exc:  # apply refuses with sys.exit(msg)
                     raise RuntimeError(f"vintages apply refused: {exc}") from None
             # seed's upserts also trip the revision trigger (source NULL) for the bulletin

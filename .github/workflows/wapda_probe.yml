@@ -1,0 +1,24 @@
+name: wapda_probe
+# Is wapda.gov.pk reachable from GitHub's runners? Its river-flow workbook answers a Pakistani
+# residential IP and times out from the VPS (2026-10-31). Each matrix leg lands on a different
+# Azure IP. Read-only: two GETs, no DB, no secrets. Run it only if WAPDA starts updating the
+# workbook again (it has been frozen since 20 Dec 2024) — then a scheduled run needs a runner.
+on:
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        leg: [1, 2, 3, 4]
+    steps:
+      - name: probe
+        run: |
+          curl -s https://ifconfig.me/ip; echo " (runner IP)"
+          for u in https://wapda.gov.pk/river-flow/ https://wapda.gov.pk/wp-content/uploads/2024/12/GRAPH-DG-16-for-MAIL-2.xls ; do
+            printf '%s -> ' "$u"
+            curl -4 -s -o /dev/null -w '%{http_code} %{size_download}B %{time_total}s\n' --max-time 40 \
+              -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141 Safari/537.36' "$u" || echo "timeout"
+          done

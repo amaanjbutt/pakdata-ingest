@@ -6,7 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import (account, admin, agri, amcs, auth, billing, calendar, catalog,
-                     commodities, fixed_income, funds, regional, search, securities, series,
+                     commodities, fixed_income, funds, ports, regional, search, securities, series,
                      status, trade, usage, webhooks)
 
 app = FastAPI(
@@ -23,6 +23,7 @@ app.include_router(funds.router)
 app.include_router(amcs.router)
 app.include_router(securities.router)
 app.include_router(trade.router)
+app.include_router(ports.router)
 app.include_router(regional.router)
 app.include_router(series.router)
 app.include_router(status.router)

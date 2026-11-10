@@ -580,3 +580,49 @@ CREATE TABLE IF NOT EXISTS search_entities (
 );
 CREATE INDEX IF NOT EXISTS idx_search_entities_trgm ON search_entities USING gin (haystack gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_series_name_trgm ON series USING gin (lower(name) gin_trgm_ops);
+
+-- Ports: every ship in each daily port statement (ingestion/port_calls.py). PQA's "Daily Shipping and
+-- Cargo Statement" (berth / anchorage / expected / sailed) and Karachi Port's daily tonnage and container
+-- reports (berth / containers). One row per (port, statement date, section, ship, direction, commodity,
+-- seq): each statement is its own snapshot, so a manifest or balance restated from one day to the next is
+-- visible (the source's vintages). Raw publisher text in *_raw; readable names from ingestion/ports_pk.py.
+CREATE TABLE IF NOT EXISTS port_vessel_calls (
+    port            TEXT NOT NULL,              -- 'PQA' | 'KPT'
+    statement_date  DATE NOT NULL,              -- the statement's "as at" day
+    section         TEXT NOT NULL,              -- berth | anchorage | expected | sailed | containers
+    vessel          TEXT NOT NULL,              -- as printed, without the M.V-/M.T- prefix
+    call_ref        TEXT NOT NULL DEFAULT '',   -- PQA registration no. / KPT registration no.
+    direction       TEXT NOT NULL DEFAULT '',   -- import | export | '' (not stated)
+    commodity_raw   TEXT NOT NULL DEFAULT '',
+    seq             SMALLINT NOT NULL DEFAULT 0, -- two parcels of one commodity in one ship
+    commodity       TEXT,
+    unit            TEXT,                       -- metric ton | cubic metre | teu | units
+    berth_raw       TEXT,
+    terminal        TEXT,
+    agent_raw       TEXT,
+    agent           TEXT,
+    flag_raw        TEXT,
+    flag            TEXT,
+    port_raw        TEXT,                       -- loading port (anchorage) / last port (expected)
+    country         TEXT,
+    vessel_type     TEXT,
+    loa_m           NUMERIC,
+    draft_m         NUMERIC,
+    manifest        NUMERIC,                    -- manifest quantity (anchorage/expected: weight aboard)
+    handled_24h     NUMERIC,                    -- handled in the 24 hours to the statement time
+    handled_before  NUMERIC,
+    balance         NUMERIC,
+    berthed_at      TIMESTAMP,
+    arrived_on      DATE,
+    expected_at     TIMESTAMP,
+    departs_at      TIMESTAMP,                  -- cast-off / sailing time
+    checks_ok       BOOLEAN,                    -- manifest = last 24 h + previous + balance
+    details         JSONB NOT NULL DEFAULT '{}'::jsonb,
+    source_file     TEXT,
+    first_seen_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (port, statement_date, section, vessel, call_ref, direction, commodity_raw, seq)
+);
+CREATE INDEX IF NOT EXISTS idx_port_calls_day ON port_vessel_calls(port, statement_date DESC);
+CREATE INDEX IF NOT EXISTS idx_port_calls_vessel ON port_vessel_calls(lower(vessel), statement_date DESC);
+CREATE INDEX IF NOT EXISTS idx_port_calls_ref ON port_vessel_calls(port, call_ref) WHERE call_ref <> '';

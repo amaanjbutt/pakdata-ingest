@@ -199,6 +199,7 @@ REVISION_SOURCES = {
     None: "PakDataHub revision tracking",
     "sbp_msb": "SBP Monthly Statistical Bulletin",
     "sbp_msb_na": "SBP Monthly Statistical Bulletin (national accounts tables)",
+    "wapda_web": "WAPDA river-flow tables (earlier web copies, Internet Archive)",
 }
 
 

@@ -324,6 +324,8 @@ def _seed_commodities_catalog() -> None:
 # (id, module, name, unit, frequency, source, source_url, description, min_value, max_value).
 CATALOG_MODULES = [
     "ingestion.jobs.pso_fuel_prices",
+    "ingestion.jobs.ffd_river_flows",
+    "ingestion.jobs.wapda_river_flows",
     "ingestion.jobs.nepra_generation",
     "ingestion.jobs.pbs_census_2023",
     "ingestion.jobs.pbs_economic_census",
@@ -331,6 +333,9 @@ CATALOG_MODULES = [
     "ingestion.jobs.pbs_lfs",
     "ingestion.jobs.ismo_power",
     "ingestion.jobs.ismo_merit_order",
+    "ingestion.jobs.pqa_shipping",
+    "ingestion.jobs.pqa_port_performance",
+    "ingestion.jobs.kpt_shipping",
     "ingestion.jobs.pbs_census_history",
     "ingestion.jobs.pbs_pslm",
     "ingestion.jobs.pbs_hies",
