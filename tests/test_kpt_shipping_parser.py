@@ -105,6 +105,19 @@ def test_tonnage_report_history():
     assert recs[(teu, (("cargo", "all"), ("direction", "all"), ("level", "total")))][1] == 9000
 
 
+def test_tonnage_report_day_without_bulk_cargo():
+    from ingestion.jobs.kpt_tonnage_history import figures, to_records
+
+    with open(os.path.join(FIXTURES, "kpt_tonnage_report_2022-12-05.html"), encoding="utf-8") as fh:
+        nums = figures(fh.read())  # no "Bulk Cargo" rows that day: those figures are left out, not shifted
+    assert nums[0] is None and nums[1:5] == [0.009, 0.009, 0.014, 0.023] and nums[15:] == [0.001, 0.0]
+    recs = {tuple(sorted(r.dims.items())): r.value for r in to_records(date(2022, 12, 6), nums, monthly=False)
+            if r.series_id == "ports.karachi.cargo_handled"}
+    assert recs[(("direction", "import"), ("level", "total"))] == 23000
+    assert (("cargo", "bulk"), ("direction", "import"), ("level", "cargo_type")) not in recs
+    assert figures("<html>Service unavailable</html>") is None
+
+
 def test_container_report_teus_and_terminals():
     rows, recs = _parse("kpt_tues_2026-10-31.pdf", "kpt_tues.pdf")
     breeze = _ship(rows, "Seaspan Breeze", "export")

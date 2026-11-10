@@ -41,28 +41,53 @@ BLOCKS = ("import", "export", "all")
 KINDS = ("bulk", "general", "dry", "liquid", "total")
 
 
-def figures(page: str) -> list[float] | None:
-    """The report's 17 figures in order (5 imports, 5 exports, 5 both, TEUs in, TEUs out), or None. Pure."""
+_BLOCKS = {"imports / million tons": 0, "exports / million tons": 1, "total imports & exports / million tons": 2}
+_KINDS = {"bulk cargo": 0, "general cargo": 1, "total dry cargo": 2, "total liquid cargo": 3, "total cargo": 4}
+_NUMBER = re.compile(r"\d+(?:\.\d+)?")
+
+
+def figures(page: str) -> list[float | None] | None:
+    """The report's 17 figures in order (5 imports, 5 exports, 5 both, TEUs in, TEUs out), read by their
+    labels: KPT leaves out a cargo type's row on a day it handled none (no "Bulk Cargo" line), so that
+    figure is None. None for a page without the report (an error page). Pure."""
     t = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", page)
     t = html.unescape(re.sub(r"<[^>]+>", "\n", t))
     lines = [x.strip() for x in t.splitlines() if x.strip()]
     i = next((k for k, x in enumerate(lines) if x.startswith("From :")), None)
     if i is None:
         return None
-    nums = [float(x) for x in lines[i + 1:i + 80] if re.fullmatch(r"\d+(?:\.\d+)?", x)]
-    return nums[:17] if len(nums) >= 17 else None
+    out: list[float | None] = [None] * 17
+    block, teu = None, None
+    for k in range(i + 1, min(len(lines), i + 80)):
+        low = lines[k].lower()
+        if low.startswith("quick links"):
+            break
+        if low in _BLOCKS:
+            block, teu = _BLOCKS[low], None
+        elif low.startswith("total teu"):
+            block, teu = None, 15
+        elif teu is not None and _NUMBER.fullmatch(lines[k]) and teu <= 16:
+            out[teu] = float(lines[k])
+            teu += 1
+        elif block is not None and low in _KINDS and k + 1 < len(lines) and _NUMBER.fullmatch(lines[k + 1]):
+            out[block * 5 + _KINDS[low]] = float(lines[k + 1])
+    return out if any(v is not None for v in out) else None
 
 
-def to_records(when: date, nums: list[float], monthly: bool) -> list[Record]:
-    """One report (a day, dated `when` = D+1, or a month, dated its last day) -> records. Pure."""
+def to_records(when: date, nums: list[float | None], monthly: bool) -> list[Record]:
+    """One report (a day, dated `when` = D+1, or a month, dated its last day) -> records; a figure the
+    report leaves out writes nothing. Pure."""
     sid = "ports.karachi.cargo_handled_monthly" if monthly else "ports.karachi.cargo_handled"
     out: list[Record] = []
     for b, block in enumerate(BLOCKS):
         for k, kind in enumerate(KINDS):
-            v = round(nums[b * 5 + k] * 1e6)
+            if nums[b * 5 + k] is None:
+                continue
             dims = {"level": "total", "direction": block} if kind == "total" else \
                 {"level": "cargo_type", "direction": block, "cargo": kind}
-            out.append(Record(sid, when, float(v), dims))
+            out.append(Record(sid, when, float(round(nums[b * 5 + k] * 1e6)), dims))
+    if nums[15] is None or nums[16] is None:
+        return out
     teu_in, teu_out = round(nums[15] * 1e6), round(nums[16] * 1e6)
     for d, v in (("import", teu_in), ("export", teu_out), ("all", teu_in + teu_out)):
         if monthly:
@@ -106,7 +131,7 @@ class KptTonnageHistoryJob(IngestionJob):
             except RuntimeError:
                 missed.append(d.isoformat())
                 nums = None
-            if nums and any(nums):
+            if nums and any(nums):  # all zeros: the port was closed (Eid) or KPT hasn't entered the day
                 days[d.isoformat()] = nums
             d += timedelta(days=1)
             time.sleep(PAUSE_S)

@@ -892,10 +892,22 @@ class PqaShippingJob(PortCallsMixin, IngestionJob):
     name = "pqa_shipping"
     source = "PQA"
 
+    def _page(self, url: str) -> str:
+        """An album page; PQA's server stalls now and then (a 30 s timeout ended the first full backfill on
+        page ~100 of 247), so retry with a pause before giving up."""
+        for attempt in range(4):
+            try:
+                return self.http_get(url).decode("utf-8", "replace")
+            except Exception:  # noqa: BLE001
+                if attempt == 3:
+                    raise
+                time.sleep(20 * (attempt + 1))
+        raise AssertionError("unreachable")
+
     def fetch(self, backfill: bool = False) -> list[FetchedFile]:
         self._totals: dict[date, int | None] = {}
         self._days: dict[date, dict] = {}
-        first = self.http_get(ALBUM_URL).decode("utf-8", "replace")
+        first = self._page(ALBUM_URL)
         links = album_links(first)
         if not links:
             raise ValueError("no statements linked on the PQA album page")
@@ -903,7 +915,7 @@ class PqaShippingJob(PortCallsMixin, IngestionJob):
         if backfill:
             for p in range(2, last_page(first) + 1):
                 time.sleep(BACKFILL_PAUSE_S)
-                page = self.http_get(f"{ALBUM_URL}?page={p}").decode("utf-8", "replace")
+                page = self._page(f"{ALBUM_URL}?page={p}")
                 links += [u for u in album_links(page) if u not in links]
             # statements PQA has since taken out of the album (mostly June 2022 → February 2023)
             for item in recovered():
