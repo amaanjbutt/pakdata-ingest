@@ -158,6 +158,14 @@ MONITORED_EXTERNAL: list[Schedule] = [
     # market workbooks; a new merit order every one to two weeks.
     Schedule("ismo_power", {}, expected_interval=timedelta(days=45)),
     Schedule("ismo_merit_order", {}, expected_interval=timedelta(days=30)),
+    # FBR (customs.yml): www.fbr.gov.pk times out from the VPS and answers GitHub's runners. The
+    # ruling list is read every Monday (a new ruling every few days, but weeks can pass without
+    # one); the tariff on the first Monday of each month (a new edition each July).
+    Schedule("fbr_valuation_rulings", {}, expected_interval=timedelta(days=10), stale_on_run=True),
+    Schedule("fbr_customs_tariff", {}, expected_interval=timedelta(days=40), stale_on_run=True),
+    Schedule("fbr_customs_concessions", {}, expected_interval=timedelta(days=40), stale_on_run=True),
+    Schedule("fbr_regulatory_duty", {}, expected_interval=timedelta(days=40), stale_on_run=True),
+    Schedule("fbr_additional_customs_duty", {}, expected_interval=timedelta(days=40), stale_on_run=True),
     # Karachi Port's daily tonnage + container reports (ports.yml, twice a day): KPT's report host
     # answers GitHub's runners but not the VPS; each report shows only the latest day.
     Schedule("kpt_shipping", {}, expected_interval=timedelta(days=3)),

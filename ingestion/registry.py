@@ -14,6 +14,11 @@ from ingestion.jobs.derive_auctions import DeriveAuctionsJob
 from ingestion.jobs.derive_indicators import DeriveIndicatorsJob
 from ingestion.jobs.derive_kibor import DeriveKiborJob
 from ingestion.jobs.easydata_sync import EasyDataSyncJob
+from ingestion.jobs.fbr_additional_duty import FbrAdditionalCustomsDutyJob
+from ingestion.jobs.fbr_customs_concessions import FbrCustomsConcessionsJob
+from ingestion.jobs.fbr_customs_tariff import FbrCustomsTariffJob
+from ingestion.jobs.fbr_regulatory_duty import FbrRegulatoryDutyJob
+from ingestion.jobs.fbr_valuation_rulings import FbrValuationRulingsJob
 from ingestion.jobs.ffd_river_flows import FfdRiverFlowsJob
 from ingestion.jobs.mufap_fund_navs import MufapFundNavsJob
 from ingestion.jobs.mufap_fund_returns import MufapFundReturnsJob
@@ -104,4 +109,10 @@ JOBS: dict[str, type[IngestionJob]] = {
     PbsCensusHistoryJob.name: PbsCensusHistoryJob,
     PbsPslmJob.name: PbsPslmJob,
     WapdaRiverFlowsJob.name: WapdaRiverFlowsJob,
+    # FBR answers GitHub's runners, not the VPS (customs.yml).
+    FbrCustomsTariffJob.name: FbrCustomsTariffJob,
+    FbrCustomsConcessionsJob.name: FbrCustomsConcessionsJob,
+    FbrRegulatoryDutyJob.name: FbrRegulatoryDutyJob,
+    FbrAdditionalCustomsDutyJob.name: FbrAdditionalCustomsDutyJob,
+    FbrValuationRulingsJob.name: FbrValuationRulingsJob,
 }

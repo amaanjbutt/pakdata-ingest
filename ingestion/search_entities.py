@@ -44,7 +44,8 @@ def _fy_span(f0, f1) -> str:
 
 def _rows_trade(cur) -> list[tuple]:
     """Products (every code, plus each HS-4 heading) and partners, each opening its own page
-    (/trade/products/{code}-{slug}, /trade/partners/{slug})."""
+    (/trade/products/{code}-{slug}, /trade/partners/{slug}). A code in FBR's customs tariff is also
+    found by its dotted PCT code, its tariff wording and "customs duty" (the page shows its duty)."""
     from app.api.trade import heading_name, partner_path, product_path
     from ingestion.trade_names import heading_text
 
@@ -54,6 +55,14 @@ def _rows_trade(cur) -> list[tuple]:
                    WHERE fy >= %s AND country = 'All countries' AND code <> 'TOTAL' GROUP BY code""",
                 ((fy or 0) - 2,))
     value = {c: float(v or 0) for c, v in cur.fetchall()}
+    duty: dict[str, tuple] = {}
+    cur.execute("SELECT to_regclass('customs_tariff') IS NOT NULL")
+    if cur.fetchone()[0]:
+        cur.execute("""SELECT DISTINCT ON (t.code) t.code, t.description, d.rate_pct, d.rate_text, t.fy
+                       FROM customs_tariff t
+                       LEFT JOIN customs_tariff_duties d ON d.code = t.code AND d.fy = t.fy AND d.component = 'cd'
+                       ORDER BY t.code, t.fy DESC""")
+        duty = {c: (desc, pct, txt, fy) for c, desc, pct, txt, fy in cur.fetchall()}
     cur.execute("""SELECT code, classification, coalesce(display_name, description), short_name, description,
                           hs_heading, first_fy, last_fy
                    FROM trade_hs_codes WHERE classification <> 'total'""")
@@ -61,9 +70,15 @@ def _rows_trade(cur) -> list[tuple]:
     headings: dict[str, list] = {}
     for code, cl, name, short, raw, heading, f0, f1 in cur.fetchall():
         label = "HS" if cl == "HS" else "SITC"
-        out.append(("trade_product", code, name, f"Traded product · {label} {code} · {_fy_span(f0, f1)}".strip(" ·"),
-                    product_path(code, name), math.log10(1 + value.get(code, 0)),
-                    _hay(name, short, raw, heading, code, "export import trade")))
+        sub = f"Traded product · {label} {code} · {_fy_span(f0, f1)}".strip(" ·")
+        tariff = duty.get(code)
+        if tariff:
+            desc, pct, txt, fy = tariff
+            rate = f"{pct:g}%" if pct is not None else txt
+            sub += f" · customs duty {rate} (FY{fy - 1}-{str(fy)[2:]})" if rate else ""
+        out.append(("trade_product", code, name, sub, product_path(code, name), math.log10(1 + value.get(code, 0)),
+                    _hay(name, short, raw, heading, code, "export import trade",
+                         *((f"{code[:4]}.{code[4:]}", tariff[0], "customs duty tariff") if tariff else ()))))
         if cl == "HS" and len(code) == 8:
             h = headings.setdefault(code[:4], [f0, f1, 0.0])
             if f0 and h[0]:

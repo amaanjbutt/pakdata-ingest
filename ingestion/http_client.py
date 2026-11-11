@@ -141,14 +141,15 @@ def get(url: str, timeout: int = 30, headers: dict | None = None):
     return resp
 
 
-def post(url: str, json=None, timeout: int = 60):
-    """POST JSON returning a response with `.text` / `.json()` / `.status_code`."""
+def post(url: str, json=None, timeout: int = 60, data: dict | None = None, headers: dict | None = None):
+    """POST JSON (or a form, `data=`) returning a response with `.text` / `.json()` / `.status_code`."""
     for attempt in range(4):
         if _HAVE_CFFI:
-            resp = _sess().post(url, json=json, proxies=_proxies_for(url), timeout=timeout)
+            resp = _sess().post(url, json=json, data=data, headers=headers, proxies=_proxies_for(url), timeout=timeout)
         else:
             resp = httpx.post(
-                url, json=json, headers={"User-Agent": settings.user_agent}, timeout=timeout
+                url, json=json, data=data, headers={"User-Agent": settings.user_agent, **(headers or {})},
+                timeout=timeout
             )
             resp.raise_for_status()
             return resp

@@ -1,0 +1,84 @@
+name: customs
+# FBR customs data from GitHub's Azure runners: www.fbr.gov.pk and download1.fbr.gov.pk time out
+# from the VPS but answer the runners (4/4 on 2026-10-31, fbr_probe.yml). Same restricted SSH
+# tunnel to the VPS Postgres as the other ingestion workflows.
+#   fbr_valuation_rulings  every Monday: FBR's valuation-ruling list, then each new ruling's PDF
+#                          (its own text layer). Scans with no text, and text layers that yield no
+#                          values, are OCR'd here (rapidocr — the api image ships no OCR engine) into
+#                          customs_valuation_tokens, at most 120 a run, and parsed by the job's
+#                          second pass.
+#   fbr_customs_tariff     first Monday of the month: the two newest tariff editions (a new one
+#                          each July), then fbr_customs_concessions (the Fifth Schedule),
+#                          fbr_regulatory_duty and fbr_additional_customs_duty (the year's RD and
+#                          ACD SROs), all checked against the tariff's codes. backfill=true re-reads every edition,
+#                          FY2008-09 on, and every ruling.
+on:
+  schedule:
+    - cron: '20 4 * * 1'     # Mondays 09:20 PKT
+  workflow_dispatch:
+    inputs:
+      backfill:
+        description: 'Re-read every tariff edition and every valuation ruling (--backfill)'
+        type: boolean
+        default: false
+concurrency:
+  group: customs
+  cancel-in-progress: false
+jobs:
+  customs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: install deps (+ OCR engine)
+        run: pip install -q -r requirements.txt rapidocr_onnxruntime==1.4.4 pymupdf==1.28.2
+      - name: open DB tunnel to VPS
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_TUNNEL_KEY }}" > ~/.ssh/tunnel_key
+          chmod 600 ~/.ssh/tunnel_key
+          ok=""
+          for i in 1 2 3 4 5; do
+            if ssh -i ~/.ssh/tunnel_key -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes \
+                 -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 \
+                 -o TCPKeepAlive=yes -f -N -L 5432:127.0.0.1:5432 root@${{ secrets.VPS_HOST }}; then
+              ok=1; echo "tunnel up (attempt $i)"; break
+            fi
+            echo "tunnel attempt $i failed; retrying in 20s"; sleep 20
+          done
+          [ -n "$ok" ] || { echo "tunnel failed after 5 attempts"; exit 1; }
+      - name: run jobs
+        env:
+          DATABASE_URL: postgresql://pakdata:${{ secrets.DB_PASSWORD }}@127.0.0.1:5432/pakdata
+          RAW_ARCHIVE_DIR: /tmp/raw
+        run: |
+          mkdir -p /tmp/raw
+          set +e
+          fail=0
+          backfill=""
+          if [ "${{ github.event.inputs.backfill }}" = "true" ]; then backfill="--backfill"; fi
+          if [ -n "$backfill" ] || [ "$(date -u +%d)" -le 7 ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "::group::fbr_customs_tariff $backfill"
+            python -m ingestion.run fbr_customs_tariff --force $backfill || fail=1
+            echo "::endgroup::"
+            echo "::group::fbr_customs_concessions $backfill"
+            python -m ingestion.run fbr_customs_concessions --force $backfill || fail=1
+            echo "::endgroup::"
+            echo "::group::fbr_regulatory_duty + fbr_additional_customs_duty $backfill"
+            python -m ingestion.run fbr_regulatory_duty --force $backfill || fail=1
+            python -m ingestion.run fbr_additional_customs_duty --force $backfill || fail=1
+            echo "::endgroup::"
+          fi
+          echo "::group::fbr_valuation_rulings $backfill"
+          python -m ingestion.run fbr_valuation_rulings --force $backfill || fail=1
+          echo "::endgroup::"
+          echo "::group::OCR scanned rulings (120 a run)"
+          python -m scripts.ocr_valuation_rulings --db --limit 120 || fail=1
+          echo "::endgroup::"
+          echo "::group::fbr_valuation_rulings (parse what was OCR'd)"
+          python -m ingestion.run fbr_valuation_rulings --force || fail=1
+          echo "::endgroup::"
+          exit $fail

@@ -10,6 +10,10 @@
     GET /v1/trade/product/{code}?fy=                                 one product's page: history, partners, related
     GET /v1/trade/partner/{country}?fy=                              one partner's page: history, rank, products
     GET /v1/trade/pages                                              products + partners with a page (public)
+    GET /v1/trade/tariff?code=&fy=                                   FBR customs tariff: duties per code per year
+    GET /v1/trade/valuations?code=&q=&origin=&in_force=              FBR valuation rulings: values by item x origin
+    GET /v1/trade/valuation-rulings?q=&kind=&from=&to=               the rulings themselves
+    GET /v1/trade/concessions?code=&fy=                              Fifth Schedule concessionary duty per code
 """
 from __future__ import annotations
 
@@ -478,7 +482,10 @@ def _product_page(code: str, fy: int | None) -> dict | None:
     return {**page, "slug": ref["path"].rsplit("/", 1)[-1], "path": ref["path"], "indexable": ref["indexable"],
             "fy": year, "fiscal_year": _fy_label(year), "latest_fy": idx["latest_fy"],
             "recent": {"years": RECENT, "export_usd_th": ref["export_usd_th"], "import_usd_th": ref["import_usd_th"]},
-            "history": history, "partners": partners, "related": related}
+            "history": history, "partners": partners, "related": related,
+            "tariff": _duty_history(code),
+            "valuations": _valuation_rows(code, None, None, True, None, None, 25) if len(code) in (4, 8) else [],
+            "concessions": _concession_rows(code, None, latest_only=True, limit=20) if len(code) in (4, 8) else []}
 
 
 @router.get("/product/{code}")
@@ -494,12 +501,13 @@ def product_page(code: str,
         raise HTTPException(status_code=404, detail="give a 4-digit HS heading or a product code")
     if fy is not None:
         _check_fy(caller, fy)
-    data = cache.cached_json(f"trade:product_page:v1:{c}:{fy or 0}", _TTL, lambda: _product_page(c, fy))
+    data = cache.cached_json(f"trade:product_page:v2:{c}:{fy or 0}", _TTL, lambda: _product_page(c, fy))
     if data is None:
         raise HTTPException(status_code=404, detail=f"no product {c} in the customs record")
     floor = _fy_floor(caller)
     if floor:
         data["history"] = [h for h in data["history"] if h["fy"] >= floor]
+        data["tariff"] = [t for t in data.get("tariff") or [] if t["fy"] >= floor]
     return {"success": True, "data": data}
 
 
@@ -572,3 +580,236 @@ def trade_pages():
     thousand). Public."""
     data = cache.cached_json("trade:pages:v1", _TTL, _pages)
     return {"success": True, **data, "count": sum(len(v) for v in data["data"].values())}
+
+
+# ---- FBR customs tariff and valuation rulings (fbr_customs_tariff, fbr_valuation_rulings) ------
+
+_DUTY_NAMES = {"cd": "Customs duty", "rd_acd": "Regulatory / additional customs / anti-dumping duty",
+               "st": "Sales tax", "fed": "Federal excise duty", "wht": "Withholding income tax",
+               "concession": "Concessions and exemptions (SRO references)",
+               "rd": "Regulatory duty (the year's RD SRO)", "acd": "Additional customs duty (the year's ACD SRO)"}
+
+
+def _pct_filter(col: str, code: str, params: dict) -> str:
+    """An 8-digit PCT code (`01012100`, `0101.2100`) or a 2/4/6-digit prefix: a range the primary
+    key can use. Raises 422 otherwise."""
+    c = re.sub(r"[.\s*]", "", code.strip())
+    if re.fullmatch(r"\d{8}", c):
+        params["pct"] = c
+        return f" AND {col} = %(pct)s"
+    if re.fullmatch(r"\d{2}|\d{4}|\d{6}", c):
+        params.update(pct_lo=c.ljust(8, "0"), pct_hi=c.ljust(8, "9"))
+        return f" AND {col} >= %(pct_lo)s AND {col} <= %(pct_hi)s"
+    raise HTTPException(status_code=422, detail="code must be an 8-digit PCT code or a 2-, 4- or 6-digit prefix")
+
+
+def _dotted(code: str | None) -> str | None:
+    return f"{code[:4]}.{code[4:]}" if code and len(code) == 8 else code
+
+
+def _safe(fn):
+    """Empty until the customs tables and columns exist (a deploy that lands before the schema step)."""
+    from psycopg import errors
+
+    try:
+        return fn()
+    except (errors.UndefinedTable, errors.UndefinedColumn):
+        return []
+
+
+def _tariff_rows(where: str, params: dict) -> list[dict]:
+    return _safe(lambda: db.query(
+        f"""SELECT t.code, t.fy, t.description, t.context, t.unit, t.source_url,
+                   coalesce(jsonb_object_agg(d.component, jsonb_build_object('rate_pct', d.rate_pct, 'rate_text', d.rate_text, 'source', d.source))
+                            FILTER (WHERE d.component IS NOT NULL), '{{}}'::jsonb) AS duties
+            FROM customs_tariff t LEFT JOIN customs_tariff_duties d ON d.code = t.code AND d.fy = t.fy
+            WHERE true {where} GROUP BY t.code, t.fy ORDER BY t.code, t.fy""", params))
+
+
+def _tariff_out(r: dict) -> dict:
+    cd = (r["duties"] or {}).get("cd") or {}
+    return {"code": r["code"], "pct_code": _dotted(r["code"]), "fy": r["fy"], "fiscal_year": _fy_label(r["fy"]),
+            "in_force_from": date(r["fy"] - 1, 7, 1).isoformat(), "description": r["description"],
+            "context": r["context"], "unit": r["unit"], "customs_duty_pct": cd.get("rate_pct"),
+            "customs_duty_text": cd.get("rate_text"), "duties": r["duties"] or {}, "source_url": r["source_url"]}
+
+
+def _duty_history(code: str) -> list[dict]:
+    """The product page's duty history: a code's customs duty in every edition, or for an HS-4
+    heading the range of its codes' rates each year."""
+    if len(code) == 8:
+        def row(t: dict) -> dict:
+            d = t["duties"] or {}
+            return {**{k: t[k] for k in ("fy", "fiscal_year", "customs_duty_pct", "customs_duty_text", "description")},
+                    "rd_pct": (d.get("rd") or {}).get("rate_pct"), "rd_text": (d.get("rd") or {}).get("rate_text"),
+                    "acd_pct": (d.get("acd") or {}).get("rate_pct")}
+        return [row(t) for t in map(_tariff_out, _tariff_rows(" AND t.code = %(code)s", {"code": code}))]
+    if len(code) != 4:
+        return []
+    rows = _safe(lambda: db.query(
+        """SELECT t.fy, count(*) AS codes, min(d.rate_pct) AS lo, max(d.rate_pct) AS hi,
+                  count(*) FILTER (WHERE d.rate_pct IS NULL AND d.rate_text IS NOT NULL) AS specific
+           FROM customs_tariff t JOIN customs_tariff_duties d ON d.code = t.code AND d.fy = t.fy AND d.component = 'cd'
+           WHERE t.code >= %(lo)s AND t.code <= %(hi)s GROUP BY t.fy ORDER BY t.fy""",
+        {"lo": code + "0000", "hi": code + "9999"}))
+    return [{"fy": r["fy"], "fiscal_year": _fy_label(r["fy"]), "codes": r["codes"], "min_pct": _fnum(r["lo"]),
+             "max_pct": _fnum(r["hi"]), "specific": r["specific"]} for r in rows]
+
+
+@router.get("/tariff")
+def tariff(code: str = Query(..., description="8-digit PCT code (`01012100` or `0101.2100`), or a 2-, 4- or 6-digit prefix"),
+           fy: int | None = Query(None, ge=2009, le=2100, description="One edition (fiscal year end: 2027 = FY2026-27)"),
+           caller: Caller = Depends(authenticate)):
+    """FBR's Pakistan Customs Tariff for a code, every edition FY2008-09 on (each in force from 1
+    July): the line as printed, its heading and parent lines, and every duty component the
+    edition prints — `cd` (customs duty) always; FY2013-14 also `rd_acd`, `st`, `fed`, `wht`,
+    `concession` and `fta:<agreement>` rates. `rate_pct` is % ad valorem; a specific duty
+    ("Rs.10550/MT") is in `rate_text`."""
+    params: dict = {}
+    where = _pct_filter("t.code", code, params)
+    if fy is not None:
+        _check_fy(caller, fy)
+        params["fy"] = fy
+        where += " AND t.fy = %(fy)s"
+    floor = _fy_floor(caller)
+    if floor:
+        params["floor"] = floor
+        where += " AND t.fy >= %(floor)s"
+    key = re.sub(r"[^0-9]", "", code)
+    data = cache.cached_json(f"trade:tariff:v1:{key}:{fy or 0}:{floor or 0}", _TTL,
+                             lambda: [_tariff_out(r) for r in _tariff_rows(where, params)])
+    return {"success": True, "data": data, "count": len(data),
+            "meta": {"components": _DUTY_NAMES,
+                     "source": "FBR, Pakistan Customs Tariff (First Schedule to the Customs Act, 1969)"}}
+
+
+def _valuation_rows(code: str | None, q: str | None, origin: str | None, in_force: bool,
+                    date_from: date | None, date_to: date | None, limit: int) -> list[dict]:
+    params: dict = {"limit": limit}
+    where = ""
+    if code:
+        where += _pct_filter("v.pct_code", code, params)
+    if q:
+        params["q"] = f"%{q.strip()}%"
+        where += " AND (v.item ILIKE %(q)s OR r.title ILIKE %(q)s)"
+    if origin:
+        params["origin"] = f"%{origin.strip()}%"
+        where += " AND v.origin ILIKE %(origin)s"
+    if in_force:
+        where += " AND r.superseded_on IS NULL"
+    if date_from:
+        params["df"] = date_from
+        where += " AND coalesce(r.dated, r.listed_on) >= %(df)s"
+    if date_to:
+        params["dt"] = date_to
+        where += " AND coalesce(r.dated, r.listed_on) <= %(dt)s"
+    rows = _safe(lambda: db.query(
+        f"""SELECT r.ruling_id, r.number, r.kind, r.title, coalesce(r.dated, r.listed_on) AS issued_on, r.superseded_on,
+                   s.number AS superseded_by,
+                   r.pdf_url, v.line_no, v.item, v.pct_code, v.weboc_code, v.origin, v.value, v.currency, v.unit, v.basis
+            FROM customs_valuation_values v JOIN customs_valuation_rulings r USING (ruling_id)
+            LEFT JOIN customs_valuation_rulings s ON s.ruling_id = r.superseded_by
+            WHERE r.kind NOT IN ('withdrawal', 'classification') {where}
+            ORDER BY 5 DESC, v.ruling_id, v.line_no LIMIT %(limit)s""", params))
+    return [{"ruling_id": r["ruling_id"], "ruling": r["number"], "kind": r["kind"], "title": r["title"],
+             "issued_on": r["issued_on"], "superseded_on": r["superseded_on"], "superseded_by": r["superseded_by"],
+             "in_force": r["superseded_on"] is None, "item": r["item"], "pct_code": _dotted(r["pct_code"]),
+             "code": r["pct_code"], "weboc_code": r["weboc_code"], "origin": r["origin"], "value": _fnum(r["value"]),
+             "currency": r["currency"], "unit": r["unit"], "basis": r["basis"], "pdf_url": r["pdf_url"]} for r in rows]
+
+
+@router.get("/valuations")
+def valuations(code: str | None = Query(None, description="8-digit PCT code or a 2-, 4- or 6-digit prefix"),
+               q: str | None = Query(None, description="Words in the item or the ruling's title"),
+               origin: str | None = Query(None, description="Country of origin as printed (`China`, `Other Origins`)"),
+               in_force: bool = Query(False, description="Only values whose ruling has not been superseded"),
+               date_from: date | None = Query(None, alias="from", description="Rulings issued on or after"),
+               date_to: date | None = Query(None, alias="to", description="Rulings issued on or before"),
+               limit: int = Query(500, ge=1, le=5000),
+               caller: Caller = Depends(authenticate)):
+    """Customs values FBR's Directorate General of Customs Valuation set under section 25A: one
+    row per item x origin (x PCT / WeBOC code) per ruling, in force from the ruling's date until a
+    later ruling supersedes it (`superseded_on`). Values are per `unit` in `currency` (US$), C&F
+    unless `basis` says otherwise. Only rows that passed the parser's checks are served; the PDF is
+    linked on every row."""
+    if not (code or q or origin):
+        raise HTTPException(status_code=422, detail="give a code, q or origin")
+    floor = history_floor(caller)
+    if floor and (date_from is None or date_from < floor):
+        date_from = floor
+    data = _valuation_rows(code, q, origin, in_force, date_from, date_to, limit)
+    return {"success": True, "data": data, "count": len(data)}
+
+
+@router.get("/valuation-rulings")
+def valuation_rulings(q: str | None = Query(None, description="Words in the title or item"),
+                      kind: str | None = Query(None, pattern="^(ruling|export_ruling|publication|withdrawal|public_notice|classification|other)$"),
+                      date_from: date | None = Query(None, alias="from"),
+                      date_to: date | None = Query(None, alias="to"),
+                      limit: int = Query(200, ge=1, le=2000),
+                      caller: Caller = Depends(authenticate)):
+    """Every valuation ruling FBR lists (2015 on): number, title, goods, issue date, the rulings it
+    supersedes and the one that superseded it, the PDF, and how many values were read from it
+    (`parse_status`: parsed / partial / no_values / unreadable — a scan not OCR'd yet / missing)."""
+    params: dict = {"limit": limit}
+    where = ""
+    if q:
+        params["q"] = f"%{q.strip()}%"
+        where += " AND (r.title ILIKE %(q)s OR r.item ILIKE %(q)s)"
+    if kind:
+        params["kind"] = kind
+        where += " AND r.kind = %(kind)s"
+    floor = history_floor(caller)
+    if floor and (date_from is None or date_from < floor):
+        date_from = floor
+    if date_from:
+        params["df"] = date_from
+        where += " AND coalesce(r.dated, r.listed_on) >= %(df)s"
+    if date_to:
+        params["dt"] = date_to
+        where += " AND coalesce(r.dated, r.listed_on) <= %(dt)s"
+    rows = _safe(lambda: db.query(
+        f"""SELECT r.ruling_id, r.number, r.number_raw, r.kind, r.title, r.item,
+                   coalesce(r.dated, r.listed_on) AS issued_on, r.listed_on, r.supersedes,
+                   s.number AS superseded_by, r.superseded_on, r.pdf_url, r.parse_status, r.values_found
+            FROM customs_valuation_rulings r LEFT JOIN customs_valuation_rulings s ON s.ruling_id = r.superseded_by
+            WHERE true {where} ORDER BY 7 DESC, r.ruling_id DESC LIMIT %(limit)s""", params))
+    return {"success": True, "data": [{**r, "in_force": r["superseded_on"] is None} for r in rows], "count": len(rows)}
+
+
+def _concession_rows(code: str, fy: int | None, latest_only: bool = False, limit: int = 2000) -> list[dict]:
+    params: dict = {"limit": limit}
+    where = _pct_filter("c.code", code, params)
+    if fy is not None:
+        params["fy"] = fy
+        where += " AND c.fy = %(fy)s"
+    elif latest_only:
+        where += " AND c.fy = (SELECT max(fy) FROM customs_concessions)"
+    rows = _safe(lambda: db.query(
+        f"""SELECT c.fy, c.part, c.serial, c.sub_item, c.code, c.description, c.rate_pct, c.rate_text, c.condition,
+                   c.source_url, d.rate_pct AS cd_pct, d.rate_text AS cd_text
+            FROM customs_concessions c
+            LEFT JOIN customs_tariff_duties d ON d.code = c.code AND d.fy = c.fy AND d.component = 'cd'
+            WHERE true {where} ORDER BY c.code, c.fy DESC, c.part, c.serial LIMIT %(limit)s""", params))
+    return [{"fy": r["fy"], "fiscal_year": _fy_label(r["fy"]), "part": r["part"], "serial": r["serial"],
+             "sub_item": r["sub_item"] or None, "code": r["code"], "pct_code": _dotted(r["code"]),
+             "description": r["description"], "rate_pct": _fnum(r["rate_pct"]), "rate_text": r["rate_text"],
+             "condition": r["condition"], "tariff_cd_pct": _fnum(r["cd_pct"]), "tariff_cd_text": r["cd_text"],
+             "source_url": r["source_url"]} for r in rows]
+
+
+@router.get("/concessions")
+def concessions(code: str = Query(..., description="8-digit PCT code or a 2-, 4- or 6-digit prefix"),
+                fy: int | None = Query(None, ge=2017, le=2100, description="One edition (fiscal year end)"),
+                caller: Caller = Depends(authenticate)):
+    """The Fifth Schedule to the Customs Act: concessionary customs duty for a code, in every edition
+    FY2016-17 on — the Part and serial it falls under, the sub-item as printed, the concessionary
+    rate, the conditions, and the code's normal (tariff) rate that year for comparison. Entries the
+    schedule prints for a heading, "Respective headings" or a whole chapter are not included."""
+    if fy is not None:
+        _check_fy(caller, fy)
+    data = _concession_rows(code, fy)
+    floor = _fy_floor(caller)
+    if floor:
+        data = [r for r in data if r["fy"] >= floor]
+    return {"success": True, "data": data, "count": len(data)}

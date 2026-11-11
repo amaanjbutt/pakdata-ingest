@@ -1,0 +1,35 @@
+name: fbr_probe
+# Is FBR (www.fbr.gov.pk, download1.fbr.gov.pk) reachable from GitHub's runners? It times out
+# from the VPS (2026-10-31) and answers the owner's PC. Each matrix leg lands on a different
+# Azure IP. Read-only: the tariff page, the first KB of a tariff PDF and of a valuation ruling,
+# and one page of the valuation-ruling list (customs_valuation_rulings). No DB, no secrets.
+on:
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    strategy:
+      fail-fast: false
+      matrix:
+        leg: [1, 2, 3, 4]
+    steps:
+      - name: probe
+        run: |
+          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141 Safari/537.36'
+          curl -s https://ifconfig.me/ip; echo " (runner IP)"
+          for u in https://www.fbr.gov.pk/categ/laws/144 \
+                   https://download1.fbr.gov.pk/Docs/20268251181330180Tariff-2026-27.pdf \
+                   https://download1.fbr.gov.pk/VALUATIONS/2026103011102322728VR2124.pdf ; do
+            printf '%s -> ' "$u"
+            curl -4 -s -o /dev/null -r 0-1023 -w '%{http_code} %{size_download}B %{time_total}s\n' --max-time 30 -A "$UA" "$u" || echo "timeout"
+          done
+          # The DataTables form the page posts; without columns[], order[] and search[value] FBR answers
+          # "Value cannot be null. Parameter name: source".
+          F='draw=1&columns%5B0%5D%5Bdata%5D=VALUATIONNumber&columns%5B0%5D%5Bname%5D=VALUATIONNumber'
+          F="$F&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=true&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D="
+          F="$F&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=asc&start=0&length=1&search%5Bvalue%5D=&department="
+          printf 'POST /Home/LoadVALUATIONs -> '
+          curl -4 -s --max-time 30 -A "$UA" -H 'X-Requested-With: XMLHttpRequest' --data "$F" \
+            https://www.fbr.gov.pk/Home/LoadVALUATIONs | head -c 160 || echo "timeout"
+          echo

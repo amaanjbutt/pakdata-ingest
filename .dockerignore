@@ -12,4 +12,5 @@
 .ruff_cache/
 data/*
 !data/reference/
+!data/customs/
 tests/

@@ -329,6 +329,99 @@ ALTER TABLE trade_hs_codes ADD COLUMN IF NOT EXISTS short_name TEXT;
 ALTER TABLE trade_hs_codes ADD COLUMN IF NOT EXISTS hs_heading TEXT;
 ALTER TABLE trade_hs_codes ADD COLUMN IF NOT EXISTS unit_clean TEXT;
 
+-- FBR Pakistan Customs Tariff (`fbr_customs_tariff`): one row per 8-digit PCT code per edition.
+-- fy = fiscal year ending 30 June (2027 = FY2026-27, in force from 1 July 2026). Each edition is a
+-- vintage of the code; codes split or merged between editions are kept as printed.
+-- code = digits only, as trade_hs stores PCT codes ('01012100').
+CREATE TABLE IF NOT EXISTS customs_tariff (
+    code         TEXT NOT NULL,
+    fy           SMALLINT NOT NULL,
+    description  TEXT NOT NULL,               -- the line as printed, dashes included
+    context      TEXT,                        -- heading > parent lines, as printed
+    unit         TEXT,                        -- unit of quantity, where the edition prints one
+    source_url   TEXT NOT NULL,
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (code, fy)
+);
+CREATE INDEX IF NOT EXISTS idx_customs_tariff_fy ON customs_tariff(fy);
+-- One row per code, edition and duty component: 'cd' (customs duty, every edition) and, where the
+-- edition prints them (FY2013-14), 'rd_acd', 'st', 'fed', 'wht', 'concession', 'fta:<agreement>';
+-- 'rd' and 'acd' from the year's regulatory / additional customs duty SROs.
+CREATE TABLE IF NOT EXISTS customs_tariff_duties (
+    code         TEXT NOT NULL,
+    fy           SMALLINT NOT NULL,
+    component    TEXT NOT NULL,
+    rate_pct     NUMERIC,                     -- % ad valorem, when the cell is a plain percentage
+    rate_text    TEXT,                        -- the cell as printed otherwise ('Rs.10550/MT')
+    PRIMARY KEY (code, fy, component)
+);
+-- 'rd' (fbr_regulatory_duty) and 'acd' (fbr_additional_customs_duty) come from the year's SRO, named here
+ALTER TABLE customs_tariff_duties ADD COLUMN IF NOT EXISTS source TEXT;
+-- Fifth Schedule to the Customs Act (`fbr_customs_concessions`): concessionary customs duty, one row per
+-- edition x part x serial x sub-item x 8-digit code (a code can have several concessions, each with its
+-- own conditions). Entries printed for a heading, "Respective headings" or a chapter are not stored.
+CREATE TABLE IF NOT EXISTS customs_concessions (
+    fy           SMALLINT NOT NULL,           -- edition, as customs_tariff.fy
+    part         TEXT NOT NULL,               -- 'I', 'II', 'V(A)' …
+    serial       TEXT NOT NULL,               -- the table's S. No. ('1', '15A')
+    sub_item     TEXT NOT NULL,               -- '' or the sub-item as printed ('(1). Tractor mounted trencher')
+    code         TEXT NOT NULL,               -- 8 digits
+    description  TEXT NOT NULL,
+    rate_pct     NUMERIC,                     -- concessionary customs duty, %
+    rate_text    TEXT,                        -- the cell as printed when not a single percentage
+    condition    TEXT,
+    source_url   TEXT NOT NULL,
+    PRIMARY KEY (fy, part, serial, sub_item, code)
+);
+CREATE INDEX IF NOT EXISTS idx_customs_concessions_code ON customs_concessions(code, fy);
+-- FBR customs valuation rulings (`fbr_valuation_rulings`, section 25A of the Customs Act): one row
+-- per ruling FBR lists (ruling_id = FBR's VALUATIONID). A ruling stays in force until a later one
+-- supersedes it (superseded_by / superseded_on, from the later ruling's own text): the superseded
+-- ruling is the vintage.
+CREATE TABLE IF NOT EXISTS customs_valuation_rulings (
+    ruling_id     INTEGER PRIMARY KEY,
+    number        TEXT,                       -- '2124/2026'
+    number_raw    TEXT,                       -- as FBR lists it ('Valuation Ruling No. 2124/2026')
+    kind          TEXT NOT NULL,              -- ruling | publication | withdrawal | public_notice | other
+    title         TEXT NOT NULL,
+    item          TEXT,                       -- the goods named in the title
+    listed_on     DATE NOT NULL,              -- FBR's listing date
+    dated         DATE,                       -- the date on the ruling itself, when read from it
+    pdf_url       TEXT NOT NULL,
+    supersedes    TEXT[],                     -- ruling numbers this one replaces
+    superseded_by INTEGER,
+    superseded_on DATE,
+    text_source   TEXT,                       -- 'text' (the PDF's own text layer) | 'ocr'
+    parse_status  TEXT,                       -- parsed | partial | no_values | unreadable | missing
+    values_found  SMALLINT,
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_customs_valuation_rulings_listed ON customs_valuation_rulings(listed_on DESC);
+-- One row per value a ruling sets: item x origin x customs value (currency per unit), in force from
+-- the ruling's date (dated, else listed_on) until its superseded_on. Only rows passing the parser's sanity checks.
+CREATE TABLE IF NOT EXISTS customs_valuation_values (
+    ruling_id    INTEGER NOT NULL,
+    line_no      SMALLINT NOT NULL,
+    item         TEXT NOT NULL,               -- the description as printed
+    pct_code     TEXT,                        -- 8 digits, digits only
+    weboc_code   TEXT,                        -- the 12-digit WeBOC code, where the ruling prints one
+    origin       TEXT NOT NULL,               -- as printed ('China', 'Other Origins', 'All Origins')
+    value        NUMERIC NOT NULL,
+    currency     TEXT NOT NULL,               -- 'USD'
+    unit         TEXT NOT NULL,               -- 'kg' | 'mt' | 'unit' | 'pc' | 'sqm' | 'pair' | 'litre' | …
+    basis        TEXT,                        -- 'C&F' when the ruling says so
+    PRIMARY KEY (ruling_id, line_no)
+);
+CREATE INDEX IF NOT EXISTS idx_customs_valuation_values_code ON customs_valuation_values(pct_code);
+-- OCR cache for rulings whose PDF has no text layer (scans): written by
+-- `scripts.ocr_valuation_rulings --db` (GitHub Actions customs.yml), read by fbr_valuation_rulings.
+CREATE TABLE IF NOT EXISTS customs_valuation_tokens (
+    ruling_id  INTEGER PRIMARY KEY,
+    pdf_url    TEXT NOT NULL,
+    pages      JSONB NOT NULL,                -- [{page, width, height, tokens: [{box, text, score}]}]
+    ocr_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Users & billing
 CREATE TABLE IF NOT EXISTS users (
     id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
