@@ -45,7 +45,7 @@ CDX_URL = ("https://web.archive.org/cdx/search/cdx?url=pqa.gov.pk/en/port-operat
 WAYBACK = "https://web.archive.org/web/{}id_/" + PAGE_URL
 PAUSE_S = 2.0
 _FY = re.compile(r"^(\d{4})\s*-\s*(\d{2,4})$")
-_SECTION = re.compile(r"^(?:(DRY|LIQUID)\s+)?(IMPORTS?|EXPORTS?)$", re.I)
+_SECTION = re.compile(r"^(?:(DRY|LIQUID)\s+)?(IMPORTS?|EXPORTS?)\s*:?$", re.I)
 
 _C = dict(module="external", frequency="annual", source="PQA", source_url=PAGE_URL, min_value=0)
 _DIR = ["all", "import", "export"]
@@ -112,11 +112,16 @@ def _commodity(label: str) -> tuple[str, str | None]:
 def parse(page: str) -> tuple[list[date], list[Record]]:
     """The table -> (fiscal years, records). Pure."""
     rows = table_rows(page)
+    # values are read from the columns the header puts each fiscal year in: layouts differ (2022 has an
+    # empty column after the label; 2019's last column is a part year, "2018-19 (Up to April.2019)", and
+    # isn't stored)
     years: list[date] = []
+    cols: list[int] = []
+    width = 0
     for cells in rows[:4]:
-        found = [fy_end(c) for c in cells]
-        if sum(1 for f in found if f) >= 3:
-            years = [f for f in found if f]
+        hits = [(k, f) for k, f in ((k, fy_end(c)) for k, c in enumerate(cells)) if f]
+        if len(hits) >= 3:
+            cols, years, width = [k for k, _ in hits], [f for _, f in hits], len(cells)
             break
     if not years:
         raise ValueError("no fiscal-year header row")
@@ -133,7 +138,8 @@ def parse(page: str) -> tuple[list[date], list[Record]]:
 
     for cells in rows:
         label = cells[0].strip()
-        vals = [_num(c) for c in cells[1:1 + n]] + [None] * max(0, n - len(cells[1:1 + n]))
+        shift = width - len(cells)  # a shorter row is right-aligned with the header
+        vals = [_num(cells[k - shift]) if 0 < k - shift < len(cells) else None for k in cols]
         has = any(v is not None for v in vals)
         up = re.sub(r"\s+", " ", label.upper())
         if not label:
@@ -143,7 +149,7 @@ def parse(page: str) -> tuple[list[date], list[Record]]:
             if sec:
                 direction = "export" if sec.group(2).startswith("EXP") else "import"
                 continue
-            term = ports_pk.terminal_in(label)
+            term = ports_pk.terminal_in(label) or (ports_pk.terminal("QICT") if "CONTAINER" in up else None)
             if term:
                 terminal, after_total = term, False
                 direction = "export" if "(EXP" in up else "import"

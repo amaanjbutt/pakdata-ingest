@@ -178,15 +178,15 @@ def commodity(raw: str, unit_raw: str = "") -> tuple[str | None, str | None]:
 
 # ---- terminals ---------------------------------------------------------------------------------------------
 TERMINALS: dict[str, tuple[str, ...]] = {
-    "Marginal Wharves (multi-purpose)": ("M W", "MW", "MPT"),
+    "Marginal Wharves (multi-purpose)": ("M W", "MW", "MPT", "MULTI PURPOSE TERMINAL", "MULTI PURPOSE TERMINAL M P T"),
     "Qasim International Container Terminal (QICT)": ("QICT",),
     "QICT-2 Container Terminal": ("QT2", "QT 2", "QICT 2"),
     "Pakistan International Bulk Terminal (PIBT)": ("PIBT",),
-    "Liquid Cargo Terminal (LCT)": ("LCT",),
+    "Liquid Cargo Terminal (LCT)": ("LCT", "LIQUID CARGO TERMINAL"),
     "Fauji Akbar Portia Grain & Fertilizer Terminal (FAP)": ("FAP",),
     "Fauji Oil Terminal (FOTCO)": ("FOTCO",),
-    "Engro Vopak Terminal (EVTL)": ("EVTL",),
-    "Iron Ore & Coal Berth (IOCB)": ("IOCB",),
+    "Engro Vopak Terminal (EVTL)": ("EVTL", "ENGRO TERMINAL"),
+    "Iron Ore & Coal Berth (IOCB)": ("IOCB", "I O C B"),
     "SSGC LPG Terminal": ("SSGC",),
     "Progas LPG Terminal": ("PROGAS",),
     "HFP&S Coal Terminal": ("HFP S", "HFPS", "HFP"),
@@ -214,6 +214,9 @@ def terminal(berth: str) -> str | None:
 def terminal_in(label: str) -> str | None:
     """The PQA terminal a heading names ('FOTCO- FAUJI OIL TERMINAL …', 'LPG TERMINAL - SSGC- …',
     'HFP&S- HUANENG …'), from its first token that is a terminal code; None if none is. Pure."""
+    whole = _key(re.sub(r"\(\s*(?:IMP|EXP)[^)]*\)", "", label or "", flags=re.I))
+    if whole in _TERMINAL:  # 'ENGRO TERMINAL (IMP)', 'I.O.C.B (IMP)', 'MULTI-PURPOSE TERMINAL (M.P.T)'
+        return _TERMINAL[whole]
     for tok in re.split(r"[\s\-–(),.]+", label or ""):
         k = _key(tok)
         if k and k in _TERMINAL:

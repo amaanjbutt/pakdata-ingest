@@ -132,3 +132,26 @@ def test_report_date_letter_spaced():
     assert report_date("C O N T A I N E R H A N D L I N G\nDuring 24 Hrs. Ending 0700 Hrs. on 3 1 - O C T - 2 0 2 6") \
         == date(2026, 10, 31)
     assert report_date("During 24 Hrs. ending at 0730 Hrs. on 31-OCT-2026\nPrinted on: 01-NOV-2026") == date(2026, 10, 31)
+
+
+def test_reports_still_in_progress_and_tomorrows_programme(monkeypatch):
+    from datetime import datetime as real_datetime
+
+    from ingestion.jobs import kpt_shipping
+
+    class Night(real_datetime):  # 01:00 on the 10th in Karachi: that day's tonnage report is still adding up
+        @classmethod
+        def now(cls, tz=None):
+            return real_datetime(2026, 11, 10, 1, 0, tzinfo=kpt_shipping.PKT)
+
+    class Eve(date):  # the evening before: the programme printed for the 10th
+        @classmethod
+        def today(cls):
+            return date(2026, 11, 9)
+
+    monkeypatch.setattr(kpt_shipping, "datetime", Night)
+    rows, recs = _parse("kpt_shipcargo_2026-11-10.pdf", "kpt_shipcargo.pdf")
+    assert rows == [] and recs == {}
+    monkeypatch.setattr(kpt_shipping, "date", Eve)
+    rows, recs = _parse("kpt_pplan_2026-11-10.pdf", "kpt_pplan.pdf")
+    assert rows and recs == {}  # ships kept, series wait for the day

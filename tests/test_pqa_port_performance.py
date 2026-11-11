@@ -56,3 +56,31 @@ def test_vintage_issues_keep_only_new_or_changed_prints():
     (row,) = issues[1]["rows"]
     assert row["dims"] == {"level": "total", "direction": "all"} and row["values"] == {"2022-06-30": [55151, 0]}
     assert issues[0]["source"] == "pqa_performance" and fy_end("2014-15") == date(2015, 6, 30)
+
+
+def _copy(name):
+    with open(os.path.join(os.path.dirname(__file__), "fixtures", name), encoding="utf-8") as fh:
+        years, recs = parse(fh.read())
+    return years, {(r.series_id, r.obs_date, tuple(sorted(r.dims.items()))): r.value for r in recs}
+
+
+def test_2022_layout_with_an_empty_column_after_the_label():
+    years, recs = _copy("pqa_port_performance_2022-01-26.html")  # Internet Archive copy, 26 Jan 2022
+    assert years == [date(y, 6, 30) for y in range(2017, 2022)]
+    total = lambda y: recs[("ports.qasim.cargo_annual", date(y, 6, 30), (("direction", "all"), ("level", "total")))]  # noqa: E731
+    assert (total(2017), total(2018), total(2021)) == (37_358_000, 45_615_000, 57_993_000)  # not shifted a column
+    assert recs[("ports.qasim.teu_annual", date(2017, 6, 30), (("direction", "import"),))] == 567_000
+
+
+def test_2019_layout_headings_and_part_year():
+    years, recs = _copy("pqa_port_performance_2019-06-06.html")  # Internet Archive copy, 6 Jun 2019
+    # the last column, "2018-19 (Up to April.2019)", is a part year: not stored
+    assert years == [date(y, 6, 30) for y in range(2015, 2019)]
+    ships = lambda t, y=2015: recs[("ports.qasim.ships_annual", date(y, 6, 30), (("level", "terminal"), ("terminal", t)))]  # noqa: E731
+    # 'FOTCO', 'ENGRO TERMINAL (IMP)', 'EEPTL', 'I.O.C.B (IMP)' each keep their own ships
+    assert ships("Fauji Oil Terminal (FOTCO)") == 144 and ships("Engro Vopak Terminal (EVTL)") == 153
+    assert ships("Engro Elengy LNG Terminal (EETL)") == 5 and ships("Iron Ore & Coal Berth (IOCB)") == 21
+    # 'CONTAINER TERMINAL' (no QICT in the heading): TEUs, not the port's cargo total
+    assert recs[("ports.qasim.teu_annual", date(2015, 6, 30), (("direction", "all"),))] == 971_000
+    assert recs[("ports.qasim.cargo_annual", date(2015, 6, 30),
+                 (("cargo", "dry_and_liquid"), ("direction", "all"), ("level", "cargo_type")))] == 17_370_000

@@ -41,7 +41,7 @@ import logging
 import re
 from calendar import monthrange
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from ingestion import ports_pk
 from ingestion.framework import FetchedFile, IngestionJob, Record
@@ -53,6 +53,7 @@ REPORT_URL = "http://antares.kpt.gov.pk:90/dev60cgi/rwcgi60.exe?{}"
 REPORTS = ("shipcargo", "tues", "pplan")
 SOURCE_URL = "https://kpt.gov.pk/pages/78/daily-tonnage"
 PORT = "KPT"
+PKT = timezone(timedelta(hours=5))
 LIVE_FROM = date(2026, 11, 1)  # months from here are summed from the daily series; earlier ones: kpt_tonnage_history
 MONTHS = {m: i for i, m in enumerate(
     ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"), 1)}
@@ -568,10 +569,14 @@ class KptShippingJob(PortCallsMixin, IngestionJob):
                 rows = number_seqs(rows)
                 if not rows:
                     raise ValueError("no ships in the shipping programme")
-                return rows + programme_records(day, rows)
+                # KPT posts the next day's programme the evening before: its ships are kept, its series
+                # wait until the day arrives (the morning run writes them)
+                return rows + (programme_records(day, rows) if day <= date.today() else [])
             day = report_date(text[:600])
-            if day > date.today():
-                raise ValueError(f"report dated {day}, in the future")
+            if datetime.now(PKT) < datetime(day.year, day.month, day.day, 8, tzinfo=PKT):
+                # from midnight KPT's reports carry the next 24 hours (to 07:30), still adding up: not yet
+                log.info("kpt_shipping: %s report for %s still in progress — skipped", f.filename, day)
+                return []
             if "shipcargo" in f.filename:
                 rows = number_seqs(tonnage_vessels(day, tonnage_rows([p.extract_words() for p in pdf.pages]),
                                                    f.filename))
