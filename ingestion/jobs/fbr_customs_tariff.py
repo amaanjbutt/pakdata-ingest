@@ -579,13 +579,16 @@ class FbrCustomsTariffJob(IngestionJob):
 
 def upsert_rows(rows: list[TariffLine]) -> int:
     """Idempotent: a row or duty is written only when it differs from what is stored; an
-    edition's duties that are no longer printed for a code are removed."""
+    edition's duties that are no longer printed for a code are removed. Bulk statements (psycopg
+    pipelines executemany): the GHA runner writes over an SSH tunnel to the VPS, where one round
+    trip per code (~140k on a backfill) would take hours."""
     from app import db
 
     n = 0
     with db.connection() as conn, conn.cursor() as cur:
-        for r in rows:
-            cur.execute(
+        for fy in sorted({r.fy for r in rows}):
+            mine = [r for r in rows if r.fy == fy]
+            cur.executemany(
                 """INSERT INTO customs_tariff (code, fy, description, context, unit, source_url)
                    VALUES (%s, %s, %s, %s, %s, %s)
                    ON CONFLICT (code, fy) DO UPDATE SET description = EXCLUDED.description,
@@ -594,17 +597,22 @@ def upsert_rows(rows: list[TariffLine]) -> int:
                    WHERE (customs_tariff.description, customs_tariff.context, customs_tariff.unit,
                           customs_tariff.source_url)
                          IS DISTINCT FROM (EXCLUDED.description, EXCLUDED.context, EXCLUDED.unit, EXCLUDED.source_url)""",
-                (r.code, r.fy, r.description, r.context, r.unit, r.source_url))
-            n += cur.rowcount
-            cur.executemany(
-                """INSERT INTO customs_tariff_duties (code, fy, component, rate_pct, rate_text)
-                   VALUES (%s, %s, %s, %s, %s)
-                   ON CONFLICT (code, fy, component) DO UPDATE SET rate_pct = EXCLUDED.rate_pct,
-                       rate_text = EXCLUDED.rate_text
-                   WHERE (customs_tariff_duties.rate_pct, customs_tariff_duties.rate_text)
-                         IS DISTINCT FROM (EXCLUDED.rate_pct, EXCLUDED.rate_text)""",
-                [(r.code, r.fy, comp, pct, txt) for comp, (pct, txt) in r.duties.items()])
+                [(r.code, r.fy, r.description, r.context, r.unit, r.source_url) for r in mine])
+            n += max(cur.rowcount, 0)
+            duties = [(r.code, r.fy, comp, pct, txt) for r in mine for comp, (pct, txt) in r.duties.items()]
+            if duties:
+                cur.executemany(
+                    """INSERT INTO customs_tariff_duties (code, fy, component, rate_pct, rate_text)
+                       VALUES (%s, %s, %s, %s, %s)
+                       ON CONFLICT (code, fy, component) DO UPDATE SET rate_pct = EXCLUDED.rate_pct,
+                           rate_text = EXCLUDED.rate_text
+                       WHERE (customs_tariff_duties.rate_pct, customs_tariff_duties.rate_text)
+                             IS DISTINCT FROM (EXCLUDED.rate_pct, EXCLUDED.rate_text)""",
+                    duties)
             # the edition's own components only: 'rd' and 'acd' belong to the SRO jobs
-            cur.execute("DELETE FROM customs_tariff_duties WHERE code = %s AND fy = %s AND NOT (component = ANY(%s)) "
-                        "AND component NOT IN ('rd', 'acd')", (r.code, r.fy, list(r.duties)))
+            cur.execute(
+                """DELETE FROM customs_tariff_duties d
+                   WHERE d.fy = %s AND d.code = ANY(%s) AND d.component NOT IN ('rd', 'acd')
+                     AND NOT (d.code || '|' || d.component = ANY(%s))""",
+                (fy, [r.code for r in mine], [f"{c}|{comp}" for c, _, comp, _, _ in duties]))
     return n

@@ -719,19 +719,22 @@ def upsert_all(rulings: list[Ruling], parsed: list[ParsedRuling]) -> int:
                                        EXCLUDED.item, EXCLUDED.listed_on, EXCLUDED.pdf_url)""",
             [(r.ruling_id, r.number, r.number_raw, r.kind, r.title, r.item, r.listed_on, r.pdf_url) for r in rulings])
         n += cur.rowcount
-        for p in parsed:
-            sup = [s for s in p.supersedes if s in known]
-            cur.execute(
+        # in bulk (psycopg pipelines executemany): the GHA runner writes over an SSH tunnel to the VPS
+        if parsed:
+            cur.executemany(
                 """UPDATE customs_valuation_rulings SET supersedes = %s, text_source = %s, parse_status = %s,
                        values_found = %s, dated = %s, updated_at = now() WHERE ruling_id = %s""",
-                (sup or None, p.text_source, p.status, len(p.values), p.dated, p.ruling_id))
-            cur.execute("DELETE FROM customs_valuation_values WHERE ruling_id = %s", (p.ruling_id,))
-            cur.executemany(
-                """INSERT INTO customs_valuation_values (ruling_id, line_no, item, pct_code, weboc_code, origin, value,
-                       currency, unit, basis) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-                [(p.ruling_id, v.line_no, v.item, v.pct_code, v.weboc_code, v.origin, v.value, v.currency, v.unit,
-                  v.basis) for v in p.values])
-            n += len(p.values)
+                [([s for s in p.supersedes if s in known] or None, p.text_source, p.status, len(p.values), p.dated,
+                  p.ruling_id) for p in parsed])
+            cur.execute("DELETE FROM customs_valuation_values WHERE ruling_id = ANY(%s)", ([p.ruling_id for p in parsed],))
+            values = [(p.ruling_id, v.line_no, v.item, v.pct_code, v.weboc_code, v.origin, v.value, v.currency, v.unit,
+                       v.basis) for p in parsed for v in p.values]
+            if values:
+                cur.executemany(
+                    """INSERT INTO customs_valuation_values (ruling_id, line_no, item, pct_code, weboc_code, origin,
+                           value, currency, unit, basis) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                    values)
+            n += len(values)
         cur.execute("SELECT ruling_id, number, coalesce(dated, listed_on), supersedes FROM customs_valuation_rulings")
         stored = cur.fetchall()
         allr = [Ruling(rid, num, None, "", "", None, iss, "") for rid, num, iss, _ in stored]
