@@ -36,7 +36,12 @@ def list_series(
     limit: int | None = None, offset: int | None = None, canonical_only: bool = False,
 ) -> list[dict]:
     clauses, params = _catalog_clauses(module, source, q, canonical_only)
-    sql = f"SELECT * FROM series WHERE {' AND '.join(clauses)} ORDER BY id"
+    if q:
+        # Match first (trigram indexes, ~1 ms), then sort: with ORDER BY id + LIMIT the planner
+        # walks the primary key instead and filters every series on the way (~40 ms).
+        sql = f"WITH m AS MATERIALIZED (SELECT * FROM series WHERE {' AND '.join(clauses)}) SELECT * FROM m ORDER BY id"
+    else:
+        sql = f"SELECT * FROM series WHERE {' AND '.join(clauses)} ORDER BY id"
     if limit is not None:
         sql += " LIMIT %(limit)s"
         params["limit"] = limit
@@ -358,6 +363,24 @@ def _source_current(feeders: list[str], jobs: dict) -> bool:
     return saw_no_new_data
 
 
+def _observation_counts() -> dict[str, int]:
+    """Observations per module (active series). Counting ~4M rows takes ~0.6 s, so it is
+    cached for an hour on its own; the rest of /v1/status stays on its 60 s cycle."""
+    from app.services import cache
+
+    def build() -> dict[str, int]:
+        rows = db.query("""
+            SELECT s.module, COALESCE(SUM(oc.n), 0)::bigint AS n
+            FROM series s
+            JOIN (SELECT series_id, COUNT(*) AS n FROM observations GROUP BY series_id) oc
+              ON oc.series_id = s.id
+            WHERE s.is_active = true
+            GROUP BY s.module""")
+        return {r["module"]: int(r["n"]) for r in rows}
+
+    return cache.cached_json("status:observation_counts:v1", 3600, build)
+
+
 def module_status() -> list[dict]:
     """Per-module freshness for the public /status page: latest observation date,
     dominant cadence, series/observation counts, and an honest fresh/delayed/stale
@@ -368,19 +391,17 @@ def module_status() -> list[dict]:
         SELECT s.module,
                MAX(s.last_date)                         AS last_date,
                COUNT(*)                                 AS series_count,
-               COALESCE(SUM(oc.n), 0)::bigint           AS observation_count,
                mode() WITHIN GROUP (ORDER BY lower(s.frequency)) AS dominant_freq,
                array_agg(DISTINCT lower(s.frequency))   AS frequencies
         FROM series s
-        LEFT JOIN (
-            SELECT series_id, COUNT(*) AS n
-            FROM observations GROUP BY series_id
-        ) oc ON oc.series_id = s.id
         WHERE s.is_active = true
         GROUP BY s.module
         ORDER BY s.module
     """
     rows = db.query(sql)
+    counts = _observation_counts()
+    for r in rows:
+        r["observation_count"] = int(counts.get(r["module"], 0))
     today = _date.today()
     jobs = _latest_job_runs()
     for r in rows:

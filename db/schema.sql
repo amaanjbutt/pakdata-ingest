@@ -673,6 +673,13 @@ CREATE TABLE IF NOT EXISTS search_entities (
 );
 CREATE INDEX IF NOT EXISTS idx_search_entities_trgm ON search_entities USING gin (haystack gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_series_name_trgm ON series USING gin (lower(name) gin_trgm_ops);
+-- /v1/catalog?q= and /v1/search match id, name and description with ILIKE '%word%', which the
+-- lower(name) index above can't serve: one trigram index per column lets Postgres OR them
+-- (BitmapOr) instead of reading every series — 44 ms -> 1 ms per query on prod (2026-11-13).
+-- On prod: CREATE INDEX CONCURRENTLY with the same names.
+CREATE INDEX IF NOT EXISTS idx_series_id_trgm ON series USING gin (id gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_series_name_ci_trgm ON series USING gin (name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_series_description_trgm ON series USING gin (description gin_trgm_ops);
 
 -- Ports: every ship in each daily port statement (ingestion/port_calls.py). PQA's "Daily Shipping and
 -- Cargo Statement" (berth / anchorage / expected / sailed) and Karachi Port's daily tonnage and container

@@ -139,10 +139,11 @@ def _usd(v, rate):
 
 
 def _all_codes() -> list[dict]:
+    # ~5 MB of JSON: decoded once per change, not per call (read-only — callers copy what they change)
     return cache.cached_json("trade:hs_codes:v2", 3600, lambda: db.query(
         "SELECT code, classification, coalesce(display_name, description) AS name, short_name, "
         "hs_heading, description, coalesce(unit_clean, nullif(unit, '')) AS unit, first_fy, last_fy "
-        "FROM trade_hs_codes WHERE classification <> 'total' ORDER BY code"))
+        "FROM trade_hs_codes WHERE classification <> 'total' ORDER BY code"), shared=True)
 
 
 @router.get("/products")
@@ -362,7 +363,7 @@ def page_index() -> dict:
         def rnd(d):
             return {k: [round(a, 1), round(b, 1)] for k, (a, b) in d.items()}
         return {"latest_fy": latest, "codes": rnd(codes), "headings": rnd(heads)}
-    return cache.cached_json("trade:page_index:v1", _TTL, build)
+    return cache.cached_json("trade:page_index:v1", _TTL, build, shared=True)  # read-only
 
 
 def partner_index() -> dict[str, dict]:
