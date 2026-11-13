@@ -86,6 +86,45 @@ def _seed_easydata_catalog() -> None:
     print(f"seeded {len(rows)} EasyData series")
 
 
+def seed_missing_easydata_catalog(commit: bool = False) -> list[str]:
+    """Catalog rows for configured EasyData series that have none on this database — safe on prod.
+
+    Prod is never `db.init`-ed, so a series added to `easydata_series.json` after its catalog was
+    built never got a row, and `easydata_sync` / `dq-verify` rejected or skipped it ("not in
+    catalog"): 373 such series were found on 2026-11-13 (historical BOP, debt and fiscal tables,
+    commodity-wise trade payments, the 2000-01-base CPI snapshot …). Inserts only — an existing row
+    (its name fixed by the disambiguation pass, its unit by `apply_easydata_units`) is never
+    touched. Rows start inactive: the first non-zero value activates them (`framework.upsert`), so
+    a series SBP leaves empty or all-zero stays hidden. SBP's '.' spacer rows are skipped.
+    Returns the ids inserted (or that would be)."""
+    from ingestion.easydata_config import load_series
+    from ingestion.easydata_units import scaled_unit
+
+    rows = [s for s in load_series() if (s.name or "").strip(" .")]
+    held = {r["id"] for r in db.query("SELECT id FROM series WHERE id = ANY(%(ids)s)",
+                                      {"ids": [s.id for s in rows]})}
+    todo = [s for s in rows if s.id not in held]
+    if commit and todo:
+        with db.connection() as conn:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    """
+                    INSERT INTO series (id, module, name, description, unit, frequency, source, source_url,
+                                        dimensions, min_value, max_value, max_step, tier, is_active,
+                                        easydata_dataset_code, easydata_last_refresh)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'{}'::jsonb,%s,%s,%s,%s,false,%s,NULL)
+                    ON CONFLICT (id) DO NOTHING
+                    """,
+                    [(s.id, module_for_dataset(s.easydata_dataset_code, s.module), s.name, s.description,
+                      scaled_unit(s.easydata_dataset_code, s.id, s.unit), s.frequency, s.source,
+                      f"https://easydata.sbp.org.pk/api/v1/series/{s.easydata_key}/data",
+                      s.min_value, s.max_value, s.max_step, s.tier, s.easydata_dataset_code) for s in todo],
+                )
+    print(f"{'inserted' if commit else 'would insert'} {len(todo)} EasyData catalog rows "
+          f"(of {len(rows)} configured)")
+    return [s.id for s in todo]
+
+
 def _seed_pkrv_catalog() -> None:
     """Upsert catalog rows for the MUFAP PKRV (conventional) and PKISRV (Islamic)
     yield-curve tenors."""
