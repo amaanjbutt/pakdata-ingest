@@ -28,7 +28,7 @@ from app import db
 from app.config import settings
 from ingestion import alerting
 from ingestion.registry import JOBS
-from ingestion.schedule import SCHEDULES, expected_intervals, stale_on_run_jobs
+from ingestion.schedule import GHA_DISPATCH, SCHEDULES, expected_intervals, stale_on_run_jobs
 
 log = logging.getLogger("pakdata.scheduler")
 
@@ -279,6 +279,7 @@ SWAP_ALERT_USED_PCT = float(os.getenv("SWAP_ALERT_USED_PCT", "75"))
 REDIS_ALERT_PCT = float(os.getenv("REDIS_ALERT_PCT", "85"))
 BACKUP_DIR = os.getenv("BACKUP_DIR", "/backups")
 BACKUP_MAX_AGE_HOURS = float(os.getenv("BACKUP_MAX_AGE_HOURS", "30"))
+OFFSITE_MAX_AGE_HOURS = float(os.getenv("OFFSITE_MAX_AGE_HOURS", "50"))   # one missed nightly run is fine
 
 
 def _disk_usage(path: str):
@@ -374,6 +375,21 @@ def resource_check() -> list[str]:
             f"Last verified backup {age_h:.0f} h ago ({what}). Check `docker compose -f "
             "docker-compose.server.yml logs --tail 40 backup`."
         ) if age_h > BACKUP_MAX_AGE_HOURS else None, "DB backup is stale")
+
+    from ingestion import offsite_backup
+    if offsite_backup.configured():
+        try:
+            raw = get_redis().get(offsite_backup.REDIS_KEY) or ""
+            ts, _, what = raw.partition(" ")
+            age_h = (datetime.now(timezone.utc).timestamp() - int(ts)) / 3600 if ts.isdigit() else float("inf")
+            problems["offsite"] = ((
+                f"Last off-site copy {'never recorded' if age_h == float('inf') else f'{age_h:.0f} h ago'}"
+                f"{f' ({what})' if what else ''}. `$DC logs scheduler | grep offsite_backup`; rerun with "
+                "`$DC exec -T scheduler python -c \"from ingestion import offsite_backup as o, scheduler as s; "
+                "print(o.run(redis_client=s.get_redis()))\"`."
+            ) if age_h > OFFSITE_MAX_AGE_HOURS else None, "Off-site DB backup is stale")
+        except Exception as exc:  # noqa: BLE001
+            log.warning("resource check: off-site marker unavailable (%s)", exc)
 
     found: list[str] = []
     for key, (problem, title) in problems.items():
@@ -492,7 +508,41 @@ def build_scheduler() -> BlockingScheduler:
     sched.add_job(search_entities_refresh, trigger=CronTrigger(hour=4, minute=40, timezone=settings.timezone),
                   id="search_entities_refresh", name="search_entities_refresh")
     log.info("scheduled %-22s cron=daily 04:40", "search_entities_refresh")
+
+    # GitHub Actions ingestion workflows, started on time (GitHub's own crons run hours late or not
+    # at all; they stay as a backstop that skips itself after a dispatch — ingestion/gha_dispatch.py)
+    from ingestion import gha_dispatch
+    if gha_dispatch.configured():
+        for i, d in enumerate(GHA_DISPATCH):
+            sched.add_job(dispatch_workflow, trigger=CronTrigger(**d.cron, timezone=settings.timezone),
+                          args=[d.workflow, d.inputs], id=f"gha:{d.workflow}#{i}", name=f"gha:{d.workflow}")
+            log.info("scheduled %-22s cron=%s inputs=%s", f"gha:{d.workflow}", d.cron, d.inputs)
+    else:
+        log.info("GitHub Actions dispatch off (no GHA_DISPATCH_TOKEN / REQLOG_ARCHIVE_TOKEN) — "
+                 "the workflows' own crons run them")
+
+    # encrypted off-site copy of the night's verified dump (backup runs 20:00 UTC = 01:00 PKT)
+    sched.add_job(offsite_backup_job, trigger=CronTrigger(hour=2, minute=45, timezone=settings.timezone),
+                  id="offsite_backup", name="offsite_backup")
+    log.info("scheduled %-22s cron=daily 02:45", "offsite_backup")
     return sched
+
+
+def dispatch_workflow(workflow: str, inputs: dict) -> None:
+    from ingestion import gha_dispatch
+    try:
+        gha_dispatch.run(workflow, inputs, redis_client=get_redis())
+    except Exception:  # noqa: BLE001 — must not kill the scheduler
+        log.exception("dispatch of %s raised", workflow)
+
+
+def offsite_backup_job() -> None:
+    from ingestion import offsite_backup
+    try:
+        offsite_backup.run(redis_client=get_redis())
+    except Exception as exc:  # noqa: BLE001 — must not kill the scheduler
+        log.exception("offsite_backup failed")
+        alerting.alert("off-site backup failed", str(exc)[:500])
 
 
 def search_entities_refresh() -> None:

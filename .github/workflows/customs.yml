@@ -21,11 +21,43 @@ on:
         description: 'Re-read every tariff edition and every valuation ruling (--backfill)'
         type: boolean
         default: false
+      clock:
+        description: 'Sent by the VPS scheduler at the Monday slot: behave like the cron (tariff only in the first week)'
+        type: boolean
+        default: false
 concurrency:
   group: customs
   cancel-in-progress: false
 jobs:
+  gate:
+    # The VPS scheduler dispatches this workflow on time (backend/ingestion/gha_dispatch.py, slots in
+    # schedule.GHA_DISPATCH). GitHub's cron above runs hours late or not at all, so it is only the
+    # backstop: a scheduled run goes ahead only if nothing was dispatched in the last WITHIN_H hours.
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      actions: read
+    outputs:
+      run: ${{ steps.g.outputs.run }}
+    steps:
+      - id: g
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WITHIN_H: '144'
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          wf=$(basename "${GITHUB_WORKFLOW_REF%@*}")
+          since=$(date -u -d "-${WITHIN_H} hours" +%Y-%m-%dT%H:%M:%SZ)
+          n=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${wf}/runs?event=workflow_dispatch&created=%3E%3D${since}&per_page=1" --jq .total_count 2>/dev/null || echo 0)
+          if [ "${n:-0}" -gt 0 ] 2>/dev/null; then
+            echo "::notice::dispatched by the VPS clock in the last ${WITHIN_H} h — skipping this late cron run"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
   customs:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -60,7 +92,7 @@ jobs:
           fail=0
           backfill=""
           if [ "${{ github.event.inputs.backfill }}" = "true" ]; then backfill="--backfill"; fi
-          if [ -n "$backfill" ] || [ "$(date -u +%d)" -le 7 ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ -n "$backfill" ] || [ "$(date -u +%d)" -le 7 ] || { [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.clock }}" != "true" ]; }; then
             echo "::group::fbr_customs_tariff $backfill"
             python -m ingestion.run fbr_customs_tariff --force $backfill || fail=1
             echo "::endgroup::"

@@ -11,7 +11,7 @@ sources can be declared ahead of their implementation.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 
 
@@ -181,6 +181,33 @@ WORKSTATION: frozenset[str] = frozenset({
     # WAPDA's river-flow workbook: frozen since 20 Dec 2024, and wapda.gov.pk times out from the VPS
     "wapda_river_flows",
 })
+
+
+@dataclass(frozen=True)
+class Dispatch:
+    """One slot of a GitHub Actions workflow the VPS scheduler starts (ingestion/gha_dispatch.py)."""
+    workflow: str            # file name in amaanjbutt/pakdata-ingest/.github/workflows
+    cron: dict               # APScheduler cron fields, Asia/Karachi
+    inputs: dict = field(default_factory=dict)
+
+
+# The workflows' own crons, in PKT (UTC+5), dispatched on time by the scheduler. Keep each in step
+# with the `schedule:` block of ops/gha-ingest/workflows/<file> — that cron stays as the backstop.
+GHA_DISPATCH: list[Dispatch] = [
+    Dispatch("ingest.yml", {"hour": "0,6,12,18", "minute": 0}),                      # 19/01/07/13 UTC
+    Dispatch("mufap.yml", {"day_of_week": "mon-fri", "hour": "19,22", "minute": 0}, {"set": "daily"}),
+    Dispatch("mufap.yml", {"day_of_week": "tue-sat", "hour": 1, "minute": 0}, {"set": "daily"}),  # 20 UTC Mon-Fri
+    Dispatch("mufap.yml", {"day_of_week": "sat", "hour": 11, "minute": 0}, {"set": "daily"}),
+    Dispatch("mufap.yml", {"day_of_week": "wed,sat", "hour": 8, "minute": 0}, {"set": "weekly"}),
+    Dispatch("pbs.yml", {"hour": "11,15", "minute": 0}),
+    Dispatch("energy.yml", {"hour": 8, "minute": 40}),
+    Dispatch("dq-verify.yml", {"hour": 3, "minute": 20}),
+    Dispatch("publications.yml", {"day_of_week": "mon,thu", "hour": 10, "minute": 30}),
+    Dispatch("publications.yml", {"day_of_week": "mon,thu", "hour": 16, "minute": 47}),
+    Dispatch("ports.yml", {"hour": "10,17", "minute": 30}),
+    # `clock`: behave like the Monday cron (tariff editions only in the first week), not a manual run
+    Dispatch("customs.yml", {"day_of_week": "mon", "hour": 9, "minute": 20}, {"clock": True}),
+]
 
 
 def expected_intervals() -> dict[str, timedelta]:

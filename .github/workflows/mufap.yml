@@ -36,10 +36,38 @@ concurrency:
 env:
   MUFAP_PROBE_URL: https://www.mufap.com.pk/Industry/IndustryStatDaily?tab=1
 jobs:
+  gate:
+    # The VPS scheduler dispatches this workflow on time (backend/ingestion/gha_dispatch.py, slots in
+    # schedule.GHA_DISPATCH). GitHub's cron above runs hours late or not at all, so it is only the
+    # backstop: a scheduled run goes ahead only if nothing was dispatched in the last WITHIN_H hours.
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      actions: read
+    outputs:
+      run: ${{ steps.g.outputs.run }}
+    steps:
+      - id: g
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WITHIN_H: '20'
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          wf=$(basename "${GITHUB_WORKFLOW_REF%@*}")
+          since=$(date -u -d "-${WITHIN_H} hours" +%Y-%m-%dT%H:%M:%SZ)
+          n=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${wf}/runs?event=workflow_dispatch&created=%3E%3D${since}&per_page=1" --jq .total_count 2>/dev/null || echo 0)
+          if [ "${n:-0}" -gt 0 ] 2>/dev/null; then
+            echo "::notice::dispatched by the VPS clock in the last ${WITHIN_H} h — skipping this late cron run"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
   daily:
+    needs: gate
     if: >-
+      needs.gate.outputs.run == 'true' && (
       (github.event_name == 'schedule' && (github.event.schedule == '0 14,17,20 * * 1-5' || github.event.schedule == '0 6 * * 6')) ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.set == 'daily')
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.set == 'daily'))
     runs-on: ubuntu-latest
     # One runner's blip (a transient VPS tunnel timeout, a single 403) must NOT fail the
     # whole matrix run and email a false "run failed" — most runners probe-skip or ingest
@@ -122,9 +150,11 @@ jobs:
           done
           echo "::notice::this runner ingested MUFAP"
   weekly:
+    needs: gate
     if: >-
+      needs.gate.outputs.run == 'true' && (
       (github.event_name == 'schedule' && startsWith(github.event.schedule, '0 3 ')) ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.set == 'weekly')
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.set == 'weekly'))
     runs-on: ubuntu-latest
     continue-on-error: true  # see daily: a single runner's failure must not email a false alarm
     timeout-minutes: 45
