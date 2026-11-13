@@ -79,12 +79,13 @@ def _profile(name: str) -> dict | None:
     if not rows:
         return None
     province = (rows[0]["dims"] or {}).get("province")
-    # Through `series`: a LIKE on observations.series_id can't use its btree under the
-    # en_US collation, so it read all ~4M observations (~320 ms); per-series lookups take ~20 ms.
+    # The PSLM ids first, as an array: a LIKE on observations.series_id can't use its btree under
+    # the en_US collation (it read all ~4M observations, ~320 ms), and as a join the planner can
+    # still pick that seq scan; `= ANY(array)` is one index scan (~6 ms).
     prov = db.query(
         """SELECT o.series_id, o.obs_date, o.value, o.dims FROM observations o
-           JOIN series s ON s.id = o.series_id AND s.id LIKE 'regional.pslm.%%'
-           WHERE o.dims->>'province' = %(p)s AND NOT o.dims ? 'district'
+           WHERE o.series_id = ANY((SELECT array_agg(id) FROM series WHERE id LIKE 'regional.pslm.%%')::text[])
+             AND o.dims->>'province' = %(p)s AND NOT o.dims ? 'district'
            ORDER BY o.series_id, o.obs_date""",
         {"p": province})
 

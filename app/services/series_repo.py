@@ -36,9 +36,10 @@ def list_series(
     limit: int | None = None, offset: int | None = None, canonical_only: bool = False,
 ) -> list[dict]:
     clauses, params = _catalog_clauses(module, source, q, canonical_only)
-    if q:
+    if q and len(q.strip()) >= 3:
         # Match first (trigram indexes, ~1 ms), then sort: with ORDER BY id + LIMIT the planner
-        # walks the primary key instead and filters every series on the way (~40 ms).
+        # walks the primary key instead and filters every series on the way (~40 ms). Shorter
+        # patterns have no trigrams to look up, so they keep the walk (it can stop at LIMIT).
         sql = f"WITH m AS MATERIALIZED (SELECT * FROM series WHERE {' AND '.join(clauses)}) SELECT * FROM m ORDER BY id"
     else:
         sql = f"SELECT * FROM series WHERE {' AND '.join(clauses)} ORDER BY id"
