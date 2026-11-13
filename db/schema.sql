@@ -719,3 +719,13 @@ CREATE TABLE IF NOT EXISTS port_vessel_calls (
 CREATE INDEX IF NOT EXISTS idx_port_calls_day ON port_vessel_calls(port, statement_date DESC);
 CREATE INDEX IF NOT EXISTS idx_port_calls_vessel ON port_vessel_calls(lower(vessel), statement_date DESC);
 CREATE INDEX IF NOT EXISTS idx_port_calls_ref ON port_vessel_calls(port, call_ref) WHERE call_ref <> '';
+
+-- ---- autovacuum for the big, mostly-append tables (2026-11-12) ------------------------------------
+-- The default 20 % scale factors let agri_prices (14.5 M rows) take ~3 M changes between vacuums and
+-- fund_navs go unvacuumed since August: new pages stay out of the visibility map (index-only scans
+-- fall back to the heap) and planner statistics drift. Vacuum/analyze after ~2 % instead. Setting
+-- these takes a SHARE UPDATE EXCLUSIVE lock — reads and writes carry on (use a lock_timeout on prod).
+ALTER TABLE observations SET (autovacuum_vacuum_scale_factor = 0.02, autovacuum_vacuum_insert_scale_factor = 0.02, autovacuum_analyze_scale_factor = 0.02);
+ALTER TABLE agri_prices  SET (autovacuum_vacuum_scale_factor = 0.02, autovacuum_vacuum_insert_scale_factor = 0.02, autovacuum_analyze_scale_factor = 0.02);
+ALTER TABLE trade_hs     SET (autovacuum_vacuum_scale_factor = 0.02, autovacuum_vacuum_insert_scale_factor = 0.02, autovacuum_analyze_scale_factor = 0.02);
+ALTER TABLE fund_navs    SET (autovacuum_vacuum_scale_factor = 0.02, autovacuum_vacuum_insert_scale_factor = 0.02, autovacuum_analyze_scale_factor = 0.02);

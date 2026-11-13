@@ -198,3 +198,11 @@ class QuotaPool:
         EasyData's hourly window and effectively retires a spent key for the rest of
         a time-boxed CI run."""
         self._blocked_until[self._active] = time.time() + seconds
+
+    def penalize_key(self, key: str, seconds: float = 3600.0) -> None:
+        """penalize() for a named key. The concurrent fetch path claims a key, then calls
+        EasyData outside the lock — by the time a call fails, another worker may have
+        moved `_active` on, so the failing key has to be named, not assumed."""
+        for i, k in enumerate(self.keys):
+            if k == key:
+                self._blocked_until[i] = time.time() + seconds

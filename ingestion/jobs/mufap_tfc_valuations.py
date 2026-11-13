@@ -28,7 +28,9 @@ from ingestion.framework import FetchedFile, IngestionJob
 LIST_URL = "https://www.mufap.com.pk/WebRegulations/GetSecpFileById"
 FILE_BASE = "https://www.mufap.com.pk"
 TAB_ID = 44
-INCREMENTAL_FILES = 3
+# One PDF per business day. Six, not three, so a run after a few blocked days (2026-11-10 → 13:
+# every runner stopped by the fund-page check) still reaches back to the first missed day.
+INCREMENTAL_FILES = 6
 SECURITY_TYPE = "tfc_sukuk"
 
 _ROW_RE = re.compile(

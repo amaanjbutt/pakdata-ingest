@@ -11,9 +11,17 @@ probe had just fetched.
 The first page doubles as the IP probe.
 
     python -m scripts.mufap_fetch_bundle /tmp/raw/mufap_bundle
+    python -m scripts.mufap_fetch_bundle --files-probe
 
 Exit codes: 0 = probe page fetched (bundle may still be partial; missing pages
 fall through to a live fetch in the job), 2 = IP blocked (nothing fetched).
+
+`--files-probe`: since 2026-11-10 MUFAP's fund pages (/Industry/*, /AMC/*) answer every
+non-browser client with a Cloudflare managed challenge (the PC too), while the file API
+(POST /WebRegulations/GetSecpFileById) and the /Upload/ files it lists are served plainly.
+The four file jobs (PKRV, debt prices, TFC valuations, debt trades) need only those, so a
+runner whose page probe failed checks the file API instead of giving up: exit 0 = the list
+and its newest file came back, 2 = not.
 """
 from __future__ import annotations
 
@@ -58,7 +66,47 @@ def _fetch_once(url: str) -> tuple[int | None, bytes | None]:
     return resp.status_code, None
 
 
+FILES_LIST_URL = "https://www.mufap.com.pk/WebRegulations/GetSecpFileById"
+FILES_BASE = "https://www.mufap.com.pk"
+FILES_PROBE_TAB = 46  # PKRV / PKISRV: a new file every business day
+
+
+def file_reachable(status: int | None, content: bytes | None) -> bool:
+    """A real file, not a 403 or Cloudflare's 'Just a moment...' challenge page. Pure."""
+    if status != 200 or not content:
+        return False
+    head = content[:2048].lower()
+    return b"just a moment" not in head and b"challenges.cloudflare.com" not in head
+
+
+def files_probe() -> int:
+    """0 if MUFAP's file API answers this runner (list + its newest file), else 2."""
+    try:
+        resp = http_client.post(FILES_LIST_URL, json={"fk_HeaderSubMenuTabId": FILES_PROBE_TAB}, timeout=45)
+        items = (resp.json().get("data") or []) if resp.status_code == 200 else []
+    except Exception as exc:  # noqa: BLE001 - a stall or an HTML challenge counts as blocked
+        print(f"file list: error {exc}")
+        return 2
+    if not items:
+        print(f"file list: {getattr(resp, 'status_code', None)} with no files — blocked")
+        return 2
+    newest = items[-1]  # the list is oldest first
+    try:
+        f = http_client._sess().get(FILES_BASE + newest["FilePath"],
+                                    proxies=http_client._proxies_for(FILES_BASE), timeout=60)
+        status, content = f.status_code, f.content
+    except Exception as exc:  # noqa: BLE001
+        print(f"file {newest.get('Title')}: error {exc}")
+        return 2
+    ok = file_reachable(status, content)
+    print(f"file list {len(items)} entries; {newest.get('Title')}: {status} {len(content or b''):,} bytes"
+          f" — {'reachable' if ok else 'blocked'}")
+    return 0 if ok else 2
+
+
 def main(argv: list[str]) -> int:
+    if len(argv) > 1 and argv[1] == "--files-probe":
+        return files_probe()
     out = Path(argv[1] if len(argv) > 1 else "/tmp/raw/mufap_bundle")
     got = 0
     for i, url in enumerate(bundle_urls(date.today())):

@@ -75,8 +75,16 @@ jobs:
           #    The first page is the IP probe: exit 2 = blocked → skip this runner.
           rc=0; timeout 300 python -m scripts.mufap_fetch_bundle /tmp/raw/mufap_bundle || rc=$?
           if [ "$rc" != "0" ]; then
-            echo "::notice::IP blocked (bundle rc=$rc) — skipping this runner"
-            exit 0
+            # Since 2026-11-10 the fund pages (/Industry/*, /AMC/*) challenge every non-browser
+            # client, but the file API + /Upload/ files don't: the four file jobs (PKRV, debt
+            # prices, TFC valuations, debt trades) can still run here. With no bundle manifest,
+            # mufap_jobs_todo below holds the page-backed fund jobs for a later runner.
+            frc=0; timeout 120 python -m scripts.mufap_fetch_bundle --files-probe || frc=$?
+            if [ "$frc" != "0" ]; then
+              echo "::notice::IP blocked for the fund pages and the file API — skipping this runner"
+              exit 0
+            fi
+            echo "::notice::fund pages blocked (bundle rc=$rc); file API reachable — file jobs only"
           fi
           # 2) Tunnel to the VPS DB (retry transient SSH timeouts).
           mkdir -p ~/.ssh

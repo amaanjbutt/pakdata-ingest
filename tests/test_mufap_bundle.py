@@ -144,3 +144,59 @@ def test_portfolio_full_queue_is_success(monkeypatch):
     out = job.run()
     assert out == {"status": "success", "rows": 6, "funds": 3, "queued": 3}
     assert fin["status"] == "success"
+
+
+# --- 2026-11-10: fund pages challenged, file API not ---------------------------------------
+# MUFAP's Cloudflare started answering /Industry/* and /AMC/* with a managed challenge
+# ("Just a moment...", cf-mitigated: challenge) for every non-browser client, while
+# POST /WebRegulations/GetSecpFileById and the /Upload/ files kept answering plainly. mufap.yml
+# gave up on any runner whose page probe failed, so the file jobs stalled with the fund jobs.
+
+FIXTURES = __import__("pathlib").Path(__file__).parent / "fixtures"
+
+
+class _HttpResp:
+    def __init__(self, status, content=b"", payload=None):
+        self.status_code, self.content, self._payload = status, content, payload
+
+    def json(self):
+        if self._payload is None:
+            raise ValueError("not json")
+        return self._payload
+
+
+def _probe(monkeypatch, list_resp, file_resp):
+    import scripts.mufap_fetch_bundle as fb
+
+    class Sess:
+        def get(self, url, proxies=None, timeout=None):
+            assert url.startswith("https://www.mufap.com.pk/Upload/")
+            return file_resp
+
+    monkeypatch.setattr(fb.http_client, "post", lambda url, json=None, timeout=None: list_resp)
+    monkeypatch.setattr(fb.http_client, "_sess", lambda: Sess())
+    return fb.files_probe()
+
+
+def test_files_probe_passes_when_the_file_api_answers(monkeypatch):
+    import json
+
+    listing = json.loads((FIXTURES / "mufap_file_list_tab46.json").read_text(encoding="utf-8"))
+    assert _probe(monkeypatch, _HttpResp(200, payload=listing), _HttpResp(200, b"Tenor,Mid Rate\n1W,11.5\n")) == 0
+
+
+def test_files_probe_fails_on_a_challenge_or_block(monkeypatch):
+    import json
+
+    challenge = (FIXTURES / "mufap_cf_challenge.html").read_bytes()
+    listing = json.loads((FIXTURES / "mufap_file_list_tab46.json").read_text(encoding="utf-8"))
+    assert _probe(monkeypatch, _HttpResp(403, challenge), _HttpResp(200, b"x")) == 2          # list challenged
+    assert _probe(monkeypatch, _HttpResp(200, payload=listing), _HttpResp(403, b"")) == 2     # file blocked (the VPS)
+    assert _probe(monkeypatch, _HttpResp(200, payload=listing), _HttpResp(200, challenge)) == 2
+
+
+def test_runner_without_pages_runs_only_the_file_jobs():
+    # mufap.yml: page probe failed → no manifest → bundled = set() → page jobs wait for a later runner
+    assert jobs_todo(set(), set()) == [
+        "mufap_pkrv", "mufap_debt_prices", "mufap_tfc_valuations", "mufap_debt_trades",
+    ]

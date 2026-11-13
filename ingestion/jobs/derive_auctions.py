@@ -9,8 +9,12 @@ series and the dedicated `auctions` table from those observations — a pure DB 
 (no external fetch), so it refreshes automatically as EasyData ingests new auctions and
 backfills the deep history the scrape never had.
 
-GIS / Ijara Sukuk cut-offs are NOT in EasyData, so `sbp_auctions` still covers those;
-the two jobs upsert by (type, tenor, date), so they coexist without clobbering.
+GIS / Ijara Sukuk cut-offs are NOT in EasyData, so `sbp_auctions` still covers those.
+Since 2026-11-12 `sbp_auctions` also writes T-Bill/PIB cut-offs again, from kibor.asp's
+dated tables, weeks before EasyData has them and to four decimals (EasyData rounds to
+two: 11.9999 vs 12.00). One writer per point: this job inserts with ON CONFLICT DO NOTHING
+(like `derive_kibor`), so a cut-off already stored — by the scrape or an earlier run — is
+never rewritten; the scrape's dates come only from the page's printed "as on" date.
 """
 from __future__ import annotations
 
@@ -121,20 +125,17 @@ class DeriveAuctionsJob(IngestionJob):
         sid = self._target_id(atype, tenor)
         with db.connection() as conn:
             with conn.cursor() as cur:
+                before = cur.execute("SELECT count(*) FROM observations WHERE series_id=%s", (sid,)).fetchone()[0]
                 cur.executemany(
                     """INSERT INTO observations (series_id, obs_date, value, dims, flagged, revised_at)
                        VALUES (%s, %s, %s, '{}'::jsonb, false, now())
-                       ON CONFLICT (series_id, obs_date, dims)
-                       DO UPDATE SET value = EXCLUDED.value, revised_at = now()
-                       WHERE observations.value IS DISTINCT FROM EXCLUDED.value""",
+                       ON CONFLICT (series_id, obs_date, dims) DO NOTHING""",
                     [(sid, d, v) for d, v in pts],
                 )
                 cur.executemany(
                     """INSERT INTO auctions (auction_type, tenor, auction_date, cutoff_yield, source)
                        VALUES (%s, %s, %s, %s, 'SBP')
-                       ON CONFLICT (auction_type, tenor, auction_date)
-                       DO UPDATE SET cutoff_yield = EXCLUDED.cutoff_yield, revised_at = now()
-                       WHERE auctions.cutoff_yield IS DISTINCT FROM EXCLUDED.cutoff_yield""",
+                       ON CONFLICT (auction_type, tenor, auction_date) DO NOTHING""",
                     [(atype, tenor, d, v) for d, v in pts],
                 )
                 cur.execute(
@@ -142,4 +143,5 @@ class DeriveAuctionsJob(IngestionJob):
                     "last_date=(SELECT max(obs_date) FROM observations WHERE series_id=%s) WHERE id=%s",
                     (sid, sid, sid),
                 )
-        return len(pts)
+                after = cur.execute("SELECT count(*) FROM observations WHERE series_id=%s", (sid,)).fetchone()[0]
+        return after - before  # new points only (existing ones are never rewritten)

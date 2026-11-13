@@ -24,7 +24,7 @@ GitHub Actions in the public ingestion repo, or on the PC (`docker compose run -
 | `apply_easydata_units.py` | api container | Write the SBP-verified dataset scales (`ingestion/easydata_units.py`) to `series.unit` and rescale the merge-spliced history in `ingestion/easydata_splices.csv`; dry run, `--commit` backs up first |
 | `harvest_dataset_codes.py` | PC (Playwright) | Rebuild `ingestion/dataset_codes.json` from the EasyData portal tree |
 | `check_repo.py` | CI | Consistency checks: every job registered, scheduled or monitored, workflows only run registered jobs |
-| `backup.sh`, `backup_loop.sh` | `backup` container | Nightly `pg_dump` + verified scratch restore |
+| `backup.sh`, `backup_loop.sh`, `backup_rotate.sh` | `backup` container | Nightly `pg_dump` at 20:00 UTC + verified scratch restore, then 7 daily / 4 weekly / 3 monthly rotation |
 
 `archive/` holds retired one-offs (kept for reference, not run by anything) — see `archive/README.md`.
 Sitemap and IndexNow scripts are in `ops/seo/`.

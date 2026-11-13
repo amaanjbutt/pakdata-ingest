@@ -249,10 +249,142 @@ def staleness_check() -> list[str]:
 
 def health_check() -> dict:
     """Hourly health sweep. Reaps wedged runs *first* so that a dead job stops
-    masquerading as in-flight, then evaluates staleness against real statuses."""
+    masquerading as in-flight, then evaluates staleness against real statuses,
+    then the box itself (disk, memory, Redis, backups)."""
     reaped = stuck_run_check()
     stale = staleness_check()
-    return {"reaped": reaped, "stale": stale}
+    try:
+        resources = resource_check()
+    except Exception as exc:  # noqa: BLE001 — the sweep must never kill the scheduler
+        log.exception("resource check failed")
+        resources = [f"resource check failed: {exc}"]
+    try:  # GitHub Actions runs can't email; their problems surface here (ingestion/external_runs.py)
+        from ingestion.external_runs import external_run_check
+        external = external_run_check(get_redis())
+    except Exception as exc:  # noqa: BLE001
+        log.exception("external run check failed")
+        external = {"check": f"failed: {exc}"}
+    return {"reaped": reaped, "stale": stale, "resources": resources, "external": external}
+
+
+# ---- host resources ------------------------------------------------------------
+# The scheduler container sees the host's root filesystem through the rawdata volume
+# (/var/lib/docker is on it, and so are pgdata and backups) and the host's /proc/meminfo,
+# so it can watch the whole box. Thresholds are env-tunable; each problem alerts at most
+# once per STALE_ALERT_TTL and re-arms when it clears.
+DISK_PATH = os.getenv("RESOURCE_DISK_PATH", "/data/raw")
+DISK_ALERT_PCT = float(os.getenv("DISK_ALERT_PCT", "80"))
+MEM_ALERT_AVAILABLE_PCT = float(os.getenv("MEM_ALERT_AVAILABLE_PCT", "10"))
+SWAP_ALERT_USED_PCT = float(os.getenv("SWAP_ALERT_USED_PCT", "75"))
+REDIS_ALERT_PCT = float(os.getenv("REDIS_ALERT_PCT", "85"))
+BACKUP_DIR = os.getenv("BACKUP_DIR", "/backups")
+BACKUP_MAX_AGE_HOURS = float(os.getenv("BACKUP_MAX_AGE_HOURS", "30"))
+
+
+def _disk_usage(path: str):
+    import shutil
+    return shutil.disk_usage(path)
+
+
+def _meminfo() -> dict[str, int]:
+    """/proc/meminfo in kB ({} where it doesn't exist)."""
+    out: dict[str, int] = {}
+    try:
+        with open("/proc/meminfo") as fh:
+            for line in fh:
+                key, _, rest = line.partition(":")
+                parts = rest.split()
+                if parts and parts[0].isdigit():
+                    out[key] = int(parts[0])
+    except OSError:
+        pass
+    return out
+
+
+def _last_backup() -> tuple[datetime, str] | None:
+    """(time, what) of the last good backup, or None if BACKUP_DIR isn't mounted.
+
+    backup.sh writes `last_ok` only after a dump passed its restore test; until the
+    first such run, fall back to the newest dump file's mtime."""
+    if not os.path.isdir(BACKUP_DIR):
+        return None
+    marker = os.path.join(BACKUP_DIR, "last_ok")
+    try:
+        with open(marker) as fh:
+            parts = fh.read().split()
+        return datetime.fromtimestamp(int(parts[0]), timezone.utc), " ".join(parts[2:3]) or "last_ok"
+    except (OSError, ValueError, IndexError):
+        pass
+    dumps = [f for f in os.listdir(BACKUP_DIR) if f.startswith("pakdata_") and f.endswith(".dump")]
+    if not dumps:
+        return datetime.fromtimestamp(0, timezone.utc), "no dump at all"
+    newest = max(dumps)
+    mtime = os.path.getmtime(os.path.join(BACKUP_DIR, newest))
+    return datetime.fromtimestamp(mtime, timezone.utc), newest
+
+
+def _resource_alert(key: str, problem: str | None, title: str) -> None:
+    """Alert once per STALE_ALERT_TTL while `problem` persists; re-arm when it clears."""
+    if problem is None:
+        _clear_stale_alert(f"resource:{key}")
+    else:
+        _alert_stale(f"resource:{key}", title, problem)
+
+
+def resource_check() -> list[str]:
+    """Disk, memory, Redis and backup freshness. Returns the problems found."""
+    problems: dict[str, tuple[str | None, str]] = {}
+
+    du = _disk_usage(DISK_PATH)
+    used_pct = 100.0 * du.used / du.total
+    problems["disk"] = ((
+        f"Host disk {used_pct:.0f}% used ({du.free / 2**30:.1f} GB free of {du.total / 2**30:.0f} GB). "
+        "docs/operations.md → Incidents → Disk filling."
+    ) if used_pct >= DISK_ALERT_PCT else None, f"VPS disk {used_pct:.0f}% full")
+
+    mem = _meminfo()
+    if mem.get("MemTotal"):
+        avail_pct = 100.0 * mem.get("MemAvailable", 0) / mem["MemTotal"]
+        swap_total = mem.get("SwapTotal", 0)
+        swap_pct = 100.0 * (swap_total - mem.get("SwapFree", 0)) / swap_total if swap_total else 0.0
+        low = avail_pct < MEM_ALERT_AVAILABLE_PCT or swap_pct >= SWAP_ALERT_USED_PCT
+        problems["memory"] = ((
+            f"MemAvailable {mem.get('MemAvailable', 0) // 1024} MB ({avail_pct:.0f}% of "
+            f"{mem['MemTotal'] // 1024} MB), swap {swap_pct:.0f}% used. Check `docker stats` and "
+            "detached backfills in the api container."
+        ) if low else None, f"VPS memory low ({avail_pct:.0f}% available)")
+
+    try:
+        info = get_redis().info("memory")
+        cap, used = int(info.get("maxmemory") or 0), int(info.get("used_memory") or 0)
+        if cap:
+            pct = 100.0 * used / cap
+            problems["redis"] = ((
+                f"Redis {used / 2**20:.0f} MB of its {cap / 2**20:.0f} MB cap ({pct:.0f}%); keys with a "
+                "TTL are being evicted. Look for a runaway cache key family (redis-cli --bigkeys)."
+            ) if pct >= REDIS_ALERT_PCT else None, f"Redis memory {pct:.0f}% of cap")
+    except Exception as exc:  # noqa: BLE001
+        log.warning("resource check: redis info unavailable (%s)", exc)
+
+    last = _last_backup()
+    if last is not None:
+        when, what = last
+        age_h = (datetime.now(timezone.utc) - when).total_seconds() / 3600
+        problems["backup"] = ((
+            f"Last verified backup {age_h:.0f} h ago ({what}). Check `docker compose -f "
+            "docker-compose.server.yml logs --tail 40 backup`."
+        ) if age_h > BACKUP_MAX_AGE_HOURS else None, "DB backup is stale")
+
+    found: list[str] = []
+    for key, (problem, title) in problems.items():
+        _resource_alert(key, problem, title)
+        if problem:
+            found.append(f"{key}: {problem}")
+    if found:
+        log.warning("resource check: %s", "; ".join(found))
+    else:
+        log.info("resource check: disk %.0f%% used, memory/redis/backups ok", used_pct)
+    return found
 
 
 # EasyData API keys expire and must be rotated by hand (no auto-provision). When
@@ -334,7 +466,7 @@ def build_scheduler() -> BlockingScheduler:
         id="health_check",
         name="health_check",
     )
-    log.info("scheduled %-22s cron=hourly (stuck-run reap + staleness)", "health_check")
+    log.info("scheduled %-22s cron=hourly (stuck-run reap + staleness + disk/memory/backups)", "health_check")
 
     sched.add_job(
         key_expiry_check,

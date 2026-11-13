@@ -26,13 +26,38 @@ def test_normalize_tenor():
     assert _normalize_tenor("bad") is None
 
 
-def test_parses_tbill_and_pib_cutoffs():
+NOV_FIXTURE = os.path.join(os.path.dirname(__file__), "fixtures", "kibor_2026_11_12.html")
+
+
+def _load_nov() -> str:
+    with open(NOV_FIXTURE, encoding="utf-8") as f:
+        return f.read()
+
+
+def test_parses_tbill_and_pib_cutoffs_on_their_printed_dates():
+    """kibor.asp on 2026-11-12: MTBs "(as on Nov 11, 2026)", fixed-rate PIBs "(as on Nov 04,
+    2026)", both newer than anything EasyData had (latest auction there: Oct 14)."""
+    recs = {r.series_id: r for r in parse_auctions_html(_load_nov(), date(2026, 11, 12))}
+    t3 = recs["rates.auction.tbill.3m.cutoff_yield"]
+    assert (t3.obs_date, t3.value) == (date(2026, 11, 11), 11.9999)
+    assert recs["rates.auction.tbill.1m.cutoff_yield"].value == 11.8838
+    assert recs["rates.auction.tbill.12m.cutoff_yield"].value == 12.41
+    p10 = recs["rates.auction.pib.10y.cutoff_yield"]
+    assert (p10.obs_date, p10.value) == (date(2026, 11, 4), 12.85)
+    assert "rates.auction.pib.15y.cutoff_yield" not in recs  # "Bids Rejected"
+    # the floating-rate PIB tables (all "Bids Rejected") never land on the fixed-rate ids
+    assert {r.obs_date for r in recs.values() if ".pib." in r.series_id} == {date(2026, 11, 4)}
+    # GIS tables print no date: fall back to the fetch day (drop_unchanged_undated dedupes)
+    assert recs["rates.auction.gis.3y.cutoff_price"].obs_date == date(2026, 11, 12)
+
+
+def test_undated_tbill_table_is_not_stamped_with_the_fetch_day():
+    """The July-2026 page printed no date under the MTBs; stamping the fetch day put each
+    auction on the next day (Aug 20, Sep 3) beside EasyData's real one (Aug 19, Sep 2)."""
     recs = parse_auctions_html(_load(), date(2026, 7, 23))
     ids = {r.series_id for r in recs}
-    # MTB (T-Bill) and Fixed-Rate PIB cut-off yields present
-    assert "rates.auction.tbill.3m.cutoff_yield" in ids
-    assert "rates.auction.pib.10y.cutoff_yield" in ids
-    # all values are plausible rates/prices
+    assert not any(".tbill." in i for i in ids)
+    assert {r.obs_date for r in recs if ".pib." in r.series_id} == {date(2026, 7, 6)}  # dated: kept
     assert all(r.value is not None and r.value > 0 for r in recs)
 
 

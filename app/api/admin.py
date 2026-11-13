@@ -265,5 +265,5 @@ def system(_: Caller = Depends(require_admin)):
     return {"success": True, "database": size, "largest_tables": tables, "backup_tables": backups,
             "redis": redis_info, "easydata_keys": keys,
             "request_log": {"partitions": partitions[0]["n"] if partitions else None,
-                            "archive_configured": bool(os.getenv("REQLOG_ARCHIVE_REPO") and
-                                                       os.getenv("REQLOG_ARCHIVE_TOKEN"))}}
+                            # the token lives only in the scheduler (.env.scheduler), not here
+                            "archive_configured": bool(os.getenv("REQLOG_ARCHIVE_REPO"))}}

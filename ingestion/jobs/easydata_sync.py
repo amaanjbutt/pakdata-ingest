@@ -131,6 +131,24 @@ def _is_unauthorized(exc: Exception) -> bool:
     return "401" in str(exc)
 
 
+# A key is retired for the rest of the run after this many 401s in a row (no success with it
+# in between). Two, not one, so a single series EasyData refuses for its own reasons can't
+# retire a good key; a dead key still costs only two calls instead of its whole hourly budget.
+_RETIRE_AFTER_401S = 2
+_RETIRE_SECONDS = 30 * 86400.0
+
+
+def unauthorized_note(dead_positions: list[int], n_keys: int) -> str | None:
+    """The run's error text when keys answered 401: which ones (1-based position in
+    EASYDATA_API_KEYS + EASYDATA_API_KEY, never the key) and what to do. Pure."""
+    if not dead_positions:
+        return None
+    which = ", ".join(f"#{p}" for p in sorted(dead_positions))
+    return (f"EasyData key {which} of {n_keys} rejected (401) and skipped for this run — "
+            "mint a replacement on the EasyData portal and update EASYDATA_API_KEYS in "
+            "amaanjbutt/pakdata-ingest (+ EASYDATA_KEY_EXPIRIES in the VPS .env)")
+
+
 # ---- pure parsing (unchanged) -----------------------------------------------
 
 def _col_index(columns: list[str], name: str) -> int:
@@ -215,6 +233,8 @@ class EasyDataSyncJob(IngestionJob):
         # Dedup the "API key rejected (401)" alert to once per run (a fresh
         # process/run resets it) so an expired key can't email per series.
         self._alerted_401 = False
+        # Keys retired this run for answering 401 (1-based positions), for the run's error.
+        self._dead_keys: set[int] = set()
 
     # ---- helpers ------------------------------------------------------------
 
@@ -314,16 +334,9 @@ class EasyDataSyncJob(IngestionJob):
             try:
                 return self.http_get(build_url(key))
             except Exception as exc:  # noqa: BLE001
-                if _is_unauthorized(exc) and not self._alerted_401:
-                    self._alerted_401 = True
-                    alerting.alert(
-                        f"{self.name}: EasyData API key rejected (401)",
-                        "An EasyData API key returned 401 — it is expired or invalid, "
-                        "so EasyData ingestion is degrading. Mint a replacement key and "
-                        "update EASYDATA_API_KEYS in BOTH GHA repos (amaanjbutt + amaanu01) "
-                        "and the VPS .env. " + self.redact(str(exc)),
-                    )
                 unauthorized = _is_unauthorized(exc)
+                if unauthorized:
+                    self._note_dead_key(key, exc)
                 if not (_is_rate_limited(exc) or unauthorized):
                     raise
                 last_exc = exc
@@ -335,6 +348,27 @@ class EasyDataSyncJob(IngestionJob):
                 if not quota.allow():  # no other key has budget -> stop cleanly
                     raise QuotaExhausted(self.redact(str(exc))) from exc
         raise QuotaExhausted(self.redact(str(last_exc)) if last_exc else "quota exhausted")
+
+    def _key_position(self, key: str | None) -> int | None:
+        try:
+            return self.api_keys.index(key) + 1
+        except (ValueError, AttributeError):
+            return None
+
+    def _note_dead_key(self, key: str | None, exc: Exception) -> None:
+        """Record a key that answered 401 (for the run's error) and alert once per run."""
+        pos = self._key_position(key)
+        if pos is not None:
+            if getattr(self, "_dead_keys", None) is None:
+                self._dead_keys = set()
+            self._dead_keys.add(pos)
+        if not self._alerted_401:
+            self._alerted_401 = True
+            alerting.alert(
+                f"{self.name}: EasyData API key rejected (401)",
+                (unauthorized_note([pos] if pos else [], len(self.api_keys)) or
+                 "An EasyData API key returned 401.") + " " + self.redact(str(exc)),
+            )
 
     def _fetch_dataset_meta(self, code: str, quota) -> dict[str, str | None]:
         """dataset/{code}/meta -> {series_key: last_refresh_date}. One call covers
@@ -503,6 +537,30 @@ class EasyDataSyncJob(IngestionJob):
         agg = {"rows": 0, "processed": 0, "failed": 0, "stopped": False}
         alock = threading.Lock()
         log = logging.getLogger("pakdata.ingest")
+        # Consecutive 401s per key (guarded by qlock). Before 2026-11-12 a 401 here was an
+        # ordinary per-series failure, so a dead key kept being handed out until its whole
+        # hourly budget was spent: every run since early November skipped 225 series on
+        # one rejected key, and still finished `success`.
+        strikes: dict[str, int] = {}
+
+        def count_401(key: str, exc: Exception) -> None:
+            """Count a 401 against `key`; retire it for the run at _RETIRE_AFTER_401S."""
+            with qlock:
+                strikes[key] = strikes.get(key, 0) + 1
+                dead = strikes[key] == _RETIRE_AFTER_401S
+                if dead:
+                    retire = getattr(quota, "penalize_key", None)
+                    if retire:
+                        retire(key, _RETIRE_SECONDS)
+            if dead:
+                log.warning("%s: key #%s answered %d 401s in a row — retired for this run",
+                            self.name, self._key_position(key), _RETIRE_AFTER_401S)
+                self._note_dead_key(key, exc)
+
+        def worked(key: str) -> None:
+            if strikes.get(key):
+                with qlock:
+                    strikes[key] = 0
 
         def claim_key(rotate: bool = False) -> str | None:
             """Atomically take one quota slot and return the key to use (None = no
@@ -529,8 +587,13 @@ class EasyDataSyncJob(IngestionJob):
             for _ in range(max(1, len(self.api_keys))):
                 try:
                     content = self.http_get(self._data_url(s, backfill, key))
+                    worked(key)
                     break
                 except Exception as exc:  # noqa: BLE001
+                    if _is_unauthorized(exc):
+                        # Skip the series this run (retried next run, its refresh date is
+                        # untouched) and count the strike; a retired key is never claimed again.
+                        count_401(key, exc)
                     if not _is_rate_limited(exc):
                         with alock:
                             agg["failed"] += 1
@@ -613,7 +676,11 @@ class EasyDataSyncJob(IngestionJob):
                     return self._pull_one(s, quota, backfill, refresh_map.get(s.easydata_key))
 
                 status, total, processed = self._process_series(selected, quota, process_one, deadline)
-            self._finish(run_id, status, total, None, None)
+            # A rejected key doesn't stop the run (the others carry it), but the run must not
+            # read as clean: the note lands in ingestion_runs.error, which the VPS health check
+            # turns into an email (alerts raised here on a runner are only logged).
+            note = unauthorized_note(sorted(getattr(self, "_dead_keys", set())), len(self.api_keys))
+            self._finish(run_id, status, total, note, None)
             if status == "partial":
                 alerting.alert(
                     f"{self.name}: stopped at quota",

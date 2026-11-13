@@ -13,9 +13,16 @@ bid-to-cover are left NULL for now: the 2026 SBP site redesign dropped the
 structured DMMD result tables that carried them, so they await a stable source.
 
 NOTE (2026-09-12): kibor.asp's T-Bill/PIB auction tables went stale after the
-redesign, so T-Bill & PIB cut-offs are now sourced from EasyData via the
-`derive_auctions` job (reliable pipeline + years of history). This job now keeps
-ONLY GIS / Ijara Sukuk cut-offs, which EasyData does not carry (see `parse`).
+redesign, so T-Bill & PIB cut-offs came only from EasyData via `derive_auctions`.
+2026-11-12: the tables are current again and now print their own date — "(as on
+Nov 11, 2026)" under the MTBs, "(as on Nov 04, 2026)" under the fixed-rate PIBs — while
+EasyData's auction datasets lag weeks (last refreshed 2026-10-18, latest auction Oct 14).
+So this job writes T-Bill and PIB cut-offs again, but ONLY from a table that prints its
+date: the July-2026 page had an undated MTB table, and stamping it with the fetch day put
+each auction on the following Thursday (Aug 20, Sep 3) next to EasyData's Wednesday point.
+GIS tables never carry a date (see `drop_unchanged_undated`). `derive_auctions` fills the
+history and never overwrites a point already stored (ON CONFLICT DO NOTHING), so a date
+has one writer: kibor.asp's four-decimal cut-off where we saw it, EasyData's elsewhere.
 """
 from __future__ import annotations
 
@@ -59,7 +66,8 @@ def _to_float(text: str) -> float | None:
         return None
 
 
-def _extract_date(text: str, fallback: date) -> date:
+def _find_date(text: str) -> date | None:
+    """The first date printed in `text` ("Nov 11, 2026", "04-Nov-26", ...), else None."""
     m = re.search(r"(\d{1,2}[-\s][A-Za-z]{3,9}[-\s]\d{2,4}|[A-Za-z]{3,9}\s+\d{1,2},\s*\d{4})", text)
     if m:
         cand = re.sub(r"\s+", " ", m.group(1)).strip()
@@ -68,7 +76,7 @@ def _extract_date(text: str, fallback: date) -> date:
                 return datetime.strptime(cand, fmt).date()
             except ValueError:
                 continue
-    return fallback
+    return None
 
 
 def _classify(table, prev_text: str) -> str | None:
@@ -107,7 +115,10 @@ def parse_auctions_html(html: str, fallback_date: date | None = None) -> list[Re
         atype = _classify(table, prev_text)
         if atype is None:
             continue
-        adate = _extract_date(table.get_text(" ", strip=True) + " " + prev_text, fallback_date)
+        printed = _find_date(table.get_text(" ", strip=True) + " " + prev_text)
+        if printed is None and atype != "gis":
+            continue  # an undated T-Bill/PIB table: its auction day is unknown (see module doc)
+        adate = printed or fallback_date
 
         for tr in table.find_all("tr"):
             cells = [c.get_text(" ", strip=True) for c in tr.find_all(["td", "th"])]
@@ -160,16 +171,13 @@ class SbpAuctionsJob(IngestionJob):
         return [FetchedFile(filename="auctions.html", content=content, when=date.today())]
 
     def parse(self, f: FetchedFile) -> list[Record]:
-        # T-Bill & PIB cut-offs are now sourced from EasyData via the `derive_auctions`
-        # job (reliable pipeline + deep history) — kibor.asp's auction tables stopped
-        # updating after the 2026 redesign. This job keeps ONLY GIS / Ijara Sukuk, which
-        # EasyData doesn't carry. If the page has tables but no GIS rows, return nothing
-        # (no_new_data) rather than raise — the scrape being stale must not alert.
+        # Dated T-Bill/PIB tables + GIS (undated: emitted only when the value changes).
+        # A page with no auction rows returns nothing (no_new_data) rather than raise —
+        # kibor.asp dropping a table must not alert; a fetch error still fails the run.
         try:
             recs = parse_auctions_html(f.content.decode("utf-8", errors="replace"), f.when)
         except ValueError:
             return []
-        recs = [r for r in recs if ".gis." in r.series_id]
         return drop_unchanged_undated(recs, f.when, self._last_values([r.series_id for r in recs]))
 
     @staticmethod
@@ -202,6 +210,7 @@ class SbpAuctionsJob(IngestionJob):
                         VALUES (%s, %s, %s, %s, 'SBP')
                         ON CONFLICT (auction_type, tenor, auction_date)
                         DO UPDATE SET cutoff_yield = EXCLUDED.cutoff_yield, revised_at = now()
+                        WHERE auctions.cutoff_yield IS DISTINCT FROM EXCLUDED.cutoff_yield
                         """,
                         (atype, tenor, r.obs_date, r.value),
                     )

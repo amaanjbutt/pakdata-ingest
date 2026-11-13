@@ -111,3 +111,70 @@ def test_db_state_overlays_refresh_date_and_module(monkeypatch):
     assert (out["x.b"].easydata_last_refresh, out["x.b"].module) == ("2026-09-01", "external")
     assert out["x.c"] == cfg[2]  # not in the DB: unchanged
     assert es._module_priority(out["social.a"]) < es._module_priority(cfg[0])
+
+
+class FakePool:
+    """QuotaPool's selection rule (first key not retired) with a named-key retire."""
+    def __init__(self, keys: list[str]):
+        self.keys, self.blocked, self.calls = list(keys), set(), 0
+        self.api_key = keys[0]
+    def allow(self) -> bool:
+        for k in self.keys:
+            if k not in self.blocked:
+                self.api_key = k
+                return True
+        return False
+    def record(self) -> None:
+        self.calls += 1
+    def penalize(self, seconds: float = 3600.0) -> None:
+        self.blocked.add(self.api_key)
+    def penalize_key(self, key: str, seconds: float = 3600.0) -> None:
+        self.blocked.add(key)
+
+
+def _keyed_job(monkeypatch, keys, refuse):
+    """A job whose fake EasyData answers 401 when refuse(series_id, key) is true."""
+    job = eds.EasyDataSyncJob.__new__(eds.EasyDataSyncJob)
+    job.api_keys, job.api_key, job._alerted_401 = list(keys), keys[0], False
+    job._dead_keys = set()
+
+    def fake_get(url: str):
+        sid, key = url.split("|")
+        if refuse(sid, key):
+            raise RuntimeError("HTTP Error 401: ")
+        return b'{"columns":[],"rows":[]}'
+
+    monkeypatch.setattr(job, "_data_url", lambda s, backfill, key: f"{s.id}|{key}")
+    monkeypatch.setattr(job, "http_get", fake_get)
+    monkeypatch.setattr(job, "upsert", lambda v: 1)
+    monkeypatch.setattr(job, "validate", lambda recs: recs)
+    monkeypatch.setattr(job, "_update_refresh", lambda sid, r: None)
+    monkeypatch.setattr(eds, "parse_easydata_json", lambda text: [object()])
+    monkeypatch.setattr(eds.storage, "archive", lambda *a, **k: "/tmp/x")
+    monkeypatch.setattr(eds.alerting, "alert", lambda *a, **k: None)
+    return job
+
+
+def test_dead_key_is_retired_after_two_401s(monkeypatch):
+    """The 2026-11 runs: one key in the pool answered 401 and was handed out until its
+    hourly budget ran out (225 series skipped every run, status `success`). Now it costs
+    two series (retried next run) and the run names it."""
+    job = _keyed_job(monkeypatch, ["dead", "live"], lambda sid, key: key == "dead")
+    pool = FakePool(["dead", "live"])
+    status, rows, processed = job._process_series_concurrent(_series(20), pool, False, {}, 1)
+    assert processed == 18 and rows == 18 and status == "success"
+    assert pool.blocked == {"dead"} and job._dead_keys == {1}
+    note = eds.unauthorized_note(sorted(job._dead_keys), len(job.api_keys))
+    assert "#1 of 2" in note and "401" in note and "dead" not in note  # position, never the key
+
+
+def test_one_refused_series_does_not_retire_a_good_key(monkeypatch):
+    job = _keyed_job(monkeypatch, ["k1", "k2"], lambda sid, key: sid == "s.3")
+    pool = FakePool(["k1", "k2"])
+    status, rows, processed = job._process_series_concurrent(_series(10), pool, False, {}, 1)
+    assert processed == 9 and not pool.blocked and not job._dead_keys
+
+
+def test_unauthorized_note_is_none_without_dead_keys():
+    assert eds.unauthorized_note([], 3) is None
+    assert "#2, #3 of 3" in eds.unauthorized_note([3, 2], 3)
