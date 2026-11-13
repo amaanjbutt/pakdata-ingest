@@ -11,21 +11,27 @@ we compute: PBS publishes per-item city prices but no per-city cost index.
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import date
 
 from app import db
 from ingestion.framework import IngestionJob
 
 # A city needs at least this many base-week items to yield a meaningful index.
 _MIN_BASKET = 8
+# The base week every published index is rebased to (the first SPI week we held). Weeks
+# recovered later that are earlier still (6 Jul 2023, from PBS's media library) are indexed
+# to it too, rather than moving the base and so restating every published value.
+BASE_WEEK = date(2023, 7, 13)
 
 
-def compute_city_indices(rows: list[dict], min_basket: int = _MIN_BASKET) -> dict:
+def compute_city_indices(rows: list[dict], min_basket: int = _MIN_BASKET,
+                         base_week: date | None = BASE_WEEK) -> dict:
     """Pure: SPI observation rows -> per-city cost-of-living index.
 
     `rows` are dicts with `series_id`, `obs_date`, `value`, `city`. Returns
     ``{city: {"base": date, "basket_n": int, "points": [(obs_date, index)]}}``,
-    each index rebased to 100 at the earliest week over the fixed base-week
-    basket. No DB/network — testable in isolation.
+    each index rebased to 100 at `base_week` (the earliest week when that week has no
+    prices) over the fixed base-week basket. No DB/network — testable in isolation.
     """
     data: dict[str, dict[str, dict]] = defaultdict(lambda: defaultdict(dict))
     all_dates: set = set()
@@ -38,7 +44,7 @@ def compute_city_indices(rows: list[dict], min_basket: int = _MIN_BASKET) -> dic
     if not all_dates:
         return {}
     dates = sorted(all_dates)
-    base = dates[0]
+    base = base_week if base_week in all_dates else dates[0]
     out: dict = {}
     for city, items in data.items():
         basket = {it: p for it, p in items.items() if p.get(base, 0) > 0}

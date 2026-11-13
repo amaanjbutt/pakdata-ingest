@@ -48,3 +48,21 @@ def test_city_below_min_basket_is_skipped():
 
 def test_empty_input():
     assert compute_city_indices([]) == {}
+
+
+def test_a_week_recovered_before_the_base_week_does_not_move_the_base():
+    """6 Jul 2023 was recovered after the index had been published on a 13 Jul 2023 base: the
+    earlier week is indexed to the pinned base, so no published value changes."""
+    from ingestion.jobs.cost_of_living import BASE_WEEK
+
+    early, later = date(2023, 7, 6), date(2023, 7, 20)
+    before = compute_city_indices(_rows("multan", {
+        "commodities.a": {BASE_WEEK: 100.0, later: 110.0},
+        "commodities.b": {BASE_WEEK: 50.0, later: 60.0}}), min_basket=2)
+    after = compute_city_indices(_rows("multan", {
+        "commodities.a": {early: 95.0, BASE_WEEK: 100.0, later: 110.0},
+        "commodities.b": {early: 50.0, BASE_WEEK: 50.0, later: 60.0}}), min_basket=2)
+    assert after["multan"]["base"] == before["multan"]["base"] == BASE_WEEK
+    pts = dict(after["multan"]["points"])
+    assert pts[BASE_WEEK] == 100.0 and pts[later] == dict(before["multan"]["points"])[later] == 115.0
+    assert pts[early] == 97.5  # mean(95, 100)

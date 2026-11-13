@@ -118,3 +118,24 @@ def test_job_takes_only_months_after_each_cumulative_file():
     with open(REVIEW_FIXTURE, "rb") as fh:
         recs = job.parse(FetchedFile(filename="cpi_review_2026_08.pdf", content=fh.read(), when=date.today()))
     assert recs and all(r.series_id.startswith("cpi.rural.") for r in recs)  # one writer per point
+
+
+def test_urban_furnishing_fy2022_with_a_glued_label():
+    """FY2021-22's furnishing row reads "…maintena1n4c2e.29 142.88 …" in the PDF's text layer
+    (July's 142.29 threaded through the label); the whole fiscal year used to be dropped."""
+    from ingestion.jobs.pbs_cpi_groups import _unglue_first
+
+    by = {(r.series_id, r.obs_date): r.value for r in _recs()}
+    assert by[("cpi.urban.furnishing", date(2021, 7, 31))] == 142.29
+    assert by[("cpi.urban.furnishing", date(2022, 6, 30))] == 165.68
+    assert sum(1 for (sid, d) in by if sid == "cpi.urban.furnishing" and date(2021, 7, 1) <= d <= date(2022, 6, 30)) == 12
+    # a normal label is left alone
+    assert _unglue_first("Food 1.00 2.00", ["1.00", "2.00"]) == ["1.00", "2.00"]
+
+
+def test_rural_furnishing_fy2017_with_two_glued_columns():
+    """Rural FY2016-17: "…ma1in0t1e.n6a3nc1e01.77 102.23 …" threads July (101.63) and August (101.77)."""
+    by = {(r.series_id, r.obs_date): r.value for r in _rural()}
+    assert by[("cpi.rural.furnishing", date(2016, 7, 31))] == 101.63
+    assert by[("cpi.rural.furnishing", date(2016, 8, 31))] == 101.77
+    assert by[("cpi.rural.furnishing", date(2016, 9, 30))] == 102.23

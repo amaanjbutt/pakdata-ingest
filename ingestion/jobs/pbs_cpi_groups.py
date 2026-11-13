@@ -94,6 +94,24 @@ _GROUP_LINE_RE = re.compile(r"^\s*(\d[\d\s]*?)\s+00\s+([A-Za-z].*)$")
 _DECIMAL_RE = re.compile(r"-?\d+\.\d+")
 
 
+def _unglue_first(rest: str, nums: list[str]) -> list[str]:
+    """The text layer sometimes threads the first month's indices through the end of a long
+    label: urban FY2021-22 furnishing reads "…equipment maintena1n4c2e.29 142.88 …" (142.29),
+    rural FY2016-17 "…equipment ma1in0t1e.n6a3nc1e01.77 102.23 …" (101.63, 101.77). The row
+    then shows fewer than 13 clean numbers and the fiscal year was dropped. When the token just
+    before the first clean number mixes letters and digits, and its digits split exactly into
+    indices (nnn.nn), those are the leading columns. Pure."""
+    tokens = rest.split()
+    k = next((i for i, t in enumerate(tokens) if re.fullmatch(r"-?\d+\.\d+", t)), None)
+    if not k or not (re.search(r"[A-Za-z]", tokens[k - 1]) and re.search(r"\d", tokens[k - 1])):
+        return nums
+    digits = re.sub(r"[^\d.]", "", tokens[k - 1])
+    glued = re.findall(r"\d{2,4}\.\d{2}", digits)
+    if not glued or "".join(glued) != digits:
+        return nums
+    return glued + [t for t in tokens[k:] if re.fullmatch(r"-?\d+\.\d+", t)]
+
+
 def _mg_code(code_block: str) -> str:
     return re.sub(r"\s", "", code_block)[-2:]
 
@@ -129,6 +147,8 @@ def parse_cpi_groups_pdf(pdf_bytes: bytes, area: str = "urban") -> list[Record]:
                 if mg not in _GROUPS:
                     continue
                 nums = _DECIMAL_RE.findall(m.group(2))
+                if len(nums) < 13:
+                    nums = _unglue_first(m.group(2), nums)
                 # need the 12 monthly values + a trailing fiscal average
                 if len(nums) < 13:
                     continue

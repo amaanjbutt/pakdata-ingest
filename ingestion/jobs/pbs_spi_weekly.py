@@ -38,6 +38,18 @@ BACKFILL_WEEKS = 104
 # ("SPI20Annex26USCP_07032024.pdf"; some entries even swap the two links), so a
 # backfill reads that list instead of guessing URLs.
 ARCHIVE_PAGE = "https://www.pbs.gov.pk/price-statistics/"
+# PBS's WordPress media library lists every upload, including annexures that the archive list
+# links wrongly or not at all: 18 weeks of Jul–Dec 2023 (re-uploaded on 23 Jan 2024 as
+# "SPI_AnnexUSCP_26072023.pdf" & co. while the list kept dead links) and 31 Jul 2025
+# ("Annex_31.07.202-5.pdf"). A backfill also reads it.
+# Searched twice: "Annex" misses the misspelt "SPI_AnexUSCP_10082023.pdf" (10 Aug 2023), "SPI" finds it.
+MEDIA_API = ("https://www.pbs.gov.pk/wp-json/wp/v2/media?search={q}&per_page=100&page={page}"
+             "&_fields=id,date,source_url")
+MEDIA_SEARCHES = ("Annex", "SPI")
+MEDIA_PAGES = 10
+_NOT_SPI = re.compile(r"CPI|Monthly|Census|Coding|Survey", re.I)
+_NAME_DATES = (re.compile(r"(\d{2})[._\-]?(\d{2})[._\-]?(20\d{2})(?!\d)"),  # 26072023, …2002.05.2024
+               re.compile(r"(?<!\d)(\d{2})[._\-]?(\d{2})[._\-]?(\d{2})(?!\d)"))     # 070923
 # A backfill fetches at most this many missing weeks per run (each annexure is ~4 MB
 # and the framework holds a run's files in memory) — re-run until nothing is missing.
 BACKFILL_BATCH = 20
@@ -233,6 +245,38 @@ def archive_entries(page_html: str) -> list[tuple[date, str]]:
     return sorted(out.items())
 
 
+def media_annexes(items: list[dict]) -> list[tuple[date | None, date, str]]:
+    """PBS media-library JSON items -> [(date in the file name or None, upload date, url)] for
+    the SPI annexure PDFs, oldest upload first. CPI / monthly-price annexes are left out. Pure."""
+    out = []
+    for x in items:
+        url = (x.get("source_url") or "") if isinstance(x, dict) else ""
+        name = url.rsplit("/", 1)[-1]
+        if not name.lower().endswith(".pdf") or "nex" not in name.lower() or _NOT_SPI.search(name):
+            continue
+        try:
+            uploaded = datetime.fromisoformat((x.get("date") or "")[:19]).date()
+        except ValueError:
+            continue
+        named = None
+        for pattern in _NAME_DATES:
+            for m in pattern.finditer(name):
+                y = int(m.group(3))
+                try:
+                    named = date(y + 2000 if y < 100 else y, int(m.group(2)), int(m.group(1)))
+                    break
+                except ValueError:
+                    continue
+            if named:
+                break
+        out.append((named, uploaded, url))
+    return sorted(out, key=lambda t: (t[1], t[2]))
+
+
+def _near(d: date, held: set[date], days: int = 2) -> bool:
+    return any(abs((d - h).days) <= days for h in held)
+
+
 class PbsSpiWeeklyJob(IngestionJob):
     name = "pbs_spi_weekly"
     source = "PBS"
@@ -300,6 +344,49 @@ class PbsSpiWeeklyJob(IngestionJob):
                     out.append(FetchedFile(filename=url.rsplit("/", 1)[-1], content=content, when=d))
         return out
 
+    def _media_items(self) -> list[dict]:
+        import httpx
+
+        from app.config import settings
+
+        items: dict = {}
+        for q in MEDIA_SEARCHES:
+            for page in range(1, MEDIA_PAGES + 1):
+                try:
+                    resp = httpx.get(MEDIA_API.format(q=q, page=page), headers={"User-Agent": settings.user_agent},
+                                     timeout=90, follow_redirects=True)
+                    batch = resp.json() if resp.status_code == 200 else []
+                except (httpx.HTTPError, ValueError):
+                    break
+                if not isinstance(batch, list) or not batch:
+                    break  # WordPress answers 400 past the last page
+                items.update({x.get("id") or x.get("source_url"): x for x in batch if isinstance(x, dict)})
+        return list(items.values())
+
+    def _media_missing(self, held: set[date], limit: int) -> list[FetchedFile]:
+        """Annexures in PBS's media library for weeks we don't hold. A file is dated by its own
+        header (parse_spi_pdf), never by its name; one whose header week we hold is dropped."""
+        out: list[FetchedFile] = []
+        got = set(held)
+        for named, uploaded, url in media_annexes(self._media_items()):
+            if len(out) >= limit:
+                break
+            guess = named or uploaded - timedelta(days=(uploaded.weekday() - 3) % 7)
+            if _near(guess, got) or guess < date(2023, 7, 1):
+                continue
+            content = self._get(url)
+            if content is None:
+                continue
+            try:
+                d, _ = parse_spi_pdf(content, guess)
+            except ValueError:
+                continue  # not an SPI annexure (other "Annex" uploads share the search)
+            if d in got:
+                continue
+            got.add(d)
+            out.append(FetchedFile(filename=url.rsplit("/", 1)[-1], content=content, when=d))
+        return out
+
     def fetch(self, backfill: bool = False) -> list[FetchedFile]:
         out: list[FetchedFile] = []
         if not backfill:
@@ -320,6 +407,7 @@ class PbsSpiWeeklyJob(IngestionJob):
                 content = self._get(url)
                 if content is not None:
                     out.append(FetchedFile(filename=url.rsplit("/", 1)[-1], content=content, when=d))
+            out += self._media_missing(held | {f.when for f in out}, BACKFILL_BATCH - len(out))
             if out or todo:
                 return out
         weeks = BACKFILL_WEEKS if backfill else INCREMENTAL_LOOKBACK_WEEKS

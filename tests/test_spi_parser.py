@@ -157,3 +157,46 @@ def test_incremental_fills_listed_weeks_released_off_thursday(monkeypatch):
     monkeypatch.setattr(job, "_get", lambda url: b"%PDF fake")
     got = job._recent_listed({held})
     assert [f.when for f in got] == [wed]        # not the held week, not the 30-week-old one
+
+
+# --- PBS media library: annexures the archive list links wrongly or not at all ---------------
+
+def test_media_annexes_dates_from_file_names():
+    import json
+
+    from ingestion.jobs.pbs_spi_weekly import media_annexes
+
+    with open(os.path.join(FIX, "pbs_media_annex.json"), encoding="utf-8") as f:
+        got = {url.rsplit("/", 1)[-1]: (named, up) for named, up, url in media_annexes(json.load(f))}
+    # CPI / monthly-price annexes, the census coding scheme and .xlsx copies are not SPI annexure PDFs
+    assert not any(n.startswith(("CPI_", "SPI_Monthly", "Coding")) or n.endswith(".xlsx") for n in got)
+    assert got["SPI_AnnexUSCP_26072023.pdf"] == (date(2023, 7, 26), date(2024, 1, 23))
+    assert got["SPI_AnnexUSCP_070923.pdf"][0] == date(2023, 9, 7)        # two-digit year
+    assert got["SPI_AnexUSCP_10082023.pdf"][0] == date(2023, 8, 10)      # "Anex": found by the "SPI" search
+    assert got["SPI-AnnexUSCP12102023.pdf"][0] == date(2023, 10, 12)      # no separator
+    assert got["SPI_AnnexUSCP_27092023_0.pdf"][0] == date(2023, 9, 27)
+    assert got["ANNEX202620USCP2002.05.2024.pdf"][0] == date(2024, 5, 2)  # "%20" debris before the date
+    assert got["Annex_31.07.202-5.pdf"] == (None, date(2025, 8, 1))       # mistyped year: undated
+    assert got["Annex.pdf"] == (None, date(2025, 6, 19))
+
+
+def test_media_missing_dates_by_header_and_skips_held_weeks(monkeypatch):
+    """A file is fetched only for a week we lack, then dated by its own header; an undated upload
+    is tried for the Thursday on or before its upload day."""
+    from ingestion.jobs.pbs_spi_weekly import PbsSpiWeeklyJob
+
+    pdf = _load(os.path.join(FIX, "spi_annex_2026-04-16.pdf"))
+    items = [
+        {"date": "2026-04-17T10:00:00", "source_url": "https://www.pbs.gov.pk/wp-content/uploads/2020/07/Annex_16.04.2026.pdf"},
+        {"date": "2026-04-17T11:00:00", "source_url": "https://www.pbs.gov.pk/wp-content/uploads/2020/07/Annex.pdf"},
+        {"date": "2026-04-10T10:00:00", "source_url": "https://www.pbs.gov.pk/wp-content/uploads/2020/07/Annex_09.04.2026.pdf"},
+    ]
+    fetched = []
+    job = PbsSpiWeeklyJob()
+    monkeypatch.setattr(job, "_media_items", lambda: items)
+    monkeypatch.setattr(job, "_get", lambda url: fetched.append(url) or pdf)
+    out = job._media_missing({date(2026, 4, 9)}, limit=20)
+    assert [f.when for f in out] == [date(2026, 4, 16)]  # one file per header week
+    assert not any(u.endswith("09.04.2026.pdf") for u in fetched)  # 9 Apr is held: never fetched
+    assert len(fetched) == 1  # the second copy of 16 Apr is skipped once that week is taken
+    assert job._media_missing({date(2026, 4, 9), date(2026, 4, 16)}, limit=20) == []
