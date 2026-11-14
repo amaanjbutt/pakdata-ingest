@@ -29,7 +29,7 @@ MAX_LIMIT = 10000
 # `index` rebases to the first point IN the window, so it must not look back.
 _LOOKBACK_DAYS = {"yoy": 400, "mom": 40}
 _PERIOD_DAYS = {
-    "daily": 10, "weekly": 21, "monthly": 45, "quarterly": 120,
+    "daily": 10, "weekly": 21, "fortnightly": 21, "monthly": 45, "quarterly": 120,
     "half-yearly": 200, "semiannual": 200, "annual": 400,
 }
 TRANSFORM_FETCH_CAP = 50000

@@ -44,6 +44,7 @@ from ingestion.jobs.pbs_trade_hs import PbsTradeHsJob
 from ingestion.jobs.pbs_lfs import PbsLfsJob
 from ingestion.jobs.pbs_lsm import PbsLsmJob
 from ingestion.jobs.pbs_spi_weekly import PbsSpiWeeklyJob
+from ingestion.jobs.pcga_cotton_arrivals import PcgaCottonArrivalsJob
 from ingestion.jobs.pso_fuel_prices import PsoFuelPricesJob
 from ingestion.jobs.kpt_shipping import KptShippingJob
 from ingestion.jobs.kpt_tonnage_history import KptTonnageHistoryJob
@@ -98,6 +99,7 @@ JOBS: dict[str, type[IngestionJob]] = {
     VintagesRefreshJob.name: VintagesRefreshJob,
     PsoFuelPricesJob.name: PsoFuelPricesJob,
     SindhAmisPricesJob.name: SindhAmisPricesJob,
+    PcgaCottonArrivalsJob.name: PcgaCottonArrivalsJob,
     # Run from a workstation (the publishers block the VPS); annual / one-off sources.
     NepraGenerationJob.name: NepraGenerationJob,
     PbsCensus2023Job.name: PbsCensus2023Job,

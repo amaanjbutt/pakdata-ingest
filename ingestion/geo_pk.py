@@ -71,6 +71,7 @@ _ALIASES = {
     "hernai": "Harnai", "lasbilla": "Lasbela", "pashin": "Pishin", "shaheed sikandar abad": "Surab",
     "shaheed sikandarabad": "Surab", "sohbat pur": "Sohbatpur", "kolai pallas": "Kolai Palas Kohistan",
     "kolai palas": "Kolai Palas Kohistan", "s waziristan": "South Waziristan", "n waziristan": "North Waziristan",
+    "qasur": "Kasur", "badeen": "Badin",
 }
 
 

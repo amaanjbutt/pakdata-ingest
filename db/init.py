@@ -378,6 +378,7 @@ CATALOG_MODULES = [
     "ingestion.jobs.pbs_census_history",
     "ingestion.jobs.pbs_pslm",
     "ingestion.jobs.pbs_hies",
+    "ingestion.jobs.pcga_cotton_arrivals",
 ]
 
 

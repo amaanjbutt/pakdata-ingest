@@ -67,6 +67,10 @@ SCHEDULES: list[Schedule] = [
     # Sindh AMIS fruit & vegetable rates (reachable from the VPS), entered over the day.
     Schedule("sindh_amis_prices", {"hour": 21, "minute": 45},
              expected_interval=timedelta(days=3)),
+    # PCGA cotton arrivals by district (pcga.org answers the VPS): a report around the 3rd and the 18th
+    # while the ginning factories work (July → April); a daily check re-reads the newest three.
+    Schedule("pcga_cotton_arrivals", {"hour": 14, "minute": 40},
+             expected_interval=timedelta(days=3)),
     # PSO retail fuel prices (psopk.com answers the VPS): PSO now posts a notice most
     # weekdays; check each morning and evening. A quiet stretch is normal, hence stale_on_run.
     Schedule("pso_fuel_prices", {"hour": 9, "minute": 5},
