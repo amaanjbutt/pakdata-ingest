@@ -182,3 +182,24 @@ def test_a_transcribed_scan_reads_like_the_text_report():
     multan = _row(rows, "MULTAN")
     assert (multan["sold_exporters"], multan["sold"], multan["factories_working"]) == (None, 20409, 5)
     assert failed_columns(rows, totals) == {}
+
+
+def test_every_stored_transcription_passes_the_checks():
+    import glob
+
+    from ingestion.jobs.pcga_cotton_arrivals import TRANSCRIBED_DIR, transcribed
+
+    files = sorted(glob.glob(os.path.join(TRANSCRIBED_DIR, "*.md")))
+    assert files, "no transcriptions found"
+    for path in files:
+        name = os.path.basename(path)
+        lines = transcribed_lines(transcribed(name.replace(".md", ".pdf")))
+        when, rows, totals = parse_lines(lines)
+        assert len(rows) == 33 and set(totals) == {"punjab", "sindh", "pakistan"}, name
+        assert failed_columns(rows, totals) == {}, name
+    # the scanned 18-Nov-2021 report: Pakistan as on 15 Nov 2021 (the 3 Dec report's own date is 1 Dec)
+    lines = transcribed_lines(transcribed("18-November-2021.pdf"))
+    assert parse_lines(lines)[0] == date(2021, 11, 15)
+    recs = _key(report_records(lines))
+    assert recs[("agriculture.cotton.arrivals", date(2021, 11, 15), (("level", "national"),))] == 6852823
+    assert recs[("agriculture.cotton.factories_working", date(2021, 11, 15), (("level", "national"),))] == 444
