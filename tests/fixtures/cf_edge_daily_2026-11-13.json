@@ -1,0 +1,179 @@
+{
+ "data": {
+  "viewer": {
+   "accounts": [
+    {
+     "byStatus": [
+      {
+       "dimensions": {
+        "status": "clientDisconnected"
+       },
+       "sum": {
+        "errors": 0,
+        "requests": 124,
+        "subrequests": 692
+       }
+      },
+      {
+       "dimensions": {
+        "status": "success"
+       },
+       "sum": {
+        "errors": 0,
+        "requests": 21647,
+        "subrequests": 65320
+       }
+      }
+     ],
+     "cpu": [
+      {
+       "quantiles": {
+        "cpuTimeP50": 10810,
+        "cpuTimeP99": 167622
+       }
+      }
+     ]
+    }
+   ],
+   "zones": [
+    {
+     "api": [],
+     "site": [
+      {
+       "avg": {
+        "sampleInterval": 1.019047619047619
+       },
+       "count": 535,
+       "dimensions": {
+        "edgeResponseStatus": 301
+       }
+      },
+      {
+       "avg": {
+        "sampleInterval": 1
+       },
+       "count": 18,
+       "dimensions": {
+        "edgeResponseStatus": 308
+       }
+      },
+      {
+       "avg": {
+        "sampleInterval": 1.0131699446164582
+       },
+       "count": 23233,
+       "dimensions": {
+        "edgeResponseStatus": 200
+       }
+      },
+      {
+       "avg": {
+        "sampleInterval": 1.1150442477876106
+       },
+       "count": 126,
+       "dimensions": {
+        "edgeResponseStatus": 499
+       }
+      },
+      {
+       "avg": {
+        "sampleInterval": 1.09
+       },
+       "count": 109,
+       "dimensions": {
+        "edgeResponseStatus": 304
+       }
+      },
+      {
+       "avg": {
+        "sampleInterval": 1.0021645021645023
+       },
+       "count": 463,
+       "dimensions": {
+        "edgeResponseStatus": 204
+       }
+      },
+      {
+       "avg": {
+        "sampleInterval": 1
+       },
+       "count": 29,
+       "dimensions": {
+        "edgeResponseStatus": 307
+       }
+      },
+      {
+       "avg": {
+        "sampleInterval": 1
+       },
+       "count": 18,
+       "dimensions": {
+        "edgeResponseStatus": 500
+       }
+      },
+      {
+       "avg": {
+        "sampleInterval": 1.1314387211367674
+       },
+       "count": 1911,
+       "dimensions": {
+        "edgeResponseStatus": 404
+       }
+      }
+     ],
+     "top5xx": [
+      {
+       "count": 8,
+       "dimensions": {
+        "clientRequestHTTPHost": "pakdatahub.com",
+        "clientRequestPath": "/_serverFn/36dee04b72df72b9765746b098713b6fca28c0ae55ef83cf281cb9ef32d8d6ea",
+        "edgeResponseStatus": 500
+       }
+      },
+      {
+       "count": 3,
+       "dimensions": {
+        "clientRequestHTTPHost": "pakdatahub.com",
+        "clientRequestPath": "/_serverFn/f912813553b13108c04c121741fc83dc86efdbaae2afe7dd60ff3fcc3c0d15c1",
+        "edgeResponseStatus": 500
+       }
+      },
+      {
+       "count": 3,
+       "dimensions": {
+        "clientRequestHTTPHost": "pakdatahub.com",
+        "clientRequestPath": "/_serverFn/0b028074dccc6ace556faef174f0e3db5288ee43063d0256b3e32d22d0877552",
+        "edgeResponseStatus": 500
+       }
+      },
+      {
+       "count": 2,
+       "dimensions": {
+        "clientRequestHTTPHost": "pakdatahub.com",
+        "clientRequestPath": "/_serverFn/b8aabbb1449aafe6a8f2ee47333188853b3dd75449b38bce2c154001024c8e31",
+        "edgeResponseStatus": 500
+       }
+      },
+      {
+       "count": 1,
+       "dimensions": {
+        "clientRequestHTTPHost": "pakdatahub.com",
+        "clientRequestPath": "/mcp",
+        "edgeResponseStatus": 500
+       }
+      },
+      {
+       "count": 1,
+       "dimensions": {
+        "clientRequestHTTPHost": "pakdatahub.com",
+        "clientRequestPath": "/sse",
+        "edgeResponseStatus": 500
+       }
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "errors": null
+}

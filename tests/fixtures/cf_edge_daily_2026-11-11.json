@@ -1,0 +1,239 @@
+{
+ "data": {
+  "viewer": {
+   "accounts": [
+    {
+     "byStatus": [
+      {
+       "dimensions": {
+        "status": "exceededResources"
+       },
+       "sum": {
+        "errors": 4417,
+        "requests": 4417,
+        "subrequests": 14618
+       }
+      },
+      {
+       "dimensions": {
+        "status": "clientDisconnected"
+       },
+       "sum": {
+        "errors": 0,
+        "requests": 37,
+        "subrequests": 399
+       }
+      },
+      {
+       "dimensions": {
+        "status": "success"
+       },
+       "sum": {
+        "errors": 0,
+        "requests": 29387,
+        "subrequests": 84820
+       }
+      }
+     ],
+     "cpu": [
+      {
+       "quantiles": {
+        "cpuTimeP50": 18680,
+        "cpuTimeP99": 181684
+       }
+      }
+     ]
+    }
+   ],
+   "zones": [
+    {
+     "api": [],
+     "site": [
+      {
+       "avg": {
+        "sampleInterval": 1.0234375
+       },
+       "count": 393,
+       "dimensions": {
+        "edgeResponseStatus": 301
+       }
+      },
+      {
+       "avg": {
+        "sampleInterval": 1
+       },
+       "count": 7,
+       "dimensions": {
+        "edgeResponseStatus": 403
+       }
+      },
+      {
+       "avg": {
+        "sampleInterval": 1
+       },
+       "count": 2,
+       "dimensions": {
+        "edgeResponseStatus": 405
+       }
+      },
+      {
+       "avg": {
+        "sampleInterval": 1.0113905376196521
+       },
+       "count": 29479,
+       "dimensions": {
+        "edgeResponseStatus": 200
+       }
+      },
+      {
+       "avg": {
+        "sampleInterval": 1
+       },
+       "count": 36,
+       "dimensions": {
+        "edgeResponseStatus": 499
+       }
+      },
+      {
+       "avg": {
+        "sampleInterval": 1.0068274920345925
+       },
+       "count": 4424,
+       "dimensions": {
+        "edgeResponseStatus": 503
+       }
+      },
+      {
+       "avg": {
+        "sampleInterval": 1.0153846153846153
+       },
+       "count": 132,
+       "dimensions": {
+        "edgeResponseStatus": 304
+       }
+      },
+      {
+       "avg": {
+        "sampleInterval": 1
+       },
+       "count": 212,
+       "dimensions": {
+        "edgeResponseStatus": 204
+       }
+      },
+      {
+       "avg": {
+        "sampleInterval": 1.0897435897435896
+       },
+       "count": 170,
+       "dimensions": {
+        "edgeResponseStatus": 307
+       }
+      },
+      {
+       "avg": {
+        "sampleInterval": 1
+       },
+       "count": 8,
+       "dimensions": {
+        "edgeResponseStatus": 500
+       }
+      },
+      {
+       "avg": {
+        "sampleInterval": 1.1101321585903083
+       },
+       "count": 756,
+       "dimensions": {
+        "edgeResponseStatus": 404
+       }
+      }
+     ],
+     "top5xx": [
+      {
+       "count": 214,
+       "dimensions": {
+        "clientRequestHTTPHost": "pakdatahub.com",
+        "clientRequestPath": "/coverage",
+        "edgeResponseStatus": 503
+       }
+      },
+      {
+       "count": 73,
+       "dimensions": {
+        "clientRequestHTTPHost": "pakdatahub.com",
+        "clientRequestPath": "/mandi/tomato",
+        "edgeResponseStatus": 503
+       }
+      },
+      {
+       "count": 61,
+       "dimensions": {
+        "clientRequestHTTPHost": "pakdatahub.com",
+        "clientRequestPath": "/mandi/carrot",
+        "edgeResponseStatus": 503
+       }
+      },
+      {
+       "count": 60,
+       "dimensions": {
+        "clientRequestHTTPHost": "pakdatahub.com",
+        "clientRequestPath": "/mandi/bitter_gourd",
+        "edgeResponseStatus": 503
+       }
+      },
+      {
+       "count": 52,
+       "dimensions": {
+        "clientRequestHTTPHost": "pakdatahub.com",
+        "clientRequestPath": "/mandi/guava",
+        "edgeResponseStatus": 503
+       }
+      },
+      {
+       "count": 49,
+       "dimensions": {
+        "clientRequestHTTPHost": "pakdatahub.com",
+        "clientRequestPath": "/mandi/capsicum",
+        "edgeResponseStatus": 503
+       }
+      },
+      {
+       "count": 47,
+       "dimensions": {
+        "clientRequestHTTPHost": "pakdatahub.com",
+        "clientRequestPath": "/mandi/onion",
+        "edgeResponseStatus": 503
+       }
+      },
+      {
+       "count": 46,
+       "dimensions": {
+        "clientRequestHTTPHost": "pakdatahub.com",
+        "clientRequestPath": "/mandi/persimmon",
+        "edgeResponseStatus": 503
+       }
+      },
+      {
+       "count": 45,
+       "dimensions": {
+        "clientRequestHTTPHost": "pakdatahub.com",
+        "clientRequestPath": "/mandi/cucumber_kheera",
+        "edgeResponseStatus": 503
+       }
+      },
+      {
+       "count": 45,
+       "dimensions": {
+        "clientRequestHTTPHost": "pakdatahub.com",
+        "clientRequestPath": "/mandi/apple_gatcha",
+        "edgeResponseStatus": 503
+       }
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "errors": null
+}

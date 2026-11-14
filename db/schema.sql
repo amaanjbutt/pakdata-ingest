@@ -736,3 +736,26 @@ ALTER TABLE observations SET (autovacuum_vacuum_scale_factor = 0.02, autovacuum_
 ALTER TABLE agri_prices  SET (autovacuum_vacuum_scale_factor = 0.02, autovacuum_vacuum_insert_scale_factor = 0.02, autovacuum_analyze_scale_factor = 0.02);
 ALTER TABLE trade_hs     SET (autovacuum_vacuum_scale_factor = 0.02, autovacuum_vacuum_insert_scale_factor = 0.02, autovacuum_analyze_scale_factor = 0.02);
 ALTER TABLE fund_navs    SET (autovacuum_vacuum_scale_factor = 0.02, autovacuum_vacuum_insert_scale_factor = 0.02, autovacuum_analyze_scale_factor = 0.02);
+
+-- ---- edge health (scripts/edge_health.py, 2026-11-14) ---------------------------------------------
+-- One row per UTC day from Cloudflare's analytics: the website Worker's invocations by outcome (the free
+-- plan allows 100k a day; `exceeded_resources` = CPU-limit kills, served as 503/1102) and what visitors
+-- got from pakdatahub.com. Excludes the Worker's own edge-cache lookups (requestSource
+-- edgeWorkerCacheAPI), whose misses Cloudflare reports as 504 rows. Rewritten whole by the daily run.
+CREATE TABLE IF NOT EXISTS ops_edge_daily (
+    day                 DATE PRIMARY KEY,
+    worker_requests     BIGINT NOT NULL DEFAULT 0,
+    worker_errors       BIGINT NOT NULL DEFAULT 0,
+    exceeded_resources  BIGINT NOT NULL DEFAULT 0,
+    client_disconnected BIGINT NOT NULL DEFAULT 0,
+    cpu_p50_ms          REAL,
+    cpu_p99_ms          REAL,
+    site_requests       BIGINT NOT NULL DEFAULT 0,   -- visitor requests to pakdatahub.com (sample-weighted)
+    site_5xx            BIGINT NOT NULL DEFAULT 0,
+    api_requests        BIGINT NOT NULL DEFAULT 0,   -- api.pakdatahub.com, when it is proxied by Cloudflare
+    api_5xx             BIGINT NOT NULL DEFAULT 0,
+    worker_by_status    JSONB NOT NULL DEFAULT '{}'::jsonb,
+    site_by_status      JSONB NOT NULL DEFAULT '{}'::jsonb,
+    top_5xx             JSONB NOT NULL DEFAULT '[]'::jsonb,  -- [{host, path, status, count}]
+    fetched_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);

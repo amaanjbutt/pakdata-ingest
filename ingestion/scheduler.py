@@ -207,44 +207,54 @@ def _clear_stale_alert(job_name: str) -> None:
         pass
 
 
-def staleness_check() -> list[str]:
-    """Alert on jobs whose freshness has lapsed. Returns the list of stale job
-    names (also useful for tests). Only checks jobs that are actually
-    registered — declared-but-unbuilt jobs are ignored."""
+def _span(td) -> str:
+    """'4 d 3 h', '5 h 12 min', '40 min'."""
+    mins = int(td.total_seconds() // 60)
+    d, rem = divmod(mins, 1440)
+    h, m = divmod(rem, 60)
+    if d:
+        return f"{d} d {h} h" if h else f"{d} d"
+    return f"{h} h {m} min" if h else f"{m} min"
+
+
+def stale_report() -> dict[str, tuple[str, str]]:
+    """Each registered monitored job whose freshness has lapsed -> (title, detail). Reads
+    `ingestion_runs`, sends nothing (the daily health email lists the same jobs)."""
     intervals = expected_intervals()
     stale_on_run = stale_on_run_jobs()
     last_success = _last_success_at()
     last_run = _last_run_rows()
     now = datetime.now(timezone.utc)
-    stale: list[str] = []
-
+    out: dict[str, tuple[str, str]] = {}
     for job_name, interval in intervals.items():
         if job_name not in JOBS:
             continue  # declared ahead of implementation
         # For "changes rarely" jobs, freshness = last run attempt, not last data.
-        ref = last_run.get(job_name, {}).get("started_at") if job_name in stale_on_run \
-            else last_success.get(job_name)
+        ref = last_run.get(job_name, {}).get("started_at") if job_name in stale_on_run             else last_success.get(job_name)
         if ref is None:
-            stale.append(job_name)
-            _alert_stale(
-                job_name,
-                f"staleness: {job_name} has never succeeded",
-                f"No successful run on record; expected every {interval}.",
-            )
+            out[job_name] = (f"staleness: {job_name} has never succeeded",
+                             f"No successful run on record; expected every {_span(interval)}.")
+        elif now - ref > interval:
+            out[job_name] = (f"staleness: {job_name} is stale",
+                             f"Last fresh run {_span(now - ref)} ago (expected every {_span(interval)}).")
+    return out
+
+
+def staleness_check() -> list[str]:
+    """Alert on jobs whose freshness has lapsed. Returns the list of stale job
+    names (also useful for tests). Only checks jobs that are actually
+    registered — declared-but-unbuilt jobs are ignored."""
+    report = stale_report()
+    for job_name in expected_intervals():
+        if job_name not in JOBS:
             continue
-        age = now - ref
-        if age > interval:
-            stale.append(job_name)
-            _alert_stale(
-                job_name,
-                f"staleness: {job_name} is stale",
-                f"Last fresh run {age} ago (> expected {interval}).",
-            )
+        if job_name in report:
+            _alert_stale(job_name, *report[job_name])
         else:
             _clear_stale_alert(job_name)
-    if not stale:
-        log.info("staleness check: all %d registered scheduled jobs fresh", len(intervals))
-    return stale
+    if not report:
+        log.info("staleness check: all %d registered scheduled jobs fresh", len(expected_intervals()))
+    return list(report)
 
 
 def health_check() -> dict:
@@ -521,6 +531,16 @@ def build_scheduler() -> BlockingScheduler:
         log.info("GitHub Actions dispatch off (no GHA_DISPATCH_TOKEN / REQLOG_ARCHIVE_TOKEN) — "
                  "the workflows' own crons run them")
 
+    # Website + API health (scripts/edge_health.py): uptime checks every 5 minutes, yesterday's Cloudflare
+    # figures (UTC day, complete by 05:00 PKT) at 06:30, and the one daily health email at 07:00.
+    for fn, cron, label in (
+        (edge_probe_job, {"minute": "*/5"}, "every 5 min"),
+        (edge_daily_job, {"hour": 6, "minute": 30}, "daily 06:30"),
+        (health_email_job, {"hour": 7, "minute": 0}, "daily 07:00"),
+    ):
+        sched.add_job(fn, trigger=CronTrigger(**cron, timezone=settings.timezone), id=fn.__name__, name=fn.__name__)
+        log.info("scheduled %-22s cron=%s", fn.__name__, label)
+
     # encrypted off-site copy of the night's verified dump (backup runs 20:00 UTC = 01:00 PKT)
     sched.add_job(offsite_backup_job, trigger=CronTrigger(hour=2, minute=45, timezone=settings.timezone),
                   id="offsite_backup", name="offsite_backup")
@@ -534,6 +554,32 @@ def dispatch_workflow(workflow: str, inputs: dict) -> None:
         gha_dispatch.run(workflow, inputs, redis_client=get_redis())
     except Exception:  # noqa: BLE001 — must not kill the scheduler
         log.exception("dispatch of %s raised", workflow)
+
+
+def edge_probe_job() -> None:
+    from scripts import edge_health
+    try:
+        edge_health.probe(get_redis())
+    except Exception:  # noqa: BLE001 — must not kill the scheduler; the next run is 5 min away
+        log.exception("edge probe failed")
+
+
+def edge_daily_job() -> None:
+    from scripts import edge_health
+    try:
+        edge_health.daily()
+    except Exception as exc:  # noqa: BLE001
+        log.exception("edge daily failed")
+        alerting.alert("edge_health.daily failed", str(exc)[:500])
+
+
+def health_email_job() -> None:
+    from scripts import edge_health
+    try:
+        edge_health.daily_email(get_redis())
+    except Exception as exc:  # noqa: BLE001
+        log.exception("daily health email failed")
+        alerting.alert("daily health email failed", str(exc)[:500])
 
 
 def offsite_backup_job() -> None:

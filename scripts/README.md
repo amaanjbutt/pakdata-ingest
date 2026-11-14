@@ -23,6 +23,7 @@ GitHub Actions in the public ingestion repo, or on the PC (`docker compose run -
 | `set_easydata_bounds.py` | api container | Learn validation bounds for EasyData series from their history (idempotent) |
 | `apply_easydata_units.py` | api container | Write the SBP-verified dataset scales (`ingestion/easydata_units.py`) to `series.unit` and rescale the merge-spliced history in `ingestion/easydata_splices.csv`; dry run, `--commit` backs up first |
 | `harvest_dataset_codes.py` | PC (Playwright) | Rebuild `ingestion/dataset_codes.json` from the EasyData portal tree |
+| `edge_health.py` | scheduler (every 5 min / 06:30 / 07:00 PKT), by hand in the scheduler container | Uptime probes of key pages + API, Cloudflare's daily website figures → `ops_edge_daily`, the daily health email (`probe`, `daily [--day]`, `email [--print]`). See `docs/operations.md` → Verify prod |
 | `check_repo.py` | CI | Consistency checks: every job registered, scheduled or monitored, workflows only run registered jobs |
 | `backup.sh`, `backup_loop.sh`, `backup_rotate.sh` | `backup` container | Nightly `pg_dump` at 20:00 UTC + verified scratch restore, then 7 daily / 4 weekly / 3 monthly rotation |
 

@@ -3,11 +3,15 @@
 Set ALERT_WEBHOOK_URL (Slack/Telegram-compatible incoming webhook) and/or
 ALERT_EMAIL_TO (delivered via Resend, see app.services.email) to enable delivery;
 otherwise alerts are logged only. Delivery never raises into ingestion.
+
+Where Redis is configured (the VPS api + scheduler), each alert is also tallied by title in an
+hourly hash, so the daily health email (scripts/edge_health.py) can say how many were sent.
 """
 from __future__ import annotations
 
 import logging
 import os
+from datetime import datetime, timezone
 
 import httpx
 
@@ -32,8 +36,30 @@ def alert_unless_403(title: str, message: str) -> None:
     alert(title, message)
 
 
+COUNT_KEY = "pakdata:alerts:{hour}"  # hour = %Y%m%d%H, UTC
+_COUNT_TTL = 3 * 86400
+
+
+def _tally(title: str) -> None:
+    """Count the alert for the daily health email. Only where REDIS_URL is set (not on the GitHub
+    runners); a second's timeout and never raises."""
+    url = os.getenv("REDIS_URL")
+    if not url:
+        return
+    try:
+        import redis
+
+        r = redis.from_url(url, socket_connect_timeout=1, socket_timeout=1, decode_responses=True)
+        key = COUNT_KEY.format(hour=datetime.now(timezone.utc).strftime("%Y%m%d%H"))
+        r.hincrby(key, title[:200], 1)
+        r.expire(key, _COUNT_TTL)
+    except Exception as exc:  # noqa: BLE001 — counting must never break alerting
+        log.debug("alert tally failed: %s", exc)
+
+
 def alert(title: str, message: str) -> None:
     log.warning("ALERT: %s — %s", title, message)
+    _tally(title)
     if _WEBHOOK:
         try:
             httpx.post(_WEBHOOK, json={"text": f"*{title}*\n{message}"}, timeout=10)
