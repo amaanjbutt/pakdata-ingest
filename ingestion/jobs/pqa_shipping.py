@@ -864,6 +864,9 @@ def chain(st: Statement, days: dict[date, dict]) -> None:
 
 
 WAYBACK = "https://web.archive.org/web/{}id_/{}"
+# the Wayback Machine's bot filter refuses some raw (id_) requests with a 429 that no wait clears, while the
+# ordinary replay of the same capture still answers; for a PDF the replay is the archived file as is
+WAYBACK_REPLAY = "https://web.archive.org/web/{}/{}"
 RECOVERED_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "data", "reference", "pqa_recovered_statements.json")
 
 
@@ -930,7 +933,8 @@ class PqaShippingJob(PortCallsMixin, IngestionJob):
             if backfill and i:
                 time.sleep(BACKFILL_PAUSE_S)
             content = b""
-            for src in [url.replace(" ", "%20")] + ([WAYBACK.format(wayback[url], url)] if url in wayback else []):
+            archived = [w.format(wayback[url], url) for w in (WAYBACK, WAYBACK_REPLAY)] if url in wayback else []
+            for src in [url.replace(" ", "%20")] + archived:
                 try:
                     content = self.http_get(src)
                 except Exception as exc:  # noqa: BLE001
@@ -940,6 +944,8 @@ class PqaShippingJob(PortCallsMixin, IngestionJob):
                     break
             if content[:4] == b"%PDF":
                 out.append(FetchedFile(filename=url.rsplit("/", 1)[-1], content=content, when=date.today()))
+            elif url in wayback:
+                log.warning("pqa_shipping: recovered statement %s not fetched from PQA or the Internet Archive", url)
         if errors and not out:
             raise errors[0]
         return out

@@ -169,6 +169,9 @@ MONITORED_EXTERNAL: list[Schedule] = [
     # Karachi Port's daily tonnage + container reports (ports.yml, twice a day): KPT's report host
     # answers GitHub's runners but not the VPS; each report shows only the latest day.
     Schedule("kpt_shipping", {}, expected_interval=timedelta(days=3)),
+    # Karachi Port's vessel history (ports.yml, once a day): every ship call since 1 May 2026, arrival
+    # and departure; kpt.gov.pk answers GitHub's runners (since Nov 2026) but not the VPS.
+    Schedule("kpt_vessel_history", {}, expected_interval=timedelta(days=3)),
 ]
 
 

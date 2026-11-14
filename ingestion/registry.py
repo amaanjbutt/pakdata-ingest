@@ -47,6 +47,7 @@ from ingestion.jobs.pbs_spi_weekly import PbsSpiWeeklyJob
 from ingestion.jobs.pso_fuel_prices import PsoFuelPricesJob
 from ingestion.jobs.kpt_shipping import KptShippingJob
 from ingestion.jobs.kpt_tonnage_history import KptTonnageHistoryJob
+from ingestion.jobs.kpt_vessel_history import KptVesselHistoryJob
 from ingestion.jobs.pqa_port_performance import PqaPortPerformanceJob
 from ingestion.jobs.pqa_shipping import PqaShippingJob
 from ingestion.jobs.pta_telecom import PtaTelecomJob
@@ -89,6 +90,7 @@ JOBS: dict[str, type[IngestionJob]] = {
     PqaShippingJob.name: PqaShippingJob,
     PqaPortPerformanceJob.name: PqaPortPerformanceJob,
     KptShippingJob.name: KptShippingJob,
+    KptVesselHistoryJob.name: KptVesselHistoryJob,  # GHA ports.yml (kpt.gov.pk)
     KptTonnageHistoryJob.name: KptTonnageHistoryJob,  # one-off, from the PC (kpt.gov.pk)
     SbpPaymentSystemsJob.name: SbpPaymentSystemsJob,
     SbpSmeFinanceJob.name: SbpSmeFinanceJob,

@@ -1,7 +1,9 @@
 name: kpt_probe
 # Is Karachi Port Trust reachable from GitHub's runners? kpt.gov.pk and its Oracle Reports host
 # antares.kpt.gov.pk:90 time out from the VPS (IPv4 and IPv6, 2026-10-31) and answer a Pakistani
-# residential IP. Each matrix leg lands on a different Azure IP. Read-only: a few GETs, no DB, no secrets.
+# residential IP. Runners: antares 6/6 since 2026-10-31; kpt.gov.pk reset them on 2026-10-31, answered
+# 6/6 on 2026-11-14 (its vessel history takes ~45 s). Each matrix leg lands on a different Azure IP.
+# Read-only: a few GETs, no DB, no secrets.
 on:
   workflow_dispatch:
 jobs:
@@ -17,9 +19,10 @@ jobs:
         run: |
           curl -s https://ifconfig.me/ip; echo " (runner IP)"
           for u in https://kpt.gov.pk/shipping/daily-board https://kpt.gov.pk/pages/86/tonnage-report \
+                   https://kpt.gov.pk/pages/87/vessel-history \
                    "http://antares.kpt.gov.pk:90/dev60cgi/rwcgi60.exe?tues" \
                    "http://antares.kpt.gov.pk:90/dev60cgi/rwcgi60.exe?shipcargo" ; do
             printf '%s -> ' "$u"
-            curl -4 -s -o /dev/null -w '%{http_code} %{size_download}B %{time_total}s\n' --max-time 25 \
+            curl -4 -s -o /dev/null -w '%{http_code} %{size_download}B %{time_total}s\n' --max-time 90 \
               -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141 Safari/537.36' "$u" || echo "timeout"
           done

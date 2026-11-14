@@ -1,6 +1,7 @@
 """The ports vessel table (`port_vessel_calls`): one row per ship × commodity × direction in each daily
 statement of a port (Port Qasim's "Daily Shipping and Cargo Statement", Karachi Port's daily tonnage
-and container-handling reports).
+and container-handling reports), and Karachi's ship calls (section 'calls', dated by arrival, from its
+Vessel History — kpt_vessel_history).
 
 Each statement date is its own snapshot: a ship at a berth for five days has five rows, one per
 statement, so a manifest or balance the port restates shows up from one day to the next — that day-by-day
@@ -24,7 +25,7 @@ class VesselRow:
 
     port: str                     # 'PQA' | 'KPT'
     statement_date: date
-    section: str                  # berth | anchorage | expected | sailed | containers
+    section: str                  # berth | anchorage | expected | sailed | containers | programme | calls
     vessel: str                   # name as printed, prefix (M.V-, M.T-) removed
     call_ref: str = ""            # PQA registration no. / KPT registration no. ('' when not printed)
     direction: str = ""           # import | export | '' (not stated)
@@ -85,13 +86,17 @@ def split(records: list) -> tuple[list, list[VesselRow]]:
     return [r for r in records if not isinstance(r, VesselRow)], rows
 
 
-def upsert_rows(rows: list[VesselRow]) -> int:
+def upsert_rows(rows: list[VesselRow], sections: tuple[str, ...] | None = None) -> int:
     """Write the rows, replacing each (port, statement date) wholesale: rows that date no longer
-    lists are deleted, changed rows updated, unchanged rows left alone."""
+    lists are deleted, changed rows updated, unchanged rows left alone. `sections` limits the
+    replacement to those sections, for a port whose sections come from different jobs (Karachi:
+    the daily reports and the vessel history) — each job then removes only its own rows."""
     from app import db
 
     if not rows:
         return 0
+    if sections is not None and {r.section for r in rows} - set(sections):
+        raise ValueError(f"rows outside the sections this job replaces ({', '.join(sections)})")
     by_day: dict[tuple[str, date], dict[tuple, VesselRow]] = {}
     for r in rows:  # last one wins (files are read oldest → newest)
         by_day.setdefault((r.port, r.statement_date), {})[r.key()] = r
@@ -107,10 +112,12 @@ def upsert_rows(rows: list[VesselRow]) -> int:
                 keep = [list(k[2:]) for k in keyed]
                 cur.execute(
                     "DELETE FROM port_vessel_calls WHERE port = %s AND statement_date = %s AND "
+                    + ("section = ANY(%s) AND " if sections is not None else "") +
                     "(section, vessel, call_ref, direction, commodity_raw, seq) NOT IN "
                     "(SELECT * FROM jsonb_to_recordset(%s::jsonb) AS k(section text, vessel text, call_ref text, "
                     "direction text, commodity_raw text, seq int))",
-                    (port, day, json.dumps([dict(zip(_KEY[2:], k)) for k in keep])),
+                    (port, day, *([list(sections)] if sections is not None else []),
+                     json.dumps([dict(zip(_KEY[2:], k)) for k in keep])),
                 )
                 cur.executemany(sql, [tuple(json.dumps(r.details) if c == "details" else getattr(r, c)
                                             for c in _COLS) for r in keyed.values()])
@@ -119,7 +126,10 @@ def upsert_rows(rows: list[VesselRow]) -> int:
 
 
 class PortCallsMixin:
-    """validate()/upsert() for jobs whose parse() returns vessel rows and observation records."""
+    """validate()/upsert() for jobs whose parse() returns vessel rows and observation records.
+    `replace_sections`: set it when another job writes other sections of the same port (see upsert_rows)."""
+
+    replace_sections: tuple[str, ...] | None = None
 
     def validate(self, records):
         obs, rows = split(records)
@@ -128,4 +138,4 @@ class PortCallsMixin:
     def upsert(self, validated) -> int:
         obs = [(r, f) for r, f in validated if not isinstance(r, VesselRow)]
         rows = [r for r, _ in validated if isinstance(r, VesselRow)]
-        return super().upsert(obs) + upsert_rows(rows)  # type: ignore[misc]
+        return super().upsert(obs) + upsert_rows(rows, self.replace_sections)  # type: ignore[misc]

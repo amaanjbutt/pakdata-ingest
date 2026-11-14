@@ -7,10 +7,11 @@
 `port` is PQA (Port Qasim, daily since 31 May 2019) or KPT (Karachi Port, daily since November 2026).
 Without `date` (and without `vessel`) the latest statement is returned. `section`: berth (alongside, with
 cargo handled in the last 24 hours), anchorage (waiting at the outer anchorage, PQA), expected (PQA),
-sailed (PQA, previous day), containers (KPT, TEUs per container ship). Each row is one ship × commodity ×
-direction on one statement date, so following a ship across dates shows its cargo worked down — and any
-manifest or balance the port restated. The daily totals are ordinary series (`ports.qasim.*`,
-`ports.karachi.*`).
+sailed (PQA, previous day), containers (KPT, TEUs per container ship), programme (KPT, ships expected and
+waiting), calls (KPT, every ship call since 1 May 2026, dated by its arrival day: arrival and departure
+times, purpose and cargo). Each row is one ship × commodity × direction on one statement date, so following
+a ship across dates shows its cargo worked down — and any manifest or balance the port restated. The daily
+totals are ordinary series (`ports.qasim.*`, `ports.karachi.*`).
 """
 from __future__ import annotations
 
@@ -30,7 +31,7 @@ MAX_LIMIT = 5000
 PORTS = {"PQA": "Port Qasim Authority — Daily Shipping and Cargo Statement",
          "KPT": "Karachi Port Trust — daily tonnage and container-handling reports"}
 _PORT = "^(PQA|KPT|pqa|kpt)$"
-_SECTION = "^(berth|anchorage|expected|sailed|containers)$"
+_SECTION = "^(berth|anchorage|expected|sailed|containers|programme|calls)$"
 FIELDS = ("statement_date", "port", "section", "vessel", "call_ref", "direction", "commodity", "commodity_raw",
           "unit", "terminal", "berth_raw", "agent", "agent_raw", "flag", "flag_raw", "port_raw", "country",
           "vessel_type", "loa_m", "draft_m", "manifest", "handled_24h", "handled_before", "balance", "berthed_at",

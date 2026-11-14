@@ -541,6 +541,7 @@ def month_totals(today: date) -> list[Record]:
 class KptShippingJob(PortCallsMixin, IngestionJob):
     name = "kpt_shipping"
     source = "KPT"
+    replace_sections = ("berth", "containers", "programme")  # `calls` are kpt_vessel_history's
 
     def fetch(self, backfill: bool = False) -> list[FetchedFile]:
         out: list[FetchedFile] = []

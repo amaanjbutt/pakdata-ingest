@@ -182,3 +182,36 @@ def test_recovered_statements_reference():
     items = recovered()
     assert items and len({i["date"] for i in items}) == len(items)  # one statement per recovered day
     assert all(i["url"].startswith("https://www.pqa.gov.pk/Content/Media/") and i["wayback"].isdigit() for i in items)
+
+
+def test_backfill_falls_back_to_the_archive_replay(monkeypatch):
+    """A statement PQA deleted comes from the Internet Archive: raw (id_) first, and when the Wayback bot
+    filter refuses that (a 429 no wait clears), the ordinary replay of the same capture."""
+    from ingestion.jobs import pqa_shipping as mod
+
+    album = "https://www.pqa.gov.pk/Content/Media/daily-shipping-and-cargo-handling-reports/"
+    live = album.replace("Media/", "Media//") + "dailyShippingCargoStat_31-OCT-2026-bc5b.PDF"
+    gone, lost = album + "dailyShippingCargoStat_19-JUN-2022-9120.PDF", album + "dailyShippingCargoStat_20-JUN-2022-cc19.PDF"
+    monkeypatch.setattr(mod, "BACKFILL_PAUSE_S", 0)
+    monkeypatch.setattr(mod, "recovered", lambda: [{"date": "2022-06-19", "url": gone, "wayback": "20220621125151"},
+                                                   {"date": "2022-06-20", "url": lost, "wayback": "20220621125148"}])
+    asked: list[str] = []
+
+    def http_get(url):
+        asked.append(url)
+        if url == live:
+            return b"%PDF-live"
+        if url == f"https://web.archive.org/web/20220621125151/{gone}":
+            return b"%PDF-replay"
+        raise RuntimeError("404 / 429")
+
+    job = PqaShippingJob()
+    monkeypatch.setattr(job, "_page", lambda url: f'<a href="{live}">x</a>')
+    monkeypatch.setattr(job, "http_get", http_get)
+    got = job.fetch(backfill=True)
+    assert [(f.filename, f.content) for f in got] == [  # oldest first; 20 Jun is nowhere, so it's left out
+        ("dailyShippingCargoStat_19-JUN-2022-9120.PDF", b"%PDF-replay"),
+        ("dailyShippingCargoStat_31-OCT-2026-bc5b.PDF", b"%PDF-live"),
+    ]
+    assert asked[:3] == [lost, f"https://web.archive.org/web/20220621125148id_/{lost}",
+                         f"https://web.archive.org/web/20220621125148/{lost}"]

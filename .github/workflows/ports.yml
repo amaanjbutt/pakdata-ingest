@@ -1,15 +1,22 @@
 name: ports
-# Karachi Port Trust's daily cargo (tonnage) and container (TEU) reports from GitHub's Azure runners.
-# KPT's report host antares.kpt.gov.pk:90 answers the runners (6/6 on 2026-10-31) and Cloudflare, but
-# times out from the VPS; kpt.gov.pk itself answers neither (kpt_probe.yml). Each report shows only the
-# latest day — there is no archive — so the job runs twice a day and stores what it sees; the second run
-# records any figures KPT restated. Port Qasim (pqa_shipping) runs on the VPS scheduler, not here.
+# Karachi Port Trust's daily cargo (tonnage) and container (TEU) reports, and its vessel history (every
+# ship call: arrival, departure, purpose), from GitHub's Azure runners. KPT's report host
+# antares.kpt.gov.pk:90 answers the runners (6/6 on 2026-10-31) and Cloudflare; kpt.gov.pk answers the
+# runners since November 2026 (6/6 on 2026-11-14, reset on 2026-10-31); both time out from the VPS
+# (kpt_probe.yml). Each report shows only the latest day — there is no archive — so the jobs run twice a
+# day and store what they see; the second run records any figures KPT restated and departures since the
+# morning. Port Qasim (pqa_shipping) runs on the VPS scheduler, not here.
 # Same restricted SSH tunnel to the VPS Postgres as the other workflows.
 on:
   schedule:
     - cron: '30 5 * * *'     # daily 10:30 PKT
     - cron: '30 12 * * *'    # daily 17:30 PKT
   workflow_dispatch:
+    inputs:
+      backfill:
+        description: 'Re-read the whole vessel history, from 1 May 2026 (kpt_vessel_history --backfill)'
+        type: boolean
+        default: false
 concurrency:
   group: ports
   cancel-in-progress: false
@@ -53,6 +60,7 @@ jobs:
       - name: install deps
         run: pip install -q -r requirements.txt
       - name: open DB tunnel to VPS
+        id: tunnel
         run: |
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.SSH_TUNNEL_KEY }}" > ~/.ssh/tunnel_key
@@ -74,3 +82,14 @@ jobs:
         run: |
           mkdir -p /tmp/raw
           python -m ingestion.run kpt_shipping --force
+      - name: kpt_vessel_history
+        # its own step: a kpt.gov.pk outage must not cost the day's reports, nor the reverse
+        if: ${{ !cancelled() && steps.tunnel.outcome == 'success' }}
+        env:
+          DATABASE_URL: postgresql://pakdata:${{ secrets.DB_PASSWORD }}@127.0.0.1:5432/pakdata
+          RAW_ARCHIVE_DIR: /tmp/raw
+        run: |
+          mkdir -p /tmp/raw
+          backfill=""
+          if [ "${{ github.event.inputs.backfill }}" = "true" ]; then backfill="--backfill"; fi
+          python -m ingestion.run kpt_vessel_history --force $backfill

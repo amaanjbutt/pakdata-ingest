@@ -53,6 +53,26 @@ def test_a_statement_replaces_its_day_and_keeps_other_days(clean):
 
 
 @needs_db
+def test_two_jobs_on_one_port_each_replace_only_their_own_sections(clean):
+    """Karachi: kpt_shipping writes berth/containers/programme rows, kpt_vessel_history 'calls' rows, both
+    dated by day; each run replaces only its own sections of a day."""
+    db = clean
+    d = date(2026, 11, 12)
+
+    def call(vessel):
+        return VesselRow(port=PORT, statement_date=d, section="calls", vessel=vessel, arrived_on=d)
+
+    upsert_rows([_row(d, "A"), _row(d, "B")], sections=("berth",))
+    upsert_rows([call("A"), call("C")], sections=("calls",))
+    upsert_rows([_row(d, "A")], sections=("berth",))   # B left the berth: removed, the calls stay
+    upsert_rows([call("C")], sections=("calls",))      # A's call dropped: removed, the berth row stays
+    got = db.query("SELECT section, vessel FROM port_vessel_calls WHERE port=%s ORDER BY section, vessel", (PORT,))
+    assert [(r["section"], r["vessel"]) for r in got] == [("berth", "A"), ("calls", "C")]
+    with pytest.raises(ValueError):
+        upsert_rows([call("D")], sections=("berth",))
+
+
+@needs_db
 def test_ports_api(client, api_key, clean):  # noqa: F811
     d1, d2 = date(2026, 10, 1), date(2026, 10, 2)
     upsert_rows([_row(d1, "ALPHA STAR"), _row(d1, "BETA"), _row(d2, "ALPHA STAR", balance=50.0)])
