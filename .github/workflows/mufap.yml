@@ -149,6 +149,19 @@ jobs:
             echo "::endgroup::"
           done
           echo "::notice::this runner ingested MUFAP"
+      # Keep what this run downloaded for the private raw-file archive: encrypted to the archive's
+      # public key (this repo's artifacts are public), collected weekly by the VPS (ops/archive).
+      - name: keep the downloaded files (encrypted artifact for the raw-file archive)
+        if: ${{ !cancelled() }}
+        run: bash scripts/pack_raw_artifact.sh /tmp/raw /tmp/raw-artifact
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: raw-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}
+          path: /tmp/raw-artifact/
+          retention-days: 30
+          if-no-files-found: ignore
+          compression-level: 0
   weekly:
     needs: gate
     if: >-
@@ -208,3 +221,16 @@ jobs:
           echo "::notice::ingesting portfolio (heavy)"
           timeout 2400 python -m ingestion.run mufap_fund_portfolio --force
           echo "exit=$? for mufap_fund_portfolio"
+      # Keep what this run downloaded for the private raw-file archive: encrypted to the archive's
+      # public key (this repo's artifacts are public), collected weekly by the VPS (ops/archive).
+      - name: keep the downloaded files (encrypted artifact for the raw-file archive)
+        if: ${{ !cancelled() }}
+        run: bash scripts/pack_raw_artifact.sh /tmp/raw /tmp/raw-artifact
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: raw-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}
+          path: /tmp/raw-artifact/
+          retention-days: 30
+          if-no-files-found: ignore
+          compression-level: 0
