@@ -18,9 +18,12 @@ amendment that says "for the figure X the figure Y" must find X in the table it 
 Not applied: amendments that had lapsed by 1 July (949(I)/2019, undone by 38(I)/2020; 119(I)/2020, to
 31 March 2020; 1571(I)/2022, 1633(I)/2022 and 1722(I)/2022, to 31 March 2023 by 204/205(I)/2023), and
 conditions by importer, end use or origin (paragraphs 2-4 of each SRO: Fifth Schedule and Chapter 99
-imports, CKD kits of home appliances, Afghan pine nuts …). FY2014-15 → FY2017-18 are not covered: RD then sat
-in several SROs at once (568(I)/2014, 482(I)/2009 and single-item SROs for sugar, wheat, fuel, maize, yarn
-and steel), each amended many times, and FBR hosts 568(I)/2014 only as an "updated" consolidation.
+imports, CKD kits of home appliances, Afghan pine nuts …). FY2014-15 → FY2017-18: RD then sat in several SROs at
+once (568(I)/2014 and 482(I)/2009, each amended many times, plus single-item SROs for potatoes, acrylics, sugar,
+wheat, petroleum, furnace oil and maize); the year-by-year tables in force on each 1 July are rebuilt once from
+FBR's SROs and consolidated copies by `scripts.claude_sros.build_rd_fy2015_2018` into
+`data/customs/regulatory_duty_fy2015_2018.json` (`EARLY_FILE`, every entry naming its SRO), and re-applied every
+run (no download).
 SRO 1065(I)/2026 (RD on commercial imports of used vehicles, on top of 1064) is not per code either.
 
 A heading or sub-heading entry applies to every code of that year's tariff under it, except the codes
@@ -83,6 +86,7 @@ AMENDMENTS: dict[int, list[tuple[str, list[tuple]]]] = {
     ],
 }
 CLAUDE_FILE = "data/customs/regulatory_duty_claude.json"
+EARLY_FILE = "data/customs/regulatory_duty_fy2015_2018.json"
 _CODEISH = re.compile(r"^[0-9OoIl'’.,]{2,12}$")
 _RATE = re.compile(r"^\d{1,3}(?:\.\d+)?%?$")
 _SNO = re.compile(r"^\d{1,4}[.)]?$")
@@ -232,6 +236,22 @@ def load_claude(path: str | None = None) -> dict[str, dict]:
         return json.load(f)["sros"]
 
 
+def load_early(path: str | None = None) -> dict[int, list[RdEntry]]:
+    """{fiscal year: entries} for FY2014-15 → FY2017-18 from the rebuilt file ({} when absent)."""
+    p = path or os.path.join(os.path.dirname(__file__), "..", "..", EARLY_FILE)
+    if not os.path.exists(p):
+        return {}
+    with open(p, encoding="utf-8") as f:
+        years = json.load(f)["years"]
+    out: dict[int, list[RdEntry]] = {}
+    for fy, es in years.items():
+        out[int(fy)] = []
+        for e in es:
+            pct, text = parse_rate(e["rate"])
+            out[int(fy)].append(RdEntry(e["code"], e["description"], pct, text, e["sro"]))
+    return out
+
+
 def _same_rate(a: str | None, b: str) -> bool:
     pa, ta = parse_rate(a)
     pb, tb = parse_rate(b)
@@ -315,7 +335,8 @@ class FbrRegulatoryDutyJob(IngestionJob):
 
     def fetch(self, backfill: bool = False) -> list[FetchedFile]:
         years = sorted(SROS) if backfill else sorted(SROS)[-1:]
-        return [FetchedFile(f"{fy}", self.http_get(SROS[fy][1]), date.today()) for fy in years]
+        early = [FetchedFile(f"{fy}", b"", date.today()) for fy in sorted(load_early())]   # no download
+        return early + [FetchedFile(f"{fy}", self.http_get(SROS[fy][1]), date.today()) for fy in years]
 
     def parse(self, f: FetchedFile):
         from app import db
@@ -324,9 +345,13 @@ class FbrRegulatoryDutyJob(IngestionJob):
         codes = {r["code"] for r in db.query("SELECT code FROM customs_tariff WHERE fy = %s", (fy,))}
         if not codes:
             raise ValueError(f"FY{fiscal_year(fy)}: no tariff edition loaded to check the RD codes against")
-        entries = claude_entries(fy)
-        if entries is None:
-            entries = parse_pages(list(pdf_words(f.content)))
+        early = load_early()
+        if fy in early:
+            entries = early[fy]
+        else:
+            entries = claude_entries(fy)
+            if entries is None:
+                entries = parse_pages(list(pdf_words(f.content)))
         rows = expand(entries, codes)
         return [RdRow(fy, c, e.rate_pct, e.rate_text, f"SRO {e.sro or SROS[fy][0]}") for c, e in sorted(rows.items())]
 

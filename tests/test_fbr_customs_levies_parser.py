@@ -2,8 +2,19 @@
 from __future__ import annotations
 
 import os
+import re
 
-from ingestion.jobs.fbr_additional_duty import OILS, RULES, acd_for, list_codes
+from ingestion.jobs.fbr_additional_duty import (
+    APPENDIX_I_2013,
+    APPENDIX_I_2015,
+    EARLY,
+    OILS,
+    RULES,
+    acd_for,
+    early_acd,
+    list_codes,
+    rd_goods,
+)
 from ingestion.jobs.fbr_customs_concessions import dedupe, parse_pdf, parse_rate
 from ingestion.jobs.fbr_customs_tariff import pdf_words
 import pytest
@@ -16,6 +27,7 @@ from ingestion.jobs.fbr_regulatory_duty import (
     excepted,
     expand,
     load_claude,
+    load_early,
     norm_code,
     parse_pages,
 )
@@ -200,3 +212,98 @@ def test_acd_code_lists_read_from_sro_1063_2026():
     assert acd_for((0.0, None), "39011000", r, listed) == 2     # 0% slab, but on the list
     assert acd_for((10.0, None), "10063010", r, listed) is None  # slabs under 20% pay none in FY2026-27
     assert acd_for((90.0, None), "22030000", r, listed) == 6
+
+
+# The FY2013-14 tariff's "Addl CD Ref. 693-2006 App.I" marks (its rd_acd column), as loaded
+TARIFF_2013_14_APP_I = """
+40081110 40081910 40082110 40082910 40091120 40092120 40093120 40094120 40129020 40169930 48211010 57032020 57033020
+68132010 70071111 70072111 70091010 70140010 73151910 73201010 82060010 83012010 83021010 83023010 83100020 84073110
+84073210 84073310 84099110 84099120 84133030 84152010 84212310 84213110 84254900 84831012 84834012 84835010 84836091
+84839020 84841022 85071010 85113010 85118030 85118040 85119010 85122010 85123010 85124010 85129010 85365021 85371010
+85443011 85444221 87071000 87079010 87081020 87082110 87082931 87082941 87083020 87083031 87085020 87087010 87088010
+87089120 87089210 87089310 87089410 87089930 87089940 87141010 87141020 87141030 90261020 90292011 90328910 91040020
+94012010 94019010 96138010""".split()
+
+
+def test_acd_appendix_i_read_from_sro_693_2006_and_609_2015():
+    # 693(I)/2006 as consolidated on 29 Oct 2013, Appendix I's pages: the code column (footnote marks as "8[…]")
+    printed = []
+    for page in pdf_words(_read("fbr_acd_sro_693-2006_app1.pdf")):
+        for x0, _, _, t in sorted(page, key=lambda w: (round(w[1] / 4), w[0])):
+            if t.startswith("Appendix-II"):
+                break
+            m = re.fullmatch(r"\[?(\d{4}\.\d{4})\]?", t)
+            if m and x0 < 130:
+                printed.append(m.group(1).replace(".", ""))
+    assert printed == APPENDIX_I_2013 and len(printed) == 80
+    # 609(I)/2015 part (a): the codes it inserts in Appendix I (quoted, leaving out the vehicles named in entries)
+    words = [w[3] for page in pdf_words(_read("fbr_acd_sro_609-2015.pdf"))
+             for w in sorted(page, key=lambda w: (round(w[1] / 4), w[0]))]
+    text = " ".join(words)
+    part_a = text[re.search(r"\(a\) in Appendix-I\b", text).end():re.search(r"\(b\) in Appendix-II", text).start()]
+    quoted = {c.replace(".", "") for c in re.findall(r"[\"“]\s?(\d{4}\.\d{4})", part_a)
+              if not c.startswith(("8701", "8702", "8703", "8704", "8711"))}
+    assert quoted == set(APPENDIX_I_2015) - set(APPENDIX_I_2013)
+    assert re.search(r"heading 8511\.8040 and entry relating thereto in column \(2\), the following shall be "
+                     r"substituted, namely:- .8511\.8030", part_a) and "85118040" not in APPENDIX_I_2015
+    # the FY2013-14 tariff's marks: the same list but for 609(I)/2015's two codes, which it marks early, and
+    # 8481.8020 (inserted by 491(I)/2009), which it leaves out
+    assert set(TARIFF_2013_14_APP_I) ^ set(APPENDIX_I_2013) == {"85118030", "87141030", "84818020"}
+
+
+def test_acd_fy2015_2019_rules_in_force_on_1_july():
+    none: set[str] = set()
+    assert early_acd("85118040", EARLY[2015], none) == (15, "693(I)/2006")     # CDI units, the code before 609
+    assert early_acd("85118030", EARLY[2015], none) is None
+    assert early_acd("01012100", EARLY[2015], none) is None                     # nothing else carries ACD
+    assert early_acd("85118030", EARLY[2016], none) == (15, "693(I)/2006")     # 16% only from 1 Dec 2015
+    assert early_acd("87141040", EARLY[2016], none) == (15, "693(I)/2006")
+    r17 = EARLY[2017]
+    assert early_acd("87082931", r17, none) == (11, "693(I)/2006")              # 484(I)/2016
+    assert early_acd("73182220", r17, {"73182220"}) == (11, "693(I)/2006")     # Appendix I wins over RD goods
+    assert early_acd("01012100", r17, none) == (1, "1178(I)/2015")
+    assert early_acd("04031000", r17, {"04031000"}) is None                     # goods under 568(I)/2014
+    for code in ("09041130", "12091000", "31021000", "85171210", "85291090"):
+        assert early_acd(code, r17, none) is None
+    assert early_acd("52010010", r17, none) == (1, "1178(I)/2015")             # cotton: clause (bb) from Jan 2017
+    assert early_acd("52010010", EARLY[2018], none) is None
+    assert early_acd("55064000", EARLY[2018], none) is None                     # 554(I)/2017, 1 July 2017
+    r19 = EARLY[2019]
+    assert early_acd("01012100", r19, none) == (2, "630(I)/2018")
+    assert early_acd("04031000", r19, rd_goods(2019, {"04031000"})) == (2, "630(I)/2018")  # RD goods pay too
+    assert early_acd("09041130", r19, none) == (2, "630(I)/2018")             # no longer a listed seed
+    for code in ("09042120", "31021000", "52010010", "55064000", "85171211"):
+        assert early_acd(code, r19, none) is None
+    assert early_acd("85171290", r19, none) == (2, "630(I)/2018")             # only 8517.1211/1219 now
+    assert early_acd("87082931", r19, none) == (11, "693(I)/2006")
+
+
+def test_acd_1178_exempts_the_goods_under_rd_sro_568_that_year():
+    codes = {"04031000", "72131000", "08052100", "69072111", "87032323", "07019000"}
+    assert rd_goods(2017, codes) == {"04031000", "72131000"}      # 1190 (vehicles) and 808 (potato) aren't 568
+    assert rd_goods(2018, codes) == {"04031000", "72131000", "08052100", "69072111"}   # + 555(I)/2017's rows
+    assert rd_goods(2015, codes) == set()                          # no 1178 before 1 Dec 2015
+
+
+def test_rd_fy2015_2018_rebuilt_from_the_sros_in_force_on_1_july():
+    early = load_early()
+    assert sorted(early) == [2015, 2016, 2017, 2018]
+
+    def at(fy, code):
+        return sorted((e.rate_pct, e.rate_text, e.sro) for e in early[fy] if e.entry == code)
+
+    assert at(2015, "0403.1000") == [(5.0, None, "568(I)/2014")]        # 568(I)/2014 as issued: 5%
+    assert at(2015, "3305.1000") == []                                   # 631(I)/2014 is dated 11 July 2014
+    assert at(2015, "0701.9000") == [(25.0, None, "808(I)/2009")]       # ware potato
+    assert at(2016, "8517.1210") == []                                   # 602(I)/2015 omits mobile phones
+    assert at(2016, "3402.2000") == [(5.0, None, "601(I)/2015")]
+    assert at(2016, "72.29") == [(20.0, None, "601(I)/2015")]            # 601: "for 15, 20"
+    assert at(2017, "72.13") == [(15.0, None, "568(I)/2014")]           # 236(I)/2016's 30% lapsed on 30 June 2016
+    assert at(2017, "7601.2000") == []
+    assert at(2017, "8703.2323") == [(50.0, None, "1190(I)/2015"), (60.0, None, "1190(I)/2015")]  # new / used
+    assert at(2017, "1001.1900") == []                                   # wheat: an amendment to 254 is missing
+    assert at(2018, "1001.1900") == [(60.0, None, "854(I)/2016")]
+    assert at(2018, "7303.0000") == [(12.5, None, "568(I)/2014")]       # 555(I)/2017 recodes 73.03
+    rows = expand(early[2017], {"72131000", "72139100", "87032323", "07019000"})
+    assert rows["72131000"].rate_pct == 15 and rows["07019000"].rate_pct == 25
+    assert "50%" in rows["87032323"].rate_text and "60%" in rows["87032323"].rate_text

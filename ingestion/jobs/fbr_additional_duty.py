@@ -18,9 +18,30 @@ per code: the rate stored is the one a commercial import of the code pays.
 FY2023-24 kept SRO 967(I)/2022: its amendments change nothing per code on 1 July 2023 — 1572(I)/2022
 (oils, CKD cars, 35% on large cars) ran 22 Aug 2022 → 31 Mar 2023 (extended by 206(I)/2023) and
 1954(I)/2022 only exempts stuck-up consignments of once-banned goods. Exemptions dated to end inside the
-year count on 1 July (572(I)/2020's oilseeds and edible oils, to 30 Sep 2020). FY2018-19 and earlier are
-not computed (FBR hosts SRO 630(I)/2018 only as an "UPDATED" copy). Rows: `customs_tariff_duties`
+year count on 1 July (572(I)/2020's oilseeds and edible oils, to 30 Sep 2020). Rows: `customs_tariff_duties`
 component 'acd' (source = the SRO). FBR answers GitHub's runners → `customs.yml`.
+
+FY2014-15 → FY2018-19 (`EARLY`, built from FBR's SRO files in 2026-11, re-applied every run with no
+download): ACD then sat in two notifications under section 18(5).
+- SRO 693(I)/2006 clause (a): a flat rate on the vehicle parts of its Appendix I, listed by 8-digit code —
+  15% (1 July 2014 and 2015), 16% from 1 Dec 2015 (1189(I)/2015), 11% from 1 July 2016 (484(I)/2016);
+  no later change to clause (a) up to 1 July 2018 among FBR's SRO files. Appendix I is `APPENDIX_I_2013` as printed in FBR's consolidated copy of
+  29 Oct 2013 (amendments to 939(I)/2013); 609(I)/2015 (30 June 2015) replaced 8511.8040 by 8511.8030 and
+  inserted ten codes; 560(I)/2017 only added an item under 8409.9110 (its page 1; the rest substitutes
+  Appendix II). Clause (b)'s kit rates by vehicle (Appendices I and II, imported as a kit) are not per code.
+  Checked against the FY2013-14 tariff's "Addl CD Ref. 693-2006 App.I" marks (81 codes): the same but for
+  8511.8030 and 8714.1030, which that edition marks ahead of 609(I)/2015, and 8481.8020 (inserted by
+  491(I)/2009), which it leaves out. Appendix I codes the year's tariff no longer has drop out (8708.3020 from
+  FY2016-17, 8708.5020 in FY2018-19).
+- SRO 1178(I)/2015 (1 Dec 2015): 1% on every other import, except seeds for sowing, Chapters 31 and 99,
+  heading 85.17 and 8529.1090, goods under 693(I)/2006 (Appendix I keeps its own rate) and goods under RD
+  SRO 568(I)/2014 (that year's 568 entries in the RD rebuild, `fbr_regulatory_duty.EARLY_FILE`, expanded
+  to the tariff's codes as the RD job does); from 16 Jan 2017 to 30 June 2018 also clause (bb), raw cotton
+  and man-made staple fibre (38(I)/2017; 5506.4000 added by 554(I)/2017 on 1 July 2017). 476(I)/2016
+  (Fifth Schedule) is by end use; 654(I)/2017 (52.01, 52.03 out from 15 July 2017) is after 1 July.
+- SRO 630(I)/2018 (24 May 2018) superseded 1178 at 2%: the same seeds bar 0904.1130, Chapters 31 and 99,
+  the cotton and fibre codes, 8517.1211/1219 and goods under 693 — not RD goods. 848(I)/2018 (52.01, 52.03
+  out from 15 July 2018) and 1266(I)/2018 are after 1 July.
 """
 from __future__ import annotations
 
@@ -31,7 +52,7 @@ from datetime import date
 
 from ingestion.framework import FetchedFile, IngestionJob
 from ingestion.jobs.fbr_customs_tariff import fiscal_year, pdf_words
-from ingestion.jobs.fbr_regulatory_duty import norm_code
+from ingestion.jobs.fbr_regulatory_duty import expand, load_early, norm_code
 
 S = "https://download1.fbr.gov.pk/SROs/"
 OILS = ["15071000", "15079000", "15111000", "15119010", "15119020", "15119030", "15121100", "15121900",
@@ -137,6 +158,71 @@ RULES: dict[int, Rule] = {
                       (r"six\s+per\s*cent", r"\(b\)\s+the\s+following", 6)]),
 }
 
+# ---- FY2014-15 → FY2018-19 (module docstring) ------------------------------------------------------------
+APP1_SRO = "693(I)/2006"
+# 693(I)/2006 Appendix I, column (1) as printed in FBR's consolidated copy of 29 Oct 2013
+APPENDIX_I_2013 = """
+4008.1110 4008.1910 4008.2110 4008.2910 4009.1120 4009.2120 4009.3120 4009.4120 4012.9020 4016.9930 4821.1010
+5703.2020 5703.3020 6813.2010 7007.1111 7007.2111 7009.1010 7014.0010 7315.1910 7320.1010 8206.0010 8301.2010
+8302.1010 8302.3010 8310.0020 8407.3110 8407.3210 8407.3310 8409.9110 8409.9120 8413.3030 8415.2010 8421.2310
+8421.3110 8425.4900 8481.8020 8483.1012 8483.4012 8483.5010 8483.6091 8483.9020 8484.1022 8507.1010 8511.3010
+8511.8040 8511.9010 8512.2010 8512.3010 8512.4010 8512.9010 8536.5021 8537.1010 8544.3011 8544.4221 8707.1000
+8707.9010 8708.1020 8708.2110 8708.2931 8708.2941 8708.3020 8708.3031 8708.5020 8708.7010 8708.8010 8708.9120
+8708.9210 8708.9310 8708.9410 8708.9930 8708.9940 8714.1010 8714.1020 9026.1020 9029.2011 9032.8910 9104.0020
+9401.2010 9401.9010 9613.8010
+""".replace(".", "").split()
+# 609(I)/2015 (30 June 2015), its part (a): 8511.8040 -> 8511.8030 (item 32) and ten codes inserted
+APPENDIX_I_2015 = sorted(set(APPENDIX_I_2013) - {"85118040"} | set(
+    "40169950 73182220 73201030 83023020 84133040 84831013 85112010 85118030 87082932 87141030 87141040".split()))
+SEEDS_1178 = ["09041130", "09042120", "10061010", "1209"]
+FIBRES_BB = ["5201", "5203", "55031100", "55031900", "55033000", "55034000", "55039000", "55041000", "55049000",
+             "55061000", "55063000", "55064000", "55069000", "55070000"]
+
+
+@dataclass
+class EarlyRule:
+    app1: list[str]                  # 693(I)/2006 Appendix I codes in force on 1 July
+    app1_pct: float                  # its clause (a) rate
+    general: str | None = None       # the SRO charging every other import: 1178(I)/2015, 630(I)/2018
+    general_pct: float | None = None
+    exempt: list = field(default_factory=list)    # code prefixes `general` doesn't charge
+    exempt_rd: tuple = ()            # RD SROs whose goods `general` doesn't charge (1178's clause (o))
+
+
+EARLY: dict[int, EarlyRule] = {
+    2015: EarlyRule(APPENDIX_I_2013, 15),
+    2016: EarlyRule(APPENDIX_I_2015, 15),
+    2017: EarlyRule(APPENDIX_I_2015, 11, "1178(I)/2015", 1, SEEDS_1178 + ["31", "8517", "85291090", "99"],
+                    ("568(I)/2014",)),
+    # 38(I)/2017's clause (bb) + 554(I)/2017's 5506.4000; 555(I)/2017 amended 568(I)/2014's table on 1 July 2017
+    2018: EarlyRule(APPENDIX_I_2015, 11, "1178(I)/2015", 1,
+                    SEEDS_1178 + ["31", "8517", "85291090", "99"] + FIBRES_BB, ("568(I)/2014", "555(I)/2017")),
+    2019: EarlyRule(APPENDIX_I_2015, 11, "630(I)/2018", 2,
+                    ["09042120", "10061010", "1209", "31", "99"] + FIBRES_BB + PHONES),
+}
+
+
+def early_acd(code: str, rule: EarlyRule, rd_codes: set[str]) -> tuple[float, str] | None:
+    """(ACD %, SRO) a commercial import of `code` pays under an early-year rule; `rd_codes` = the codes
+    under the RD SROs the general SRO exempts (`rd_goods`). Pure."""
+    if code in rule.app1:
+        return rule.app1_pct, APP1_SRO
+    if rule.general is None or code in rd_codes or any(code.startswith(p) for p in rule.exempt):
+        return None
+    return rule.general_pct, rule.general
+
+
+def rd_goods(fy: int, codes: set[str], early_rd: dict | None = None) -> set[str]:
+    """The year's tariff codes under the RD SROs EARLY[fy] exempts, from the RD rebuild. Pure given `early_rd`."""
+    sros = EARLY[fy].exempt_rd
+    if not sros:
+        return set()
+    early_rd = load_early() if early_rd is None else early_rd
+    entries = [e for e in early_rd.get(fy, []) if e.sro in sros]
+    if not entries:
+        raise ValueError(f"FY{fiscal_year(fy)}: no {'/'.join(sros)} entries in the RD rebuild")
+    return set(expand(entries, codes))
+
 
 def list_codes(words: list[str], start: str, end: str, known: set[str]) -> list[str]:
     """8-digit codes printed between two clause markers (OCR'd), each checked against the tariff. Pure."""
@@ -201,17 +287,22 @@ class FbrAdditionalCustomsDutyJob(IngestionJob):
 
     def fetch(self, backfill: bool = False) -> list[FetchedFile]:
         years = sorted(RULES) if backfill else sorted(RULES)[-1:]
-        return [FetchedFile(f"{fy}", self.http_get(RULES[fy].url), date.today()) for fy in years]
+        early = [FetchedFile(f"{fy}", b"", date.today()) for fy in sorted(EARLY)]   # no download
+        return early + [FetchedFile(f"{fy}", self.http_get(RULES[fy].url), date.today()) for fy in years]
 
     def parse(self, f: FetchedFile):
         from app import db
 
         fy = int(f.filename)
-        rule = RULES[fy]
         cds = {r["code"]: (None if r["rate_pct"] is None else float(r["rate_pct"]), r["rate_text"]) for r in db.query(
             "SELECT code, rate_pct, rate_text FROM customs_tariff_duties WHERE fy = %s AND component = 'cd'", (fy,))}
         if not cds:
             raise ValueError(f"FY{fiscal_year(fy)}: no tariff edition loaded")
+        if fy in EARLY:
+            goods = rd_goods(fy, set(cds))
+            hits = ((code, early_acd(code, EARLY[fy], goods)) for code in sorted(cds))
+            return [AcdRow(fy, code, float(r[0]), f"SRO {r[1]}") for code, r in hits if r is not None]
+        rule = RULES[fy]
         words = [w[3] for page in pdf_words(f.content) for w in sorted(page, key=lambda w: (round(w[1] / 4), w[0]))]
         listed: dict[str, float] = {}
         for start, end, rate in rule.lists:
@@ -226,7 +317,8 @@ class FbrAdditionalCustomsDutyJob(IngestionJob):
 
     def validate(self, records):
         for fy, n in Counter(r.fy for r in records).items():
-            if n < 1000:
+            need = 70 if fy in EARLY and EARLY[fy].general is None else 1000   # Appendix I alone: ~80 codes
+            if n < need:
                 raise ValueError(f"FY{fiscal_year(fy)}: only {n} codes carry ACD")
         return [(r, False) for r in records]
 
