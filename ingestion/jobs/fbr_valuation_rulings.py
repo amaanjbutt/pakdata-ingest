@@ -34,6 +34,8 @@ printed number must be the ruling's listed number: in a stretch of FBR's 2017 li
 the next ruling's PDF (listing 1036/2017 "Glass" opens letter 1038/2017), so a transcription is filed
 under the listing whose number it prints (`scripts/claude_rulings/prepare.py merge`), and one that
 still disagrees is not stored (`listed_number_typo` marks the few where FBR's list mistyped the number).
+The parser applies the same check to the text layer and OCR: a letter whose heading prints another
+listed ruling's number yields no values (`printed_number`).
 
 Dead links: some list entries point at a path FBR has since moved (`Valuations` vs `VALUATIONS`, the
 year in the file name off by one, an unencoded comma); `pdf_candidates` tries those spellings.
@@ -489,11 +491,32 @@ def parse_values(pages: list[list[Tok]], known_codes: set[str] | None = None,
     return rows, rejected, found
 
 
+_PRINTED = re.compile(r"(?i)valuation\s+ruling\s+no\.?\s*:?\s*(\d{3,4})\s*/\s*(20\d\d)\b")
+
+
+def printed_number(pages: list[list[Tok]]) -> str | None:
+    """The ruling number in the letter's heading ("VALUATION RULING NO. 2124/2026"): the first one on
+    page 1 that isn't in a supersession clause. Pure."""
+    if not pages:
+        return None
+    text = text_of(pages[:1])
+    for m in _PRINTED.finditer(text):
+        if not re.search(r"(?i)supersed\w*[^.]{0,40}$", text[max(0, m.start() - 60):m.start()]):
+            return f"{int(m.group(1))}/{m.group(2)}"
+    return None
+
+
 def parse_ruling(ruling_id: int, pages: list[list[Tok]], source: str, known_numbers: set[str] | None = None,
-                 known_codes: set[str] | None = None) -> ParsedRuling:
-    """One ruling's word boxes -> supersession, value rows and status. Pure."""
+                 known_codes: set[str] | None = None, number: str | None = None) -> ParsedRuling:
+    """One ruling's word boxes -> supersession, value rows and status. `number` is the ruling's listed
+    number: a letter whose heading prints the number of ANOTHER listed ruling is that ruling's letter (FBR
+    linked the wrong PDF), so none of its values or supersessions are stored here. A printed number that
+    matches no listing is left alone: it is more likely an OCR misreading than a different letter. Pure."""
     if sum(len(t.text) for p in pages for t in p) < 300:
         return ParsedRuling(ruling_id, None, "unreadable")
+    printed = printed_number(pages)
+    if number and printed and printed != number and known_numbers and printed in known_numbers:
+        return ParsedRuling(ruling_id, source, "no_values")
     text = text_of(pages)
     rows, rejected, found = parse_values(pages, known_codes)
     status = ("parsed" if rows and not rejected else "partial" if rows else "no_values")
@@ -623,20 +646,24 @@ class FbrValuationRulingsJob(IngestionJob):
 
         listing = self._list()
         rulings = parse_list(listing.decode("utf-8", "replace"))  # raises on a non-JSON answer
-        state = {r["ruling_id"]: (r["parse_status"], r["text_source"]) for r in db.query(
-            "SELECT ruling_id, parse_status, text_source FROM customs_valuation_rulings")}
+        state = {r["ruling_id"]: (r["parse_status"], r["text_source"], r["values_found"]) for r in db.query(
+            "SELECT ruling_id, parse_status, text_source, values_found FROM customs_valuation_rulings")}
         ocrd = {r["ruling_id"] for r in db.query("SELECT ruling_id FROM customs_valuation_tokens")}
         out = [FetchedFile("list.json", listing, date.today())]
         self._listed = {r.ruling_id: r.listed_on for r in rulings}
         self._listed_numbers = {r.ruling_id: r.number for r in rulings}
         claude = load_claude()
+        numbers = {r.number for r in rulings if r.number}
         n = 0
         for r in sorted(rulings, key=lambda r: -r.ruling_id):
-            status, src = state.get(r.ruling_id, (None, None))
+            status, src, found = state.get(r.ruling_id, (None, None, None))
             if r.ruling_id in claude:
-                if src != "claude":
+                # a transcription replaces the parser's reading; it is re-applied when the data file now
+                # yields a different number of rows than stored (a corrected or re-done transcription)
+                if src != "claude" or found != len(claude_ruling(
+                        r.ruling_id, claude[r.ruling_id], numbers, self._codes, r.number).values):
                     out.append(FetchedFile(f"claude|{r.ruling_id}", b"", date.today()))
-                continue           # Claude's reading of the page images replaces the parser's
+                continue
             if status in ("parsed", "partial", "missing") or (status == "no_values" and src == "ocr"):
                 continue           # read already
             if status in ("unreadable", "no_values"):
@@ -678,7 +705,7 @@ class FbrValuationRulingsJob(IngestionJob):
             return [ParsedRuling(rid, None, "missing")]
         else:
             pages, src = pdf_pages(f.content), "text"
-        return [parse_ruling(rid, pages, src, self._numbers, self._codes)]
+        return [parse_ruling(rid, pages, src, self._numbers, self._codes, self._listed_numbers.get(rid))]
 
     def run(self, backfill: bool = False) -> dict:
         from app import db

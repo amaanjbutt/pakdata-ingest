@@ -21,6 +21,7 @@ from ingestion.jobs.fbr_valuation_rulings import (
     parse_values,
     pdf_candidates,
     pdf_pages,
+    printed_number,
     supersedes_of,
 )
 
@@ -161,3 +162,24 @@ def test_pdf_candidates_cover_fbrs_moved_files():
     c = pdf_candidates("https://download1.fbr.gov.pk/VALUATIONS/2025813981246957VR.2020-MedicalItems,Equipments.pdf", "2020/2025")
     assert c[0].endswith("MedicalItems,Equipments.pdf")
     assert "https://download1.fbr.gov.pk/Valuations/2025813981246957VR.2020-MedicalItems,Equipments.pdf" in c
+
+
+def _letter(heading: str, body: str) -> list:
+    """A one-page letter as OCR word boxes: the heading line, then a long body line."""
+    return ocr_pages([{"page": 0, "tokens": [
+        {"box": [[100, 100], [900, 100], [900, 130], [100, 130]], "text": heading},
+        {"box": [[100, 300], [1500, 300], [1500, 330], [100, 330]], "text": body}]}])
+
+
+def test_printed_number_check_on_parsed_letters():
+    body = "This Ruling supersedes Valuation Ruling No. 1001/2016 dated 01.01.2016. " + "assessed " * 60
+    pages = _letter("VALUATION RULING NO. 1038/2017", body)
+    assert printed_number(pages) == "1038/2017"
+    assert printed_number(_letter("Directorate General of Customs Valuation", body)) is None   # only the clause
+    known = {"1036/2017", "1038/2017", "1001/2016"}
+    # listing 1036/2017 links letter 1038/2017 (FBR's 2017 list): nothing is stored under 1036
+    wrong = parse_ruling(262, pages, "ocr", known, None, number="1036/2017")
+    assert wrong.status == "no_values" and not wrong.values and not wrong.supersedes
+    # the right listing keeps the letter; a printed number no listing carries is read as an OCR slip
+    assert parse_ruling(263, pages, "ocr", known, None, number="1038/2017").supersedes == ["1001/2016"]
+    assert parse_ruling(263, pages, "ocr", {"1036/2017", "1001/2016"}, None, number="1036/2017").supersedes == ["1001/2016"]

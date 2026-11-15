@@ -751,7 +751,7 @@ def valuation_rulings(q: str | None = Query(None, description="Words in the titl
                       caller: Caller = Depends(authenticate)):
     """Every valuation ruling FBR lists (2015 on): number, title, goods, issue date, the rulings it
     supersedes and the one that superseded it, the PDF, and how many values were read from it
-    (`parse_status`: parsed / partial / no_values / unreadable — a scan not OCR'd yet / missing)."""
+    (`parse_status`: parsed / partial / no_values / unreadable — no values read yet / missing)."""
     params: dict = {"limit": limit}
     where = ""
     if q:
