@@ -170,6 +170,8 @@ MONITORED_EXTERNAL: list[Schedule] = [
     Schedule("fbr_customs_concessions", {}, expected_interval=timedelta(days=40), stale_on_run=True),
     Schedule("fbr_regulatory_duty", {}, expected_interval=timedelta(days=40), stale_on_run=True),
     Schedule("fbr_additional_customs_duty", {}, expected_interval=timedelta(days=40), stale_on_run=True),
+    # The Sales Tax Act's Sixth and Eighth Schedules, with the tariff (a new edition after each budget).
+    Schedule("fbr_sales_tax_schedules", {}, expected_interval=timedelta(days=40), stale_on_run=True),
     # Karachi Port's daily tonnage + container reports (ports.yml, twice a day): KPT's report host
     # answers GitHub's runners but not the VPS; each report shows only the latest day.
     Schedule("kpt_shipping", {}, expected_interval=timedelta(days=3)),

@@ -18,6 +18,7 @@ from ingestion.jobs.fbr_additional_duty import FbrAdditionalCustomsDutyJob
 from ingestion.jobs.fbr_customs_concessions import FbrCustomsConcessionsJob
 from ingestion.jobs.fbr_customs_tariff import FbrCustomsTariffJob
 from ingestion.jobs.fbr_regulatory_duty import FbrRegulatoryDutyJob
+from ingestion.jobs.fbr_sales_tax_schedules import FbrSalesTaxSchedulesJob
 from ingestion.jobs.fbr_valuation_rulings import FbrValuationRulingsJob
 from ingestion.jobs.ffd_river_flows import FfdRiverFlowsJob
 from ingestion.jobs.mufap_fund_navs import MufapFundNavsJob
@@ -118,5 +119,6 @@ JOBS: dict[str, type[IngestionJob]] = {
     FbrCustomsConcessionsJob.name: FbrCustomsConcessionsJob,
     FbrRegulatoryDutyJob.name: FbrRegulatoryDutyJob,
     FbrAdditionalCustomsDutyJob.name: FbrAdditionalCustomsDutyJob,
+    FbrSalesTaxSchedulesJob.name: FbrSalesTaxSchedulesJob,
     FbrValuationRulingsJob.name: FbrValuationRulingsJob,
 }

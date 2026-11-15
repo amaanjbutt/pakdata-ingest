@@ -374,6 +374,41 @@ CREATE TABLE IF NOT EXISTS customs_concessions (
     PRIMARY KEY (fy, part, serial, sub_item, code)
 );
 CREATE INDEX IF NOT EXISTS idx_customs_concessions_code ON customs_concessions(code, fy);
+-- Sales Tax Act, Sixth Schedule (exemptions) and Eighth Schedule (reduced rates) (`fbr_sales_tax_schedules`):
+-- one row per entry per edition (fy = the edition in force on 1 July, or the nearest after: as_of is the date
+-- it was amended up to). Serials can repeat within a table, so entries are keyed by their position (seq).
+CREATE TABLE IF NOT EXISTS sales_tax_schedules (
+    fy           SMALLINT NOT NULL,           -- edition, as customs_tariff.fy
+    as_of        DATE NOT NULL,               -- "as amended up to"
+    schedule     TEXT NOT NULL,               -- 'sixth' | 'eighth'
+    tbl          TEXT NOT NULL,               -- the schedule's Table: '1', '2', '3', '4'
+    seq          SMALLINT NOT NULL,           -- position in the table
+    serial       TEXT NOT NULL,               -- S. No. as printed ('14', '27A')
+    description  TEXT NOT NULL,
+    codes_text   TEXT,                        -- heading / PCT codes column as printed
+    rate_text    TEXT,                        -- Eighth Schedule: the rate as printed
+    rate_pct     NUMERIC,                     -- the rate when it is a single percentage
+    condition    TEXT,
+    items        JSONB,                       -- the entry's own rows: [{text, codes, rate}], when it has several
+    source_url   TEXT NOT NULL,
+    PRIMARY KEY (fy, schedule, tbl, seq)
+);
+-- Each 8-digit code an entry covers: a printed code in that year's customs tariff, or every tariff code
+-- under a printed heading (printed = '87.03') or range.
+CREATE TABLE IF NOT EXISTS sales_tax_schedule_codes (
+    fy           SMALLINT NOT NULL,
+    schedule     TEXT NOT NULL,
+    tbl          TEXT NOT NULL,
+    seq          SMALLINT NOT NULL,
+    code         TEXT NOT NULL,               -- 8 digits
+    printed      TEXT NOT NULL,               -- the code, heading or range as printed
+    item         TEXT,                        -- the entry's own row the code sits on, when it has several
+    rate_text    TEXT,
+    rate_pct     NUMERIC,
+    PRIMARY KEY (fy, schedule, tbl, seq, code),
+    FOREIGN KEY (fy, schedule, tbl, seq) REFERENCES sales_tax_schedules (fy, schedule, tbl, seq) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_sales_tax_schedule_codes_code ON sales_tax_schedule_codes(code, fy);
 -- FBR customs valuation rulings (`fbr_valuation_rulings`, section 25A of the Customs Act): one row
 -- per ruling FBR lists (ruling_id = FBR's VALUATIONID). A ruling stays in force until a later one
 -- supersedes it (superseded_by / superseded_on, from the later ruling's own text): the superseded

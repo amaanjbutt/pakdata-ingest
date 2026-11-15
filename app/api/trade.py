@@ -14,6 +14,8 @@
     GET /v1/trade/valuations?code=&q=&origin=&in_force=              FBR valuation rulings: values by item x origin
     GET /v1/trade/valuation-rulings?q=&kind=&from=&to=               the rulings themselves
     GET /v1/trade/concessions?code=&fy=                              Fifth Schedule concessionary duty per code
+    GET /v1/trade/sales-tax?code=&fy=&schedule=                      Sales Tax Act Sixth / Eighth Schedule entries per code
+    GET /v1/trade/sales-tax-schedules?fy=&schedule=&table=&q=        one edition of those schedules, as printed
 """
 from __future__ import annotations
 
@@ -486,7 +488,8 @@ def _product_page(code: str, fy: int | None) -> dict | None:
             "history": history, "partners": partners, "related": related,
             "tariff": _duty_history(code),
             "valuations": _valuation_rows(code, None, None, True, None, None, 25) if len(code) in (4, 8) else [],
-            "concessions": _concession_rows(code, None, latest_only=True, limit=20) if len(code) in (4, 8) else []}
+            "concessions": _concession_rows(code, None, latest_only=True, limit=20) if len(code) in (4, 8) else [],
+            "sales_tax": _sales_tax_page(code) if len(code) in (4, 8) else None}
 
 
 @router.get("/product/{code}")
@@ -502,13 +505,19 @@ def product_page(code: str,
         raise HTTPException(status_code=404, detail="give a 4-digit HS heading or a product code")
     if fy is not None:
         _check_fy(caller, fy)
-    data = cache.cached_json(f"trade:product_page:v2:{c}:{fy or 0}", _TTL, lambda: _product_page(c, fy))
+    data = cache.cached_json(f"trade:product_page:v3:{c}:{fy or 0}", _TTL, lambda: _product_page(c, fy))
     if data is None:
         raise HTTPException(status_code=404, detail=f"no product {c} in the customs record")
     floor = _fy_floor(caller)
     if floor:
         data["history"] = [h for h in data["history"] if h["fy"] >= floor]
         data["tariff"] = [t for t in data.get("tariff") or [] if t["fy"] >= floor]
+        st = data.get("sales_tax")
+        if st:
+            keep = [e for e in st["entries"] if e["last_fy"] >= floor]
+            data["sales_tax"] = {**st, "entries": [
+                {**e, "first_fy": max(e["first_fy"], floor),
+                 "fiscal_years": [y for y in e["fiscal_years"] if int(y[:4]) + 1 >= floor]} for e in keep]}
     return {"success": True, "data": data}
 
 
@@ -814,3 +823,129 @@ def concessions(code: str = Query(..., description="8-digit PCT code or a 2-, 4-
     if floor:
         data = [r for r in data if r["fy"] >= floor]
     return {"success": True, "data": data, "count": len(data)}
+
+
+# ---- Sales Tax Act: Sixth Schedule (exemptions) and Eighth Schedule (reduced rates) -------------------
+
+_ST_SCHEDULES = {"sixth": "Sixth Schedule (exemptions)", "eighth": "Eighth Schedule (reduced rates)"}
+
+
+def _st_editions() -> list[dict]:
+    rows = _safe(lambda: db.query(
+        """SELECT fy, min(as_of) AS as_of, count(*) FILTER (WHERE schedule = 'sixth') AS sixth,
+                  count(*) FILTER (WHERE schedule = 'eighth') AS eighth
+           FROM sales_tax_schedules GROUP BY fy ORDER BY fy"""))
+    return [{"fy": r["fy"], "fiscal_year": _fy_label(r["fy"]), "as_of": r["as_of"],
+             "entries": {"sixth": r["sixth"], "eighth": r["eighth"]}} for r in rows]
+
+
+def _sales_tax_rows(code: str, fy: int | None, schedule: str | None = None, limit: int = 2000) -> list[dict]:
+    params: dict = {"limit": limit}
+    where = _pct_filter("c.code", code, params)
+    if fy is not None:
+        params["fy"] = fy
+        where += " AND c.fy = %(fy)s"
+    if schedule:
+        params["schedule"] = schedule
+        where += " AND c.schedule = %(schedule)s"
+    rows = _safe(lambda: db.query(
+        f"""SELECT c.fy, s.as_of, c.schedule, c.tbl, c.seq, s.serial, c.code, c.printed, c.item, c.rate_text, c.rate_pct,
+                   s.description, s.condition, s.source_url
+            FROM sales_tax_schedule_codes c JOIN sales_tax_schedules s USING (fy, schedule, tbl, seq)
+            WHERE true {where} ORDER BY c.code, c.fy DESC, c.schedule DESC, c.tbl, c.seq LIMIT %(limit)s""", params))
+    return [{"fy": r["fy"], "fiscal_year": _fy_label(r["fy"]), "as_of": r["as_of"], "schedule": r["schedule"],
+             "schedule_name": _ST_SCHEDULES[r["schedule"]], "table": r["tbl"], "serial": r["serial"],
+             "code": r["code"], "pct_code": _dotted(r["code"]), "printed": r["printed"], "item": r["item"],
+             "description": r["description"], "condition": r["condition"],
+             "rate_pct": _fnum(r["rate_pct"]), "rate_text": r["rate_text"], "source_url": r["source_url"]} for r in rows]
+
+
+def _sales_tax_page(code: str) -> dict | None:
+    """The product page's sales-tax section: each Sixth / Eighth Schedule entry that lists the code (or,
+    for a heading, any of its codes), with the editions that list it, the most recent first."""
+    editions = _st_editions()
+    if not editions:
+        return None
+    latest = editions[-1]
+    groups: dict[tuple, dict] = {}
+    for r in _sales_tax_rows(code, None, limit=5000):
+        g = groups.setdefault((r["schedule"], r["table"], r["serial"]), {"rows": [], "fys": set(), "codes": set()})
+        g["rows"].append(r)
+        g["fys"].add(r["fy"])
+        g["codes"].add(r["code"])
+    out = []
+    for (sch, tbl, serial), g in groups.items():
+        r = max(g["rows"], key=lambda x: x["fy"])
+        fys = sorted(g["fys"])
+        out.append({"schedule": sch, "schedule_name": _ST_SCHEDULES[sch], "table": tbl, "serial": serial,
+                    "description": r["description"], "item": r["item"], "printed": r["printed"],
+                    "condition": r["condition"], "rate_pct": r["rate_pct"], "rate_text": r["rate_text"],
+                    "fy": r["fy"], "fiscal_year": r["fiscal_year"], "as_of": r["as_of"],
+                    "first_fy": fys[0], "last_fy": fys[-1], "fiscal_years": [_fy_label(f) for f in fys],
+                    "codes": len(g["codes"]), "in_latest": latest["fy"] in g["fys"]})
+    out.sort(key=lambda x: (-x["last_fy"], x["schedule"] != "sixth", x["table"], x["serial"]))
+    return {"latest_fy": latest["fy"], "latest_fiscal_year": latest["fiscal_year"], "latest_as_of": latest["as_of"],
+            "first_fy": editions[0]["fy"], "fiscal_years": [e["fiscal_year"] for e in editions], "entries": out[:20]}
+
+
+@router.get("/sales-tax")
+def sales_tax(code: str = Query(..., description="8-digit PCT code or a 2-, 4- or 6-digit prefix"),
+              fy: int | None = Query(None, ge=2010, le=2100, description="One edition (fiscal year end: 2027 = FY2026-27)"),
+              schedule: str | None = Query(None, pattern="^(sixth|eighth)$",
+                                           description="`sixth` (exemptions) or `eighth` (reduced rates)"),
+              caller: Caller = Depends(authenticate)):
+    """The Sales Tax Act's Sixth Schedule (exempt goods) and Eighth Schedule (reduced rates) for a code, in
+    every edition FY2009-10 and FY2014-15 on: the schedule, Table and serial that list it, the entry's
+    description and conditions, the item it sits on, how the schedule prints it (the code itself or its
+    heading, e.g. `87.03`) and, in the Eighth Schedule, the reduced rate. An entry printed for "Respective
+    headings" names no code and is not included here — see `/v1/trade/sales-tax-schedules`."""
+    if fy is not None:
+        _check_fy(caller, fy)
+    data = _sales_tax_rows(code, fy, schedule)
+    floor = _fy_floor(caller)
+    if floor:
+        data = [r for r in data if r["fy"] >= floor]
+    return {"success": True, "data": data, "count": len(data)}
+
+
+@router.get("/sales-tax-schedules")
+def sales_tax_schedules(fy: int | None = Query(None, ge=2010, le=2100, description="One edition (default: the latest)"),
+                        schedule: str | None = Query(None, pattern="^(sixth|eighth)$"),
+                        table: str | None = Query(None, pattern="^[1-9]$", description="The schedule's Table (`1`–`4`)"),
+                        q: str | None = Query(None, description="Words in the description, items or conditions"),
+                        caller: Caller = Depends(authenticate)):
+    """One edition of the Sales Tax Act's Sixth and Eighth Schedules as printed: every entry in force, with
+    its Table and serial, description, codes column as printed, the reduced rate (Eighth Schedule),
+    conditions, the entry's own items, and the 8-digit tariff codes it covers. `meta.editions` lists every
+    edition with its as-of date."""
+    editions = _st_editions()
+    if not editions:
+        return {"success": True, "data": [], "count": 0, "meta": {"editions": []}}
+    fy = fy or editions[-1]["fy"]
+    _check_fy(caller, fy)
+    params: dict = {"fy": fy}
+    where = ""
+    if schedule:
+        params["schedule"] = schedule
+        where += " AND s.schedule = %(schedule)s"
+    if table:
+        params["tbl"] = table
+        where += " AND s.tbl = %(tbl)s"
+    if q:
+        params["q"] = f"%{q.strip()}%"
+        where += " AND (s.description ILIKE %(q)s OR s.condition ILIKE %(q)s OR s.items::text ILIKE %(q)s)"
+    rows = _safe(lambda: db.query(
+        f"""SELECT s.*, (SELECT array_agg(c.code ORDER BY c.code) FROM sales_tax_schedule_codes c
+                         WHERE (c.fy, c.schedule, c.tbl, c.seq) = (s.fy, s.schedule, s.tbl, s.seq)) AS codes
+            FROM sales_tax_schedules s WHERE s.fy = %(fy)s {where}
+            ORDER BY s.schedule DESC, s.tbl, s.seq""", params))
+    data = [{"fy": r["fy"], "fiscal_year": _fy_label(r["fy"]), "as_of": r["as_of"], "schedule": r["schedule"],
+             "schedule_name": _ST_SCHEDULES[r["schedule"]], "table": r["tbl"], "serial": r["serial"],
+             "description": r["description"], "codes_text": r["codes_text"], "rate_text": r["rate_text"],
+             "rate_pct": _fnum(r["rate_pct"]), "condition": r["condition"], "items": r["items"],
+             "codes": r["codes"] or [], "source_url": r["source_url"]} for r in rows]
+    floor = _fy_floor(caller)
+    eds = [e for e in editions if not floor or e["fy"] >= floor]
+    return {"success": True, "data": data, "count": len(data),
+            "meta": {"editions": eds, "schedules": _ST_SCHEDULES,
+                     "source": "FBR, Sales Tax Act, 1990 — Sixth and Eighth Schedules"}}
