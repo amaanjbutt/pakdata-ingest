@@ -10,19 +10,27 @@ listed by the Internet Archive's index of that folder).
 
 RD then sat in several SROs at once. 1035(I)/2017 (16 Oct 2017) superseded exactly these: 482(I)/2009, 808(I)/2009,
 214(I)/2010, 568(I)/2014, 1043(I)/2014, 254(I)/2015, 393(I)/2015 and 1248(I)/2015 — so they are the RD SROs in force
-until then, each from its own date. 392(I)/2015 (petroleum) isn't in that list: it had ended by then, when is not
-known, so it counts only on 1 July 2015. Export RDs (potatoes 340(I)/2014, lead 594(I)/2009, pulses 492(I)/2006,
-HSD/SKO to Afghanistan 946(I)/2008) are not import duties per code and are left out.
+until then, each from its own date. 392(I)/2015 (petroleum, 30 Apr 2015) isn't in that list: 603(I)/2015 (30 Jun
+2015) rescinded it, so it was never in force on a 1 July. 604(I)/2015 (30 Jun 2015) took 393(I)/2015 (furnace oil)
+from 7% to 2%. Export RDs (potatoes 340(I)/2014, lead 594(I)/2009, pulses 492(I)/2006, HSD/SKO to Afghanistan
+946(I)/2008) are not import duties per code and are left out; so is 808(I)/2009's proviso (a duty-free quota of
+potatoes, widened by 712(I)/2014).
 
 568(I)/2014 per year, from FBR's consolidated copies and the amendments dated before each 1 July:
   FY2015  the Jul 2014 consolidation minus 631(I)/2014 (11 Jul 2014: its four inserted rows)
   FY2016  the Mar 2015 consolidation (as amended to 246(I)/2015, 27 Mar) + 601(I)/2015 (inserts) and 602(I)/2015
           (omits S.No.280), both in force from 1 Jul 2015
-  FY2017  the Mar 2016 consolidation (Table substituted by 1177(I)/2015, then 236(I)/2016); checked row by row
-          against the transcription of 1177(I)/2015 with 236(I)/2016's changes
+  FY2017  the Mar 2016 consolidation (Table substituted by 1177(I)/2015, then 236(I)/2016), S. Nos taken from the
+          transcription of 1177(I)/2015, which it must equal row by row but for 236(I)/2016's changes; 236's own
+          "effective till 30 June 2016" paragraph was omitted by 477(I)/2016 (from 25 Jun 2016), so its rates stand;
+          + 475(I)/2016 (from 25 Jun 2016: inserts 3A, 5A, 231A-231G and 388A, substitutes 388)
   FY2018  the Table substituted by 505(I)/2017 (21 Jun 2017) + 555(I)/2017 (1 Jul 2017)
-482(I)/2009: the Aug 2013 consolidation; + 1190(I)/2015 and 1247(I)/2015 (Dec 2015) and 485(I)/2016 (from 1 Jul
-2016) for FY2017; the Table substituted by 504(I)/2017 + 556(I)/2017 for FY2018.
+Paragraph 2 of 568(I)/2014 (imports it exempts) is not applied, as for every RD SRO; note that besides exemptions by
+importer or scheme it lists bare codes (clause (j): 7312.9010, 7318.1520, 7318.1620; 475(I)/2016's clause (m):
+7217.3010).
+482(I)/2009: the Aug 2013 consolidation; 605(I)/2015 (30 Jun 2015) omits S.Nos 10, 11 and 14 (tiles, moved to 568 by
+601(I)/2015) for FY2016 and FY2017; + 1190(I)/2015 and 1247(I)/2015 (Dec 2015) and 485(I)/2016 (from 1 Jul 2016) for
+FY2017; the Table substituted by 504(I)/2017 + 556(I)/2017 for FY2018.
 214(I)/2010: no copy survives; the 2013-14 Customs Tariff prints RD 5% on 3906.9030 and 3906.9040, the only RD
 codes there that 482(I)/2009 and 808(I)/2009 don't explain.
 254(I)/2015 (wheat 25%): 854(I)/2016 (Sep 2016) sets S.No.1 "for 40, 60", so an amendment between Mar 2015 and Sep
@@ -190,6 +198,33 @@ def apply_601(rows: list[dict]) -> None:
                                _row("309B", "9503.0090", "Other", "5", s)])
 
 
+def apply_475(rows: list[dict]) -> None:
+    """S.R.O. 475(I)/2016 (24 Jun 2016, in force from 25 Jun 2016) on 568(I)/2014's Table (1177(I)/2015's numbering),
+    clause (1) as printed; clause (2) amends paragraph 2 (exemptions), which isn't applied."""
+    s = "475(I)/2016"
+    assert rows[_at(rows, "3")]["codes"] == ["03.04"] and rows[_at(rows, "5")]["codes"] == ["0403.9000"]
+    insert_after(rows, "3", [_row("3A", "04.02", "Milk and cream, concentrated or containing sugar or other "
+                                  "sweetening matter", "25", s)])
+    insert_after(rows, "5", [_row("5A", "0404.1010", "Whey powder", "25", s)])
+    assert rows[_at(rows, "231")]["codes"] == ["52.12"]
+    insert_after(rows, "231", [
+        _row("231A", "54.07", "Woven fabrics of synthetic filament yarn, including woven fabrics obtained from "
+             "materials of heading 54.04", "5", s),
+        _row("231B", "54.08", "Woven fabrics of artificial filament yarn, including woven fabrics obtained from "
+             "materials of heading 54.05", "5", s),
+        _row("231C", "55.12", "Woven fabrics of synthetic staple fibres, containing 85% or more by weight of synthetic "
+             "staple fibres", "5", s),
+        _row("231D", "55.13", "Woven fabrics of synthetic staple fibres, containing less than 85% by weight of such "
+             "fibres, mixed mainly or solely with cotton, of a weight not exceeding 170 g/m2", "5", s),
+        _row("231E", "55.14", "Woven fabrics of synthetic staple fibres, containing less than 85% by weight of such "
+             "fibres, mixed mainly or solely with cotton, of weight exceeding 170 g/m2", "5", s),
+        _row("231F", "55.15", "Other woven fabrics of synthetic staple fibres", "5", s),
+        _row("231G", "55.16", "Woven fabrics of artificial staple fibres", "5", s)])
+    assert rows[_at(rows, "388")]["codes"] == ["9405.5000"], rows[_at(rows, "388")]
+    substitute(rows, ["388"], [_row("388", "9405.5010", "Tubular Day lighting Device.", "15", s)], s)
+    insert_after(rows, "388", [_row("388A", "9405.5090", "Other", "15", s)])
+
+
 def entries(rows: list[dict], sro: str) -> list[dict]:
     out = []
     for r in rows:
@@ -224,20 +259,35 @@ def build(text: str, deepseek: str) -> dict:
     checks.append(f"568 FY2016: {len(mar15)} rows (Mar 2015 consolidation) - S.No.280 (602) + 601 -> {len(fy16_568)}")
 
     mar16 = docx_rows(T("sros/20163251534131437UPDATE-SRO568(I)-2014-21.03.16-.docx"))
-    t1177 = ds(deepseek, "s052")
+    t1177 = ds(deepseek, "s052")["rows"]
     s236 = ds(deepseek, "s153")
-    ours = {(r["codes"][0]): r["rate"] for r in mar16}
-    theirs = {c: re.sub(r"[^\d.]", "", r["rate"]) for r in t1177["rows"] for c in r["codes"]}
-    diff = {c: (theirs.get(c), ours.get(c)) for c in set(ours) | set(theirs) if theirs.get(c) != ours.get(c)}
-    checks.append(f"568 FY2017: Mar 2016 consolidation {len(mar16)} rows; differs from the 1177(I)/2015 transcription "
-                  f"at {len(diff)} codes (236(I)/2016's changes): {sorted(diff.items())}")
-    # 236(I)/2016 "shall be effective till 30th day of June, 2016": on 1 July 2016 the Table is 1177(I)/2015's again.
-    # Undo 236's changes on FBR's consolidation and require it to equal the transcription of 1177(I)/2015.
-    s236_rows = {r["codes"][0] for r in s236["rows"]}
-    fy17_568 = [dict(r, sro=None, rate=theirs.get(r["codes"][0], r["rate"])) for r in mar16
-                if r["codes"][0] not in s236_rows]
-    assert {r["codes"][0]: r["rate"] for r in fy17_568} == theirs, "Mar 2016 consolidation minus 236 != 1177"
-    checks.append("568 FY2017: the Mar 2016 consolidation with 236(I)/2016 undone equals the 1177(I)/2015 transcription")
+    # 236(I)/2016 as printed: (a)-(e) "for the figure X, the figure Y" against these S. Nos, (f) inserts 313A
+    raised = {"290": ("15", "30"), "291": ("15", "30"), "292": ("15", "30"), "293": ("15", "30"), "294": ("15", "30"),
+              "298": ("10", "25"), "299": ("15", "30"), "300": ("20", "35"), "304": ("10", "25"), "305": ("10", "25"),
+              "317": ("10", "25")}
+    assert [r["sno"] for r in s236["rows"]] == ["313A"] and s236["rows"][0]["codes"] == ["7601.2000"], s236["rows"]
+    # FBR's Mar 2016 consolidation = 1177(I)/2015's Table with 236's changes; it carries no S. Nos (Word numbering),
+    # so take them from the transcription of 1177, row by row, and require every difference to be one of 236's.
+    rest = [r for r in mar16 if r["codes"] != ["7601.2000"]]
+    assert len(mar16) - len(rest) == 1 and [r["codes"] for r in rest] == [r["codes"] for r in t1177], \
+        "Mar 2016 consolidation minus 313A doesn't line up with the 1177(I)/2015 transcription"
+    fy17_568, it = [], iter(t1177)
+    for r in mar16:
+        if r["codes"] == ["7601.2000"]:
+            fy17_568.append(dict(r, sno="313A", sro="236(I)/2016"))
+            continue
+        t = next(it)
+        old = re.sub(r"[^\d.]", "", t["rate"])
+        if t["sno"] in raised:
+            assert (old, r["rate"]) == raised[t["sno"]], (t["sno"], old, r["rate"])
+            fy17_568.append(dict(r, sno=t["sno"], sro="236(I)/2016"))
+        else:
+            assert old == r["rate"], f"S.No.{t['sno']}: 1177 prints {old}, the consolidation {r['rate']}"
+            fy17_568.append(dict(r, sno=t["sno"], sro=None))
+    checks.append(f"568 FY2017: Mar 2016 consolidation {len(mar16)} rows = the 1177(I)/2015 transcription + 236(I)/2016 "
+                  f"(S.Nos {sorted(raised, key=int)} raised, 313A inserted), kept: 477(I)/2016 omits its 30 June end")
+    apply_475(fy17_568)
+    checks.append(f"568 FY2017: + 475(I)/2016 (from 25 Jun 2016) -> {len(fy17_568)} rows")
 
     t505 = ds(deepseek, "s292")
     t555 = ds(deepseek, "s316")
@@ -255,7 +305,11 @@ def build(text: str, deepseek: str) -> dict:
     aug13 = numbered_rows(pdf_text(T("sros-base/201383014859860UPDATEDSRO482(I)2009august2013.pdf")))
     checks.append(f"482 Aug 2013 consolidation: {len(aug13)} rows, S.Nos {[r['sno'] for r in aug13]}")
     fy15_482 = [dict(r, sro=None) for r in aug13]
-    fy17_482 = [dict(r, sro=None) for r in aug13]
+    # 605(I)/2015 (30 Jun 2015): "Sr.Nos.10,11 and 14 ... shall be omitted" — the tiles 601(I)/2015 moved to 568
+    tiles = [(r["sno"], r["codes"]) for r in fy15_482 if r["sno"] in ("10", "11", "14")]
+    assert tiles == [("10", ["6907.1000"]), ("11", ["6907.9000"]), ("14", ["6908.9090"])], tiles
+    fy16_482 = [r for r in fy15_482 if r["sno"] not in ("10", "11", "14")]
+    fy17_482 = [dict(r) for r in fy16_482]
     t1190 = ds(deepseek, "s055")   # 485(I)/2016 (from 1 Jul 2016) adds only a valuation rule for armoured cars
     substitute(fy17_482, ["36A", "37", "38", "38A", "38B", "39", "40", "41"], t1190["rows"], "1190(I)/2015")
     omit(fy17_482, ["2"])                                          # 1247(I)/2015
@@ -280,8 +334,9 @@ def build(text: str, deepseek: str) -> dict:
              _row("2", "1101.0010", "Wheat flour", "25", w), _row("3", "1102.9000", "Maida", "25", w),
              _row("4", "1102.9000", "Semolina", "25", w)]
     assert "1001.9900 Wheat 25 2. 1101.0010 Wheat flour 25" in pdf_text(T("sros/20153311435432222015sro254.pdf"))
-    petrol = [dict(r, sro="392(I)/2015") for r in ds(deepseek, "s079")["rows"]]
     furnace = [dict(r, sro="393(I)/2015") for r in ds(deepseek, "s080")["rows"]]
+    assert [(r["codes"], r["rate"]) for r in furnace] == [(["2710.1941"], "7% ad valorem")], furnace
+    furnace = [dict(r, rate="2", sro="604(I)/2015") for r in furnace]   # 604(I)/2015: 'for "7%", "2%"'
     maize = [{"codes": ["1005.9000"], "description": "Maize", "rate": "30", "sro": "1248(I)/2015"}]
     wheat60 = [dict(r, rate="60", sro="854(I)/2016") for r in wheat if r.get("sno") == "1"]
 
@@ -293,9 +348,9 @@ def build(text: str, deepseek: str) -> dict:
 
     years["2015"] = year([(fy15_568, "568(I)/2014"), (fy15_482, "482(I)/2009"), (potato, "808(I)/2009"),
                           (acrylic, "214(I)/2010")])
-    years["2016"] = year([(fy16_568, "568(I)/2014"), (fy15_482, "482(I)/2009"), (potato, "808(I)/2009"),
+    years["2016"] = year([(fy16_568, "568(I)/2014"), (fy16_482, "482(I)/2009"), (potato, "808(I)/2009"),
                           (acrylic, "214(I)/2010"), (sugar, "1043(I)/2014"), (wheat, "254(I)/2015"),
-                          (petrol, "392(I)/2015"), (furnace, "393(I)/2015")])
+                          (furnace, "393(I)/2015")])
     years["2017"] = year([(fy17_568, "568(I)/2014"), (fy17_482, "482(I)/2009"), (potato, "808(I)/2009"),
                           (acrylic, "214(I)/2010"), (sugar, "1043(I)/2014"), (furnace, "393(I)/2015"),
                           (maize, "1248(I)/2015")])

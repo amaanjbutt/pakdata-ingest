@@ -36,7 +36,8 @@ download): ACD then sat in two notifications under section 18(5).
 - SRO 1178(I)/2015 (1 Dec 2015): 1% on every other import, except seeds for sowing, Chapters 31 and 99,
   heading 85.17 and 8529.1090, goods under 693(I)/2006 (Appendix I keeps its own rate) and goods under RD
   SRO 568(I)/2014 (that year's 568 entries in the RD rebuild, `fbr_regulatory_duty.EARLY_FILE`, expanded
-  to the tariff's codes as the RD job does); from 16 Jan 2017 to 30 June 2018 also clause (bb), raw cotton
+  to the tariff's codes as the RD job does; an entry names the amendment that set its rate, so `exempt_rd`
+  lists 568 and its amendments of that year); from 16 Jan 2017 to 30 June 2018 also clause (bb), raw cotton
   and man-made staple fibre (38(I)/2017; 5506.4000 added by 554(I)/2017 on 1 July 2017). 476(I)/2016
   (Fifth Schedule) is by end use; 654(I)/2017 (52.01, 52.03 out from 15 July 2017) is after 1 July.
 - SRO 630(I)/2018 (24 May 2018) superseded 1178 at 2%: the same seeds bar 0904.1130, Chapters 31 and 99,
@@ -192,8 +193,9 @@ class EarlyRule:
 EARLY: dict[int, EarlyRule] = {
     2015: EarlyRule(APPENDIX_I_2013, 15),
     2016: EarlyRule(APPENDIX_I_2015, 15),
+    # 236(I)/2016 (kept in force by 477(I)/2016) and 475(I)/2016 amended 568(I)/2014's table before 1 July 2016
     2017: EarlyRule(APPENDIX_I_2015, 11, "1178(I)/2015", 1, SEEDS_1178 + ["31", "8517", "85291090", "99"],
-                    ("568(I)/2014",)),
+                    ("568(I)/2014", "236(I)/2016", "475(I)/2016")),
     # 38(I)/2017's clause (bb) + 554(I)/2017's 5506.4000; 555(I)/2017 amended 568(I)/2014's table on 1 July 2017
     2018: EarlyRule(APPENDIX_I_2015, 11, "1178(I)/2015", 1,
                     SEEDS_1178 + ["31", "8517", "85291090", "99"] + FIBRES_BB, ("568(I)/2014", "555(I)/2017")),

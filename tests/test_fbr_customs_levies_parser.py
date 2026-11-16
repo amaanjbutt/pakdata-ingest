@@ -279,9 +279,11 @@ def test_acd_fy2015_2019_rules_in_force_on_1_july():
 
 
 def test_acd_1178_exempts_the_goods_under_rd_sro_568_that_year():
-    codes = {"04031000", "72131000", "08052100", "69072111", "87032323", "07019000"}
-    assert rd_goods(2017, codes) == {"04031000", "72131000"}      # 1190 (vehicles) and 808 (potato) aren't 568
-    assert rd_goods(2018, codes) == {"04031000", "72131000", "08052100", "69072111"}   # + 555(I)/2017's rows
+    codes = {"04031000", "72131000", "08052100", "69072111", "87032323", "07019000", "04041010", "76012000"}
+    # 1190 (vehicles) and 808 (potato) aren't 568; 236(I)/2016's and 475(I)/2016's rows are
+    assert rd_goods(2017, codes) == {"04031000", "72131000", "04041010", "76012000"}
+    assert rd_goods(2018, codes) == {"04031000", "72131000", "08052100", "69072111", "04041010",
+                                     "76012000"}                   # + 555(I)/2017's rows
     assert rd_goods(2015, codes) == set()                          # no 1178 before 1 Dec 2015
 
 
@@ -298,12 +300,28 @@ def test_rd_fy2015_2018_rebuilt_from_the_sros_in_force_on_1_july():
     assert at(2016, "8517.1210") == []                                   # 602(I)/2015 omits mobile phones
     assert at(2016, "3402.2000") == [(5.0, None, "601(I)/2015")]
     assert at(2016, "72.29") == [(20.0, None, "601(I)/2015")]            # 601: "for 15, 20"
-    assert at(2017, "72.13") == [(15.0, None, "568(I)/2014")]           # 236(I)/2016's 30% lapsed on 30 June 2016
-    assert at(2017, "7601.2000") == []
+    assert at(2016, "6907.1000") == [(15.0, None, "601(I)/2015")]        # tiles: 605(I)/2015 omits 482's rows
+    assert at(2017, "6908.9090") == [(20.0, None, "568(I)/2014")]
+    for code in ("2709.0000", "2710.1210", "2710.1931"):                 # petroleum: 603(I)/2015 rescinds 392
+        assert at(2016, code) == []
+    for fy in (2016, 2017, 2018):                                        # furnace oil: 604(I)/2015, 7% -> 2%
+        assert at(fy, "2710.1941") == [(2.0, None, "604(I)/2015")]
+    assert at(2015, "2710.1941") == []
+    # 236(I)/2016's rates stay: 477(I)/2016 omitted its "effective till 30 June 2016"
+    assert at(2017, "72.13") == [(30.0, None, "236(I)/2016")]
+    assert at(2017, "72.29") == [(35.0, None, "236(I)/2016")]
+    assert at(2017, "7601.2000") == [(10.0, None, "236(I)/2016")]
+    assert at(2017, "72.08") == at(2016, "72.08") != []                  # a row 236 doesn't touch
+    assert at(2017, "04.02") == at(2017, "0404.1010") == [(25.0, None, "475(I)/2016")]   # 475, from 25 June 2016
+    assert at(2017, "55.16") == [(5.0, None, "475(I)/2016")]
+    assert at(2017, "9405.5000") == [] and at(2017, "9405.5090") == [(15.0, None, "475(I)/2016")]
+    assert at(2016, "04.02") == []
+    # the Table 505(I)/2017 substituted a year later carries both forward
+    assert at(2018, "72.13") == [(30.0, None, "568(I)/2014")] and at(2018, "0404.1010") == [(25.0, None, "568(I)/2014")]
     assert at(2017, "8703.2323") == [(50.0, None, "1190(I)/2015"), (60.0, None, "1190(I)/2015")]  # new / used
     assert at(2017, "1001.1900") == []                                   # wheat: an amendment to 254 is missing
     assert at(2018, "1001.1900") == [(60.0, None, "854(I)/2016")]
     assert at(2018, "7303.0000") == [(12.5, None, "568(I)/2014")]       # 555(I)/2017 recodes 73.03
     rows = expand(early[2017], {"72131000", "72139100", "87032323", "07019000"})
-    assert rows["72131000"].rate_pct == 15 and rows["07019000"].rate_pct == 25
+    assert rows["72131000"].rate_pct == 30 and rows["07019000"].rate_pct == 25
     assert "50%" in rows["87032323"].rate_text and "60%" in rows["87032323"].rate_text
