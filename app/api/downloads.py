@@ -9,10 +9,10 @@ pakdatahub.com.
     GET  /v1/downloads/file/{token}                                   the file (signed link)
 
 A POST (session auth: a signed-in person on the website) counts one download — 5 a day on the
-free plan, unlimited with the Data pass or any paid plan — and answers with a link that works
+free plan, unlimited on every paid plan — and answers with a link that works
 for 5 minutes. The link serves the file with `Content-Disposition: attachment`; its first line
 (CSV) or its About sheet (Excel) carries the citation. `vintage=YYYY-MM-DD` (a series as it was
-known on that date) comes with the Data pass, Pro and Business.
+known on that date) comes with Pro and Business.
 """
 from __future__ import annotations
 
@@ -182,7 +182,7 @@ def download_file(token: str):
 @router.post("/{series_id}")
 def download_series(request: Request, series_id: str, format: str = Query("csv", pattern=_FORMATS),
                     dims: str | None = Query(None, description="Only these dims, e.g. side:offer; default every row"),
-                    vintage: date | None = Query(None, description="The series as known on this date (pass, Pro+)"),
+                    vintage: date | None = Query(None, description="The series as known on this date (Pro+)"),
                     caller: Caller = Depends(authenticate_session)):
     from app.services import series_repo
 
@@ -190,7 +190,7 @@ def download_series(request: Request, series_id: str, format: str = Query("csv",
         raise HTTPException(status_code=404, detail="unknown series")
     if vintage is not None and not caller.limits.vintage_downloads:
         raise HTTPException(status_code=403,
-                            detail="downloads as of a past date come with the Data pass, Pro and Business")
+                            detail="downloads as of a past date come with the Pro and Business plans")
     params: dict = {}
     want = _parse_dims(dims)
     if want:

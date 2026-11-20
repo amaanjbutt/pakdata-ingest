@@ -157,14 +157,12 @@ def test_grandfathered_allowance_resets_in_a_new_month(client):
 def test_plans_endpoint_is_truthful(client):
     body = client.get("/v1/plans").json()
     plans = {p["plan"]: p for p in body["plans"]}
-    assert list(plans) == ["free", "pass", "developer", "pro", "business"]
+    assert list(plans) == ["free", "developer", "pro", "business"]
     free = plans["free"]
     assert free["calls_per_day"] == 20 == free["requests_per_day"]
     assert free["downloads_per_day"] == 5 and free["max_points_per_call"] == 1000
     assert free["history"] == "last 5 years"
-    p = plans["pass"]
-    assert p["kind"] == "one_time" and p["price_usd_once"] == 9 and p["pass_days"] == 30
-    assert p["calls_per_day"] == 500 and p["downloads_per_day"] is None and p["whole_dataset_files"]
+    assert plans["developer"]["kind"] == "subscription" and plans["developer"]["downloads_per_day"] is None
     assert plans["developer"]["calls_per_day"] == 2_000 and not plans["developer"]["whole_dataset_files"]
     assert plans["pro"]["calls_per_day"] == 20_000 and plans["pro"]["vintages_api"] is True
     assert plans["business"]["calls_per_day"] == 200_000 and plans["business"]["sla"] is True

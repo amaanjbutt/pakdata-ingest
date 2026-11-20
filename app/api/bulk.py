@@ -1,7 +1,7 @@
 """Whole-dataset files: every series of a dataset, full history, in one file.
 
-    GET /v1/bulk                         every dataset file (name, size, rows, built) — links on the
-                                         Data pass, Pro and Business
+    GET /v1/bulk                         every dataset file (name, size, rows, built) — links on
+                                         Pro and Business
     GET /v1/bulk/{dataset}?format=       a link to one file (csv.gz or xlsx), valid 10 minutes
 
 A dataset is every series sharing the first part of its id: `rates` (KIBOR, policy rate,
@@ -34,7 +34,7 @@ def _files() -> list[dict]:
 
 
 def _upgrade_detail() -> str:
-    return "whole-dataset files come with the Data pass ($9 for 30 days), Pro and Business"
+    return "whole-dataset files come with the Pro and Business plans"
 
 
 @router.get("")

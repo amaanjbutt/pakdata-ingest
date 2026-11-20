@@ -120,8 +120,8 @@ def test_free_history_floor_is_five_years():
     assert (floor.month, floor.day) in {(today.month, today.day), (2, 28)}
 
 
-def test_paid_plans_and_the_pass_have_full_history():
-    for plan in ("pass", "developer", "pro", "business", "internal"):
+def test_paid_plans_have_full_history():
+    for plan in ("developer", "pro", "business", "internal"):
         assert history_floor(_caller(plan)) is None
 
 
@@ -138,7 +138,8 @@ def test_points_per_call():
 def test_daily_quotas_match_the_plan_table():
     assert PLAN_LIMITS["free"].per_day == 20 and PLAN_LIMITS["free"].per_min == 10
     assert PLAN_LIMITS["free"].downloads_per_day == 5
-    assert PLAN_LIMITS["pass"].per_day == 500 and PLAN_LIMITS["pass"].downloads_per_day is None
+    assert "pass" not in PLAN_LIMITS  # the Data pass was withdrawn before sale (2026-11-20)
+    assert PLAN_LIMITS["developer"].downloads_per_day is None
     assert PLAN_LIMITS["developer"].per_day == 2_000
     assert PLAN_LIMITS["pro"].per_day == 20_000
     assert PLAN_LIMITS["business"].per_day == 200_000
@@ -148,38 +149,15 @@ def test_daily_quotas_match_the_plan_table():
 
 def test_files_and_vintages_by_plan():
     lim = PLAN_LIMITS
-    assert lim["pass"].bulk and lim["pro"].bulk and lim["business"].bulk
+    assert lim["pro"].bulk and lim["business"].bulk
     assert not lim["free"].bulk and not lim["developer"].bulk
-    assert lim["pass"].vintage_downloads and not lim["pass"].vintages
-    assert lim["pro"].vintages and not lim["developer"].vintages
+    assert lim["pro"].vintages and lim["pro"].vintage_downloads
+    assert not lim["developer"].vintages and not lim["developer"].vintage_downloads
 
 
 def _row(**kw):
-    base = {"plan": "free", "subscription_status": "active", "pass_expires_at": None,
-            "limits_version": 2, "legacy_free_until": None}
+    base = {"plan": "free", "subscription_status": "active", "limits_version": 2, "legacy_free_until": None}
     return {**base, **kw}
-
-
-def test_live_pass_turns_a_free_account_into_pass():
-    from datetime import datetime, timezone
-
-    from app.security import effective_limits
-
-    soon = datetime.now(tz=timezone.utc) + timedelta(days=3)
-    assert effective_limits("free", _row(pass_expires_at=soon))[0] == "pass"
-    gone = datetime.now(tz=timezone.utc) - timedelta(minutes=1)
-    assert effective_limits("free", _row(pass_expires_at=gone)) == ("free", PLAN_LIMITS["free"])
-
-
-def test_pass_on_a_developer_plan_adds_the_files():
-    from datetime import datetime, timezone
-
-    from app.security import effective_limits
-
-    soon = datetime.now(tz=timezone.utc) + timedelta(days=3)
-    plan, lim = effective_limits("developer", _row(plan="developer", pass_expires_at=soon))
-    assert plan == "developer" and lim.per_day == 2_000
-    assert lim.bulk and lim.vintage_downloads and lim.downloads_per_day is None
 
 
 def test_grandfathered_limits():
@@ -197,7 +175,7 @@ def test_grandfathered_limits():
 def test_every_plan_reaches_every_dataset():
     # Since 2026-09-25 free reaches funds + alternate data too; plans differ by
     # volume, history, files, vintages and webhooks.
-    for plan in ("free", "pass", "developer", "pro", "business"):
+    for plan in ("free", "developer", "pro", "business"):
         enforce_tier(_caller(plan), {"tier": "pro"})  # no raise
 
 

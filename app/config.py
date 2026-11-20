@@ -39,10 +39,6 @@ class Settings:
     lemonsqueezy_variant_developer_annual: str = os.getenv("LEMONSQUEEZY_VARIANT_DEVELOPER_ANNUAL", "")
     lemonsqueezy_variant_pro_annual: str = os.getenv("LEMONSQUEEZY_VARIANT_PRO_ANNUAL", "")
     lemonsqueezy_variant_business_annual: str = os.getenv("LEMONSQUEEZY_VARIANT_BUSINESS_ANNUAL", "")
-    # The one-time Data pass ($9, 30 days). Empty => the pass isn't on sale (checkout answers 503
-    # and /v1/plans marks it unavailable). LS_VARIANT_DATA_PASS is the name in the plan.
-    lemonsqueezy_variant_data_pass: str = os.getenv(
-        "LEMONSQUEEZY_VARIANT_DATA_PASS", os.getenv("LS_VARIANT_DATA_PASS", ""))
     # Pakistan price: a LemonSqueezy discount code applied at checkout when the visitor is in
     # Pakistan (the website passes Cloudflare's country). Empty code => no Pakistan price shown.
     lemonsqueezy_discount_pk: str = os.getenv("LEMONSQUEEZY_DISCOUNT_PK", "")

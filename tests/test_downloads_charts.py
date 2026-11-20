@@ -1,5 +1,4 @@
-"""Site downloads, full-history charts, the Data pass, whole-dataset files and CSV on every
-endpoint (plans for developers and researchers, 2026-11-20).
+"""Site downloads, full-history charts, whole-dataset files and CSV on every endpoint (plans for developers and researchers, 2026-11-20).
 
 The chart-shaping rules run without a database; the rest is skipped when none is reachable.
 """
@@ -9,7 +8,7 @@ import csv
 import io
 import json
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 
 import pytest
 
@@ -159,7 +158,7 @@ def _account(plan: str = "free", **cols):
         r = get_redis()
         for k in r.scan_iter(f"*{uid}*"):
             r.delete(k)
-        for t in ("downloads", "data_passes", "sessions", "api_keys"):
+        for t in ("downloads", "sessions", "api_keys"):
             db.execute(f"DELETE FROM {t} WHERE user_id=%s", (uid,))
         db.execute("DELETE FROM users WHERE id=%s", (uid,))
 
@@ -202,20 +201,23 @@ def test_free_account_downloads_five_a_day_with_a_signed_link(client, series):
 
 
 @needs_db
-def test_vintage_download_needs_the_pass(client, series):
-    token, _, _, cleanup = _account()
+def test_vintage_download_needs_pro(client, series):
+    for plan, want in (("free", 403), ("developer", 403), ("pro", 200)):
+        token, _, _, cleanup = _account(plan)
+        try:
+            r = client.post(f"/v1/downloads/{series}", params={"vintage": "2020-01-01"},
+                            headers={"X-Session-Token": token})
+            assert r.status_code == want, (plan, r.text)
+        finally:
+            cleanup()
+
+
+@needs_db
+def test_paid_plans_download_without_a_daily_limit(client, series):
+    token, _, _, cleanup = _account("developer")
     try:
-        r = client.post(f"/v1/downloads/{series}", params={"vintage": "2020-01-01"},
-                        headers={"X-Session-Token": token})
-        assert r.status_code == 403
-    finally:
-        cleanup()
-    soon = datetime.now(tz=timezone.utc) + timedelta(days=10)
-    token, _, _, cleanup = _account(pass_expires_at=soon)
-    try:
-        h = {"X-Session-Token": token}
-        for _ in range(7):  # the pass has no daily download limit
-            r = client.post(f"/v1/downloads/{series}", params={"vintage": "2020-01-01"}, headers=h)
+        for _ in range(7):
+            r = client.post(f"/v1/downloads/{series}", headers={"X-Session-Token": token})
             assert r.status_code == 200
         assert r.json()["downloads"]["limit"] is None
     finally:
@@ -264,43 +266,6 @@ def test_free_api_is_last_five_years_and_1000_points(client, series):
         cleanup()
 
 
-def _order(event: str, order_id: str, variant: str, user_id: str | None, email: str, status: str = "paid") -> dict:
-    return {"meta": {"event_name": event, "custom_data": {"user_id": user_id} if user_id else {}},
-            "data": {"type": "orders", "id": order_id,
-                     "attributes": {"user_email": email, "status": status, "refunded": status == "refunded",
-                                    "first_order_item": {"variant_id": int(variant)}}}}
-
-
-@needs_db
-def test_data_pass_order_refund_and_stacking(monkeypatch):
-    from app import db
-    from app.billing import service
-    from app.config import settings
-
-    monkeypatch.setattr(settings, "lemonsqueezy_variant_data_pass", "777")
-    monkeypatch.setattr(service, "log", service.log)
-    _, _, uid, cleanup = _account()
-    email = db.query_one("SELECT email FROM users WHERE id=%s", (uid,))["email"]
-    try:
-        a, b = f"pytest-{uuid.uuid4().hex[:8]}", f"pytest-{uuid.uuid4().hex[:8]}"
-        out = service.handle_event(_order("order_created", a, "777", uid, email))
-        assert out["handled"] is True
-        exp1 = db.query_one("SELECT pass_expires_at FROM users WHERE id=%s", (uid,))["pass_expires_at"]
-        assert timedelta(days=29, hours=23) < exp1 - datetime.now(tz=timezone.utc) <= timedelta(days=30)
-        service.handle_event(_order("order_created", a, "777", uid, email))  # re-delivery: no change
-        assert db.query_one("SELECT pass_expires_at FROM users WHERE id=%s", (uid,))["pass_expires_at"] == exp1
-        service.handle_event(_order("order_created", b, "777", None, email))  # a second pass stacks
-        exp2 = db.query_one("SELECT pass_expires_at FROM users WHERE id=%s", (uid,))["pass_expires_at"]
-        assert abs((exp2 - exp1) - timedelta(days=30)) < timedelta(seconds=5)
-        service.handle_event(_order("order_refunded", b, "777", uid, email, status="refunded"))
-        assert db.query_one("SELECT pass_expires_at FROM users WHERE id=%s", (uid,))["pass_expires_at"] == exp1
-        # a subscription product's order is not a pass
-        assert service.handle_event(_order("order_created", "x1", "123", uid, email))["handled"] is False
-    finally:
-        db.execute("DELETE FROM data_passes WHERE user_id=%s", (uid,))
-        cleanup()
-
-
 @needs_db
 def test_plan_change_ends_grandfathering(monkeypatch):
     from app import db
@@ -325,7 +290,7 @@ def test_plan_change_ends_grandfathering(monkeypatch):
 
 
 @needs_db
-def test_bulk_files_need_the_pass_or_pro(client):
+def test_bulk_files_need_pro(client):
     from app import db
 
     db.execute("INSERT INTO bulk_files (dataset, format, object_key, bytes, series_count, rows) VALUES "
@@ -334,7 +299,7 @@ def test_bulk_files_need_the_pass_or_pro(client):
     token, key, _, cleanup = _account()
     try:
         body = client.get("/v1/bulk", headers={"X-Session-Token": token}).json()
-        assert body["included"] is False and "Data pass" in body["upgrade"]
+        assert body["included"] is False and "Pro and Business" in body["upgrade"]
         ds = next(d for d in body["data"] if d["dataset"] == "pytestds")
         assert ds["files"][0]["url"] is None
         assert client.get("/v1/bulk/pytestds", headers={"X-Session-Token": token}).status_code == 403

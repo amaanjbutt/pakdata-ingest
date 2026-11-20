@@ -1,4 +1,4 @@
-"""Whole-dataset files: every series of a dataset in one file, for the Data pass, Pro and Business.
+"""Whole-dataset files: every series of a dataset in one file, for Pro and Business.
 
 A dataset = every active series sharing the first part of its id (`rates.*` = KIBOR, policy rate
 and the rest of the interest rates; `remittances.*` = every corridor; `bop.*` = the balance of

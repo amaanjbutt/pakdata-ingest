@@ -75,14 +75,7 @@ def billing_for_variant(variant_id: str | None) -> str | None:
     return None
 
 
-def is_data_pass_variant(variant_id) -> bool:
-    v = settings.lemonsqueezy_variant_data_pass
-    return bool(v) and str(variant_id or "") == str(v)
-
-
 def variant_for_plan(plan: str, billing: str = "month") -> str | None:
-    if plan == "pass":
-        return settings.lemonsqueezy_variant_data_pass or None
     return _variant_map().get((plan, billing)) or None
 
 
@@ -104,25 +97,20 @@ def _headers() -> dict:
 
 
 def create_checkout(plan: str, signup_token: str, email: str | None = None, *, billing: str = "month",
-                    country: str | None = None, user_id: str | None = None) -> str:
+                    country: str | None = None) -> str:
     """Create a hosted checkout for `plan` and return its URL.
 
     `signup_token` is threaded through `custom_data` (so the webhook can bind the
     resulting subscription to this signup) and the success redirect (so the buyer
-    can claim their key). The Data pass (`plan="pass"`) is bought by a signed-in account:
-    `user_id` rides in custom_data and the buyer returns to the dashboard. A visitor in
+    can claim their key). `billing` picks the monthly or yearly variant. A visitor in
     Pakistan (`country="PK"`) gets the Pakistan discount code when one is set.
     Requires store id + the plan's variant id configured."""
     variant = variant_for_plan(plan, billing)
     if not (settings.lemonsqueezy_api_key and settings.lemonsqueezy_store_id and variant):
         raise RuntimeError("billing not configured (api key / store / variant)")
 
-    if plan == "pass":
-        redirect = f"{settings.public_base_url}/dashboard?pass=1"
-        custom = {"user_id": user_id or "", "product": "data_pass"}
-    else:
-        redirect = f"{settings.public_base_url}/welcome?token={signup_token}"
-        custom = {"signup_token": signup_token}
+    redirect = f"{settings.public_base_url}/welcome?token={signup_token}"
+    custom = {"signup_token": signup_token}
     attributes: dict = {
         "checkout_data": {"custom": custom},
         "product_options": {"redirect_url": redirect},

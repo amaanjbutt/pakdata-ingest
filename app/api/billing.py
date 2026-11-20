@@ -2,8 +2,7 @@
 
 Flow:
   1. GET  /v1/plans                     -> pricing + limits (public)
-  2. POST /v1/checkout {plan, billing}  -> hosted LemonSqueezy checkout URL (the Data pass:
-                                           signed in, X-Session-Token; lands on /dashboard)
+  2. POST /v1/checkout {plan, billing}  -> hosted LemonSqueezy checkout URL
   3. (buyer pays; LS -> POST /webhooks/lemonsqueezy) -> user provisioned + key staged
   4. buyer lands on /welcome?token=...  -> GET /v1/account/key/{token} once
 """
@@ -11,26 +10,24 @@ from __future__ import annotations
 
 import secrets
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from app import db
 from app.billing import lemonsqueezy, service
-from app.security import PLAN_LIMITS, Caller, authenticate_session_or_key, session_caller
+from app.security import PLAN_LIMITS, Caller, authenticate_session_or_key
 
 router = APIRouter(tags=["billing"])
 
 
-# Public pricing (docs/decisions.md 2026-11-20). Free is $0 and self-serve (no checkout); the
-# Data pass is a one-time $9 for 30 days; subscriptions bill monthly, or yearly at 10 months.
-PLAN_PRICES = {"free": 0, "pass": 9, "developer": 19, "pro": 49, "business": 199}
+# Public pricing (docs/decisions.md 2026-11-20). Free is $0 and self-serve (no checkout);
+# subscriptions bill monthly, or yearly at 10 months, and cancel any time.
+PLAN_PRICES = {"free": 0, "developer": 19, "pro": 49, "business": 199}
 PAID_PLANS = ("developer", "pro", "business")
-PASS_DAYS = 30
 ANNUAL_MONTHS = 10  # annual = 2 months free
 
 PLAN_VALUE = {
     "free": {"name": "Free", "for": "Students, journalists, trying it", "support": "community"},
-    "pass": {"name": "Data pass", "for": "A thesis or a project, without a subscription", "support": "email"},
     "developer": {"name": "Developer", "for": "One developer or analyst", "support": "email"},
     "pro": {"name": "Pro", "for": "Teams and apps", "support": "email"},
     "business": {"name": "Business", "for": "Institutions", "support": "priority"},
@@ -50,18 +47,14 @@ def plans():
     out = []
     for name, price in PLAN_PRICES.items():
         lim = PLAN_LIMITS[name]
-        once = name == "pass"
-        monthly = None if once else price
         annual_on = name in PAID_PLANS and bool(lemonsqueezy.variant_for_plan(name, "year"))
         out.append({
             "plan": name,
             "name": PLAN_VALUE[name]["name"],
-            "kind": "free" if name == "free" else "one_time" if once else "subscription",
-            "price_usd_month": monthly,
+            "kind": "free" if name == "free" else "subscription",
+            "price_usd_month": price,
             "price_usd_year": price * ANNUAL_MONTHS if name in PAID_PLANS else None,
             "annual_available": annual_on,
-            "price_usd_once": price if once else None,
-            "pass_days": PASS_DAYS if once else None,
             "available": name == "free" or bool(lemonsqueezy.variant_for_plan(name, "month")),
             "calls_per_day": lim.per_day,
             "calls_per_min": lim.per_min,
@@ -102,29 +95,18 @@ class CheckoutRequest(BaseModel):
 
 
 @router.post("/v1/checkout")
-def checkout(req: CheckoutRequest, request: Request,
-             x_session_token: str | None = Header(default=None, alias="X-Session-Token")):
-    if req.plan not in (*PAID_PLANS, "pass"):
+def checkout(req: CheckoutRequest):
+    if req.plan not in PAID_PLANS:
         raise HTTPException(
             status_code=422,
-            detail=f"plan must be one of {', '.join((*PAID_PLANS, 'pass'))}",
+            detail=f"plan must be one of {', '.join(PAID_PLANS)}",
         )
     if req.billing not in ("month", "year"):
         raise HTTPException(status_code=422, detail="billing must be month or year")
-    user_id = None
-    email = req.email
-    if req.plan == "pass":
-        # The pass belongs to an account: buy it signed in.
-        caller = session_caller(request, x_session_token) if x_session_token else None
-        if caller is None:
-            raise HTTPException(status_code=401, detail="sign in (free) to buy the Data pass")
-        user_id = caller.user_id
-        row = db.query_one("SELECT email FROM users WHERE id = %s", (user_id,))
-        email = row["email"] if row else email
     signup_token = secrets.token_urlsafe(24)
     try:
-        url = lemonsqueezy.create_checkout(req.plan, signup_token, email, billing=req.billing,
-                                           country=req.country, user_id=user_id)
+        url = lemonsqueezy.create_checkout(req.plan, signup_token, req.email, billing=req.billing,
+                                           country=req.country)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     except Exception:  # noqa: BLE001 — upstream/provider error

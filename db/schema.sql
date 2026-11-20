@@ -532,9 +532,9 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS name TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS company TEXT;
 
 -- Plans for developers and researchers (2026-11-20, docs/decisions.md):
--- * pass_expires_at: the one-time $9 Data pass (30 days, no renewal). A free account with a live
---   pass gets the pass limits; a paid plan with a live pass keeps its plan and gains the pass's
---   files (whole-dataset files, vintage downloads).
+-- * pass_expires_at + data_passes: UNUSED. A one-time $9 "Data pass" was built and withdrawn before
+--   it went on sale (owner, 2026-11-20: it undercut Developer and Pro). Kept, empty, so prod and
+--   local stay alike; nothing reads or writes them.
 -- * limits_version: 1 = the limits sold before 2026-11-20 (grandfathered paid subscribers keep
 --   them until they change plan; app.security.LEGACY_LIMITS); 2 = current. New rows are 2.
 -- * legacy_free_until: free keys that used more than 20 calls a day before the switch keep the
@@ -543,8 +543,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS pass_expires_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS limits_version SMALLINT NOT NULL DEFAULT 2;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_free_until DATE;
 
--- Data pass purchases (LemonSqueezy one-time orders), one row per order: idempotent re-delivery,
--- refunds, and the history the dashboard shows.
+-- Unused (see pass_expires_at above).
 CREATE TABLE IF NOT EXISTS data_passes (
     order_id     TEXT PRIMARY KEY,
     user_id      UUID NOT NULL REFERENCES users(id),

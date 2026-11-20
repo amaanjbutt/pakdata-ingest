@@ -15,7 +15,7 @@ from app.security import _STORED_PLANS, generate_key
 
 def create_user(email: str, plan: str) -> None:
     if plan not in _STORED_PLANS:
-        raise SystemExit(f"plan must be one of {list(_STORED_PLANS)} (the Data pass is users.pass_expires_at)")
+        raise SystemExit(f"plan must be one of {list(_STORED_PLANS)}")
     row = db.query_one(
         "INSERT INTO users (email, plan, subscription_status) "
         "VALUES (%s, %s, 'active') "

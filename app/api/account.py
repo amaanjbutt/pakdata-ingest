@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app import db
-from app.security import Caller, authenticate_session_or_key, generate_key, pass_active
+from app.security import Caller, authenticate_session_or_key, generate_key
 
 router = APIRouter(prefix="/v1", tags=["account"])
 
@@ -16,7 +16,7 @@ def account(caller: Caller = Depends(authenticate_session_or_key)):
     """The signed-in user's account: plan, status and counts. Auth = any of the
     user's own API keys."""
     u = db.query_one(
-        "SELECT email, plan, subscription_status, period_end, name, company, pass_expires_at "
+        "SELECT email, plan, subscription_status, period_end, name, company "
         "FROM users WHERE id = %(id)s",
         {"id": caller.user_id},
     )
@@ -36,9 +36,6 @@ def account(caller: Caller = Depends(authenticate_session_or_key)):
         "plan": caller.plan,
         "subscription_status": u["subscription_status"] if u else None,
         "period_end": u["period_end"] if u else None,
-        # the Data pass: a free account with a live pass acts as plan "pass"
-        "pass_expires_at": u["pass_expires_at"] if u else None,
-        "pass_active": pass_active(u["pass_expires_at"]) if u else False,
         "active_keys": keys,
         "active_webhooks": hooks,
     }

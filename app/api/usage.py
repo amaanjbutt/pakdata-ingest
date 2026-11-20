@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app import db
 from app.security import (Caller, authenticate_session_or_key, calls_used_today, charts_used_today,
-                          download_quota, get_redis, pass_active)
+                          download_quota, get_redis)
 
 router = APIRouter(prefix="/v1", tags=["usage"])
 
@@ -53,7 +53,6 @@ def usage(caller: Caller = Depends(authenticate_session_or_key)):
     return {
         "success": True,
         "plan": caller.plan,
-        "pass_expires_at": caller.pass_expires_at if pass_active(caller.pass_expires_at) else None,
         "day_resets": "00:00 UTC",
         "limits": {
             "per_min": lim.per_min,

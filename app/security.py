@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 import time
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
 import redis
@@ -110,9 +110,10 @@ def delete_session(token: str | None) -> None:
 
 # Plans for developers and researchers (owner, 2026-11-13; docs/decisions.md 2026-11-20).
 # A free account is the hook: 20 API calls a day (1 call = 1 request) over the last 5 years at
-# up to 1,000 points per call, and 5 site downloads a day (one series, full history). The $9
-# Data pass (30 days, one-time) is for a thesis or a project; Developer / Pro / Business are
-# subscriptions for apps. Every plan reaches every dataset. Day counters reset at 00:00 UTC.
+# up to 1,000 points per call, and 5 site downloads a day (one series, full history). Developer /
+# Pro / Business are subscriptions (a month of Developer, cancelled, covers a one-off project);
+# whole-dataset files and vintages are Pro and Business. Every plan reaches every dataset. Day
+# counters reset at 00:00 UTC. (A one-time $9 "Data pass" was withdrawn before sale, 2026-11-20.)
 FREE_CALLS_PER_DAY = 20
 FREE_DOWNLOADS_PER_DAY = 5
 FREE_HISTORY_YEARS = 5
@@ -141,7 +142,6 @@ class PlanLimits:
 PLAN_LIMITS: dict[str, PlanLimits] = {
     "free": PlanLimits(per_min=10, per_day=FREE_CALLS_PER_DAY, history_years=FREE_HISTORY_YEARS,
                        max_page=1000, downloads_per_day=FREE_DOWNLOADS_PER_DAY, charts_per_day=50),
-    "pass": PlanLimits(per_min=60, per_day=500, history_years=None, bulk=True, vintage_downloads=True),
     "developer": PlanLimits(per_min=60, per_day=2_000, history_years=None),
     "pro": PlanLimits(per_min=300, per_day=20_000, history_years=None, charts_per_day=1000,
                       bulk=True, vintages=True, vintage_downloads=True),
@@ -170,15 +170,14 @@ LEGACY_LIMITS: dict[str, PlanLimits] = {
                            public=False),
 }
 
-# Plans the API sells, in display order. "pass" is a one-time purchase, not a subscription.
+# Plans the API sells, in display order.
 PUBLIC_PLANS = tuple(name for name, lim in PLAN_LIMITS.items() if lim.public)
 
 # Legacy plan names → current ones (the pre-2026-07-31 two-tier model used
 # 'basic'). Kept so existing keys/rows keep working without a hard migration.
 _PLAN_ALIASES = {"basic": "developer"}
 
-# Stored plan names (users.plan). "pass" is never stored: it is a free account with a live
-# users.pass_expires_at.
+# Stored plan names (users.plan).
 _STORED_PLANS = ("free", "developer", "pro", "business", "internal")
 
 
@@ -190,27 +189,11 @@ def resolve_plan(plan: str | None) -> str | None:
     return plan if plan in _STORED_PLANS else None
 
 
-def _aware(ts: datetime | None) -> datetime | None:
-    if ts is None:
-        return None
-    return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
-
-
-def pass_active(pass_expires_at: datetime | None) -> bool:
-    ts = _aware(pass_expires_at)
-    return ts is not None and ts > datetime.now(tz=timezone.utc)
-
-
 def effective_limits(plan: str, row: dict) -> tuple[str, PlanLimits]:
     """The plan a stored user row acts as, and its limits.
 
-    - A free account with a live Data pass acts as "pass".
     - limits_version 1 (grandfathered subscribers) keeps the pre-2026-11-20 limits.
-    - A free key with legacy_free_until in the future keeps the old monthly allowance.
-    - A paid plan with a live pass keeps its plan and gains the pass's files."""
-    has_pass = pass_active(row.get("pass_expires_at"))
-    if plan == "free" and has_pass:
-        return "pass", PLAN_LIMITS["pass"]
+    - A free key with legacy_free_until in the future keeps the old monthly allowance."""
     if plan == "free":
         until = row.get("legacy_free_until")
         if until is not None and until >= date.today():
@@ -219,8 +202,6 @@ def effective_limits(plan: str, row: dict) -> tuple[str, PlanLimits]:
     limits = PLAN_LIMITS[plan]
     if row.get("limits_version") == 1 and plan in LEGACY_LIMITS:
         limits = LEGACY_LIMITS[plan]
-    if has_pass and not (limits.bulk and limits.vintage_downloads):
-        limits = replace(limits, bulk=True, vintage_downloads=True, downloads_per_day=None)
     return plan, limits
 
 
@@ -229,7 +210,6 @@ class Caller:
     user_id: str
     plan: str
     limits: PlanLimits
-    pass_expires_at: datetime | None = None
     auth: str = "key"
 
 
@@ -251,8 +231,7 @@ def _subscription_ok(status: str | None, period_end: datetime | date | None) -> 
     return False
 
 
-_USER_COLS = ("u.plan, u.subscription_status, u.period_end, u.pass_expires_at, u.limits_version, "
-              "u.legacy_free_until")
+_USER_COLS = "u.plan, u.subscription_status, u.period_end, u.limits_version, u.legacy_free_until"
 
 
 # ---- auth dependency --------------------------------------------------------
@@ -297,8 +276,7 @@ def authenticate(
         raise HTTPException(status_code=402, detail="subscription inactive")
 
     plan, limits = effective_limits(plan, row)
-    caller = Caller(user_id=str(row["user_id"]), plan=plan, limits=limits,
-                    pass_expires_at=row.get("pass_expires_at"))
+    caller = Caller(user_id=str(row["user_id"]), plan=plan, limits=limits)
     request.state.caller = caller
     _enforce_rate_limit(request, caller)
     # Grandfathered free keys keep the old monthly allowance: a rate-limit rejection (429)
@@ -362,8 +340,7 @@ def session_caller(request: Request, token: str | None) -> Caller:
     plan, limits = effective_limits(resolve_plan(row["plan"]) or "free", row)
     request.state.user_id = str(user_id)
     request.state.auth = "session"
-    caller = Caller(user_id=user_id, plan=plan, limits=limits,
-                    pass_expires_at=row.get("pass_expires_at"), auth="session")
+    caller = Caller(user_id=user_id, plan=plan, limits=limits, auth="session")
     request.state.caller = caller
     return caller
 
@@ -470,7 +447,7 @@ def _enforce_rate_limit(request: Request, caller: Caller) -> None:
         exc = HTTPException(
             status_code=429,
             detail=(f"daily limit of {caller.limits.per_day:,} calls reached — it resets at 00:00 UTC"
-                    + (", or upgrade at pakdatahub.com/pricing" if caller.plan in ("free", "pass", "developer")
+                    + (", or upgrade at pakdatahub.com/pricing" if caller.plan in ("free", "developer")
                        else "")),
             headers={"Retry-After": str(_seconds_to_utc_midnight())},
         )
@@ -510,8 +487,8 @@ def take_download(caller: Caller) -> dict:
         r.decr(key)
         exc = HTTPException(
             status_code=429,
-            detail=(f"today's {cap} free downloads are used — they reset at 00:00 UTC; the Data pass "
-                    "($9 for 30 days) or any paid plan downloads without a limit"),
+            detail=(f"today's {cap} free downloads are used — they reset at 00:00 UTC; every paid plan "
+                    "(from $19 a month, cancel any time) downloads without a limit"),
             headers={"Retry-After": str(_seconds_to_utc_midnight())},
         )
         exc.error_code = "download_limit"
@@ -544,7 +521,7 @@ def take_chart(caller: Caller, subject: str, ip: str) -> bool:
         return True
     if int(r.scard(ukey)) >= caller.limits.charts_per_day:
         return False
-    if caller.plan in ("free", "pass") and not r.sismember(ikey, subject) \
+    if caller.plan == "free" and not r.sismember(ikey, subject) \
             and int(r.scard(ikey)) >= CHART_IP_SERIES_PER_DAY:
         return False
     pipe = r.pipeline()
@@ -571,7 +548,7 @@ def require_vintages(caller: Caller, what: str = "revision vintages") -> None:
     """?vintage= and /revisions through the API: Pro and Business."""
     if not caller.limits.vintages:
         raise HTTPException(status_code=403, detail=f"{what} through the API: Pro or Business plan "
-                                                    "(the Data pass downloads a series as of a past date)")
+                                                    "(they also download a series as of a past date)")
 
 
 def page_limit(caller: Caller, limit: int) -> int:
