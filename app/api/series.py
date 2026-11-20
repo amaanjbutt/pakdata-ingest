@@ -14,7 +14,7 @@ from app.models import (
     ResponseMeta,
     SeriesResponse,
 )
-from app.security import Caller, authenticate, enforce_tier, history_floor
+from app.security import Caller, authenticate, enforce_tier, history_floor, page_limit, require_vintages
 from app.services import cache, series_repo, transforms
 
 router = APIRouter(prefix="/v1/series", tags=["series"])
@@ -143,23 +143,24 @@ def get_series_data(
 ):
     """Observations for a series.
 
-    Pagination: results are capped at `limit` (max %d) and `next_cursor` is
-    always null in this MVP. To page through a long history, window with the
-    `from`/`to` date params rather than a cursor. (Keyset cursors are deferred:
-    a series can carry several observations per date across `dims`, so a naive
-    date cursor would split or drop rows at a page boundary.)
-    """ % MAX_LIMIT
+    Pagination: one call returns at most `limit` points, and at most the plan's points per call
+    (1,000 on the free plan, 5,000 on paid plans — the `X-Page-Max` header). `next_cursor` is
+    always null: to page through a long history, window with the `from`/`to` date params
+    (newest first: pass the oldest date you got as the next `to`). Each page is one call.
+    The free plan reaches the last 5 years.
+    """
     meta_row = series_repo.get_series(series_id)
     if not meta_row:
         raise HTTPException(status_code=404, detail="unknown series")
     enforce_tier(caller, meta_row)
-    # History-depth gating: Basic callers are clamped to the last N years.
+    limit = page_limit(caller, limit)
+    # History-depth gating: the free plan is clamped to the last 5 years.
     floor = history_floor(caller)
     if floor is not None and (date_from is None or date_from < floor):
         date_from = floor
-    if vintage is not None and caller.plan not in ("pro", "business"):
-        # Revision vintages are a Pro/Business feature (pricing "Vintages" row).
-        raise HTTPException(status_code=403, detail="vintages require the Pro plan")
+    if vintage is not None:
+        # Revision vintages through the API are a Pro/Business feature.
+        require_vintages(caller, "vintages")
     lookback = None
     if transform:
         try:
@@ -227,8 +228,8 @@ def get_series_revisions(
     if not meta_row:
         raise HTTPException(status_code=404, detail="unknown series")
     enforce_tier(caller, meta_row)
-    if caller.plan not in ("pro", "business"):
-        raise HTTPException(status_code=403, detail="revision history requires the Pro plan")
+    require_vintages(caller, "revision history")
+    limit = page_limit(caller, limit)
     floor = history_floor(caller)
     if floor is not None and (date_from is None or date_from < floor):
         date_from = floor

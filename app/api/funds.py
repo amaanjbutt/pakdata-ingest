@@ -10,7 +10,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.security import Caller, authenticate, history_floor
+from app.security import Caller, authenticate, history_floor, page_limit
 from app.services import cache, series_repo
 
 router = APIRouter(prefix="/v1/funds", tags=["funds"])
@@ -30,6 +30,7 @@ def list_funds(
     limit: int = Query(1000, ge=1, le=MAX_LIMIT),
     caller: Caller = Depends(authenticate),
 ):
+    limit = page_limit(caller, limit)
     def build() -> dict:
         rows = series_repo.list_funds(amc=amc, category=category, sector=sector, q=q, limit=limit)
         data = [
@@ -112,6 +113,7 @@ def fund_returns(
     caller: Caller = Depends(authenticate),
 ):
     """Trailing-return performance history (YTD/MTD/1D..365D) for a fund."""
+    limit = page_limit(caller, limit)
     if not series_repo.get_fund(fund_id):
         raise HTTPException(status_code=404, detail="unknown fund")
     floor = history_floor(caller)
@@ -159,6 +161,7 @@ def fund_payouts(
     caller: Caller = Depends(authenticate),
 ):
     """Dividend/payout history for a fund."""
+    limit = page_limit(caller, limit)
     if not series_repo.get_fund(fund_id):
         raise HTTPException(status_code=404, detail="unknown fund")
     rows = series_repo.fund_payouts(fund_id, limit=limit)
@@ -177,6 +180,7 @@ def fund_expenses(
     caller: Caller = Depends(authenticate),
 ):
     """Expense-ratio history (TER MTD/YTD, management fee, selling & marketing)."""
+    limit = page_limit(caller, limit)
     if not series_repo.get_fund(fund_id):
         raise HTTPException(status_code=404, detail="unknown fund")
     rows = series_repo.fund_expenses(fund_id, limit=limit)
@@ -212,6 +216,7 @@ def fund_nav_history(
     sort: str = Query("desc", pattern="^(asc|desc)$"),
     caller: Caller = Depends(authenticate),
 ):
+    limit = page_limit(caller, limit)
     if not series_repo.get_fund(fund_id):
         raise HTTPException(status_code=404, detail="unknown fund")
     floor = history_floor(caller)

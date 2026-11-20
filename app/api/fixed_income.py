@@ -11,7 +11,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.security import Caller, authenticate
+from app.security import Caller, authenticate, page_limit
 from app.services import series_repo
 
 router = APIRouter(prefix="/v1/fixed-income", tags=["fixed-income"])
@@ -27,6 +27,7 @@ def auctions(
     limit: int = Query(500, ge=1, le=5000),
     caller: Caller = Depends(authenticate),
 ):
+    limit = page_limit(caller, limit)
     if type is not None and type not in _TYPES:
         raise HTTPException(status_code=422, detail=f"type must be one of {sorted(_TYPES)}")
     rows = series_repo.list_auctions(

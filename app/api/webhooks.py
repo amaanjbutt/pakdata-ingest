@@ -13,9 +13,11 @@ router = APIRouter(prefix="/v1/webhooks", tags=["webhooks"])
 # Max active webhooks per plan (PRODUCT.md §7). None = unlimited.
 WEBHOOK_LIMITS: dict[str, int | None] = {
     "free": 0,
+    "pass": 0,
     "developer": 3,
     "pro": 50,
     "business": None,
+    "internal": None,
 }
 
 

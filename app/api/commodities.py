@@ -16,7 +16,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.models import Observation, Pagination, ResponseMeta, SeriesResponse
-from app.security import Caller, authenticate, enforce_tier, history_floor
+from app.security import Caller, authenticate, enforce_tier, history_floor, page_limit
 from app.services import series_repo
 from ingestion.commodities_config import load_cities, load_items
 
@@ -61,6 +61,7 @@ def _price_series(
     item: str, city: str, date_from: date | None, date_to: date | None,
     limit: int, sort: str, caller: Caller,
 ) -> SeriesResponse:
+    limit = page_limit(caller, limit)
     series_id = _series_id(item)
     meta_row = series_repo.get_series(series_id)
     if not meta_row:
@@ -107,6 +108,7 @@ def national(
     caller: Caller = Depends(authenticate),
 ):
     """National (derived) average retail price time series for an item."""
+    limit = page_limit(caller, limit)
     return _price_series(item, "national", date_from, date_to, limit, sort, caller)
 
 
@@ -121,6 +123,7 @@ def by_city(
     caller: Caller = Depends(authenticate),
 ):
     """Per-city retail price time series for an item."""
+    limit = page_limit(caller, limit)
     city = city.strip().lower()
     if city not in set(load_cities().values()):
         raise HTTPException(status_code=404, detail=f"unknown city: {city}")

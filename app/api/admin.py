@@ -43,14 +43,14 @@ def overview(_: Caller = Depends(require_admin)):
           count(*) FILTER (WHERE created_at::date = %(today)s)              AS signups_today,
           count(*) FILTER (WHERE created_at >= %(d7)s)                      AS signups_7d,
           count(*) FILTER (WHERE created_at >= %(d30)s)                     AS signups_30d,
-          count(*) FILTER (WHERE subscription_status='active' AND plan<>'free') AS active_paid
+          count(*) FILTER (WHERE subscription_status='active' AND plan NOT IN ('free','internal')) AS active_paid
         FROM users
         """,
         {"today": today, "d7": today - timedelta(days=7), "d30": today - timedelta(days=30)},
     )
     by_plan_rows = db.query(
         "SELECT plan, count(*) AS n FROM users "
-        "WHERE subscription_status='active' AND plan <> 'free' GROUP BY plan"
+        "WHERE subscription_status='active' AND plan NOT IN ('free','internal') GROUP BY plan"
     )
     subs_by_plan = {r["plan"]: int(r["n"]) for r in by_plan_rows}
     mrr = sum(PLAN_PRICES.get(p, 0) * n for p, n in subs_by_plan.items())

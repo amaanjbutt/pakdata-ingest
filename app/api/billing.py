@@ -2,7 +2,8 @@
 
 Flow:
   1. GET  /v1/plans                     -> pricing + limits (public)
-  2. POST /v1/checkout {plan}           -> hosted LemonSqueezy checkout URL
+  2. POST /v1/checkout {plan, billing}  -> hosted LemonSqueezy checkout URL (the Data pass:
+                                           signed in, X-Session-Token; lands on /dashboard)
   3. (buyer pays; LS -> POST /webhooks/lemonsqueezy) -> user provisioned + key staged
   4. buyer lands on /welcome?token=...  -> GET /v1/account/key/{token} once
 """
@@ -10,76 +11,120 @@ from __future__ import annotations
 
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 
 from app import db
 from app.billing import lemonsqueezy, service
-from app.security import PLAN_LIMITS, Caller, authenticate_session_or_key
+from app.security import PLAN_LIMITS, Caller, authenticate_session_or_key, session_caller
 
 router = APIRouter(tags=["billing"])
 
 
-# Public pricing (PRODUCT.md §7). Free is $0 and self-serve (no checkout).
-PLAN_PRICES = {"free": 0, "developer": 19, "pro": 49, "business": 199}
+# Public pricing (docs/decisions.md 2026-11-20). Free is $0 and self-serve (no checkout); the
+# Data pass is a one-time $9 for 30 days; subscriptions bill monthly, or yearly at 10 months.
+PLAN_PRICES = {"free": 0, "pass": 9, "developer": 19, "pro": 49, "business": 199}
 PAID_PLANS = ("developer", "pro", "business")
+PASS_DAYS = 30
+ANNUAL_MONTHS = 10  # annual = 2 months free
 
-
-# What each tier sells (value, not volume — 2026-10-04). Request numbers stay in
-# the response but are fair-use ceilings on paid plans, not the product.
 PLAN_VALUE = {
-    "free": {"for": "Evaluating, students, journalists", "usage_rights": "internal",
-             "vintages": False, "sla": False, "support": "community"},
-    "developer": {"for": "One analyst or developer", "usage_rights": "internal",
-                  "vintages": False, "sla": False, "support": "email"},
-    "pro": {"for": "Risk, treasury and research teams", "usage_rights": "internal",
-            "vintages": True, "sla": False, "support": "priority"},
-    "business": {"for": "Apps that show the data to their users", "usage_rights": "display",
-                 "vintages": True, "sla": True, "support": "dedicated"},
+    "free": {"name": "Free", "for": "Students, journalists, trying it", "support": "community"},
+    "pass": {"name": "Data pass", "for": "A thesis or a project, without a subscription", "support": "email"},
+    "developer": {"name": "Developer", "for": "One developer or analyst", "support": "email"},
+    "pro": {"name": "Pro", "for": "Teams and apps", "support": "email"},
+    "business": {"name": "Business", "for": "Institutions", "support": "priority"},
 }
+
+
+def _history(lim) -> str:
+    return "full" if lim.history_years is None else f"last {lim.history_years} years"
 
 
 @router.get("/v1/plans")
 def plans():
+    """Every plan with its real limits. 1 call = 1 request; day counters reset at 00:00 UTC.
+    Every plan reaches every dataset; every plan asks you to credit PakDataHub with a link."""
     from app.api.webhooks import WEBHOOK_LIMITS
 
     out = []
     for name, price in PLAN_PRICES.items():
         lim = PLAN_LIMITS[name]
+        once = name == "pass"
+        monthly = None if once else price
+        annual_on = name in PAID_PLANS and bool(lemonsqueezy.variant_for_plan(name, "year"))
         out.append({
             "plan": name,
-            "price_usd_month": price,
+            "name": PLAN_VALUE[name]["name"],
+            "kind": "free" if name == "free" else "one_time" if once else "subscription",
+            "price_usd_month": monthly,
+            "price_usd_year": price * ANNUAL_MONTHS if name in PAID_PLANS else None,
+            "annual_available": annual_on,
+            "price_usd_once": price if once else None,
+            "pass_days": PASS_DAYS if once else None,
+            "available": name == "free" or bool(lemonsqueezy.variant_for_plan(name, "month")),
+            "calls_per_day": lim.per_day,
+            "calls_per_min": lim.per_min,
+            # older names, same numbers (kept for existing clients)
             "requests_per_day": lim.per_day,
             "requests_per_min": lim.per_min,
-            # Paid request numbers are fair-use ceilings, not the thing being sold.
-            "fair_use": lim.credits is None,
-            # Free is metered by a monthly allowance (null on paid plans).
-            "free_credits": lim.credits,
-            "free_credits_period": "month" if lim.credits is not None else None,
-            "history": "full" if lim.history_years is None else (
-                f"{lim.history_years} year" + ("" if lim.history_years == 1 else "s")),
-            "funds_and_alternate": lim.allow_pro,  # every tier; kept for compatibility
+            "max_points_per_call": lim.max_page,
+            "history": _history(lim),
+            "history_years": lim.history_years,
+            "downloads_per_day": lim.downloads_per_day,  # null = unlimited
+            "charts_full_history": True,
+            "whole_dataset_files": lim.bulk,
+            "vintages_api": lim.vintages,
+            "vintage_downloads": lim.vintage_downloads,
             "webhooks": WEBHOOK_LIMITS.get(name, 0),  # null = unlimited
-            **PLAN_VALUE[name],
+            "sla": name == "business",
+            "pkr_invoice": name == "business",
+            "funds_and_alternate": lim.allow_pro,  # every tier; kept for compatibility
+            "for": PLAN_VALUE[name]["for"],
+            "support": PLAN_VALUE[name]["support"],
         })
-    return {"success": True, "plans": out}
+    disc = lemonsqueezy.pk_discount()
+    return {
+        "success": True,
+        "plans": out,
+        "day_resets": "00:00 UTC",
+        "annual": "2 months free",
+        "attribution": "Every plan: credit PakDataHub with a link",
+        "regional": {"PK": {"percent_off": disc["percent"]}} if disc else {},
+    }
 
 
 class CheckoutRequest(BaseModel):
     plan: str
     email: str | None = None
+    billing: str = "month"          # month | year (subscriptions)
+    country: str | None = None      # the visitor's country (the website passes Cloudflare's)
 
 
 @router.post("/v1/checkout")
-def checkout(req: CheckoutRequest):
-    if req.plan not in PAID_PLANS:
+def checkout(req: CheckoutRequest, request: Request,
+             x_session_token: str | None = Header(default=None, alias="X-Session-Token")):
+    if req.plan not in (*PAID_PLANS, "pass"):
         raise HTTPException(
             status_code=422,
-            detail=f"plan must be one of {', '.join(PAID_PLANS)}",
+            detail=f"plan must be one of {', '.join((*PAID_PLANS, 'pass'))}",
         )
+    if req.billing not in ("month", "year"):
+        raise HTTPException(status_code=422, detail="billing must be month or year")
+    user_id = None
+    email = req.email
+    if req.plan == "pass":
+        # The pass belongs to an account: buy it signed in.
+        caller = session_caller(request, x_session_token) if x_session_token else None
+        if caller is None:
+            raise HTTPException(status_code=401, detail="sign in (free) to buy the Data pass")
+        user_id = caller.user_id
+        row = db.query_one("SELECT email FROM users WHERE id = %s", (user_id,))
+        email = row["email"] if row else email
     signup_token = secrets.token_urlsafe(24)
     try:
-        url = lemonsqueezy.create_checkout(req.plan, signup_token, req.email)
+        url = lemonsqueezy.create_checkout(req.plan, signup_token, email, billing=req.billing,
+                                           country=req.country, user_id=user_id)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     except Exception:  # noqa: BLE001 — upstream/provider error

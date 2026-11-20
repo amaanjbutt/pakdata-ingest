@@ -10,12 +10,12 @@ from __future__ import annotations
 import argparse
 
 from app import db
-from app.security import PLAN_LIMITS, generate_key
+from app.security import _STORED_PLANS, generate_key
 
 
 def create_user(email: str, plan: str) -> None:
-    if plan not in PLAN_LIMITS:
-        raise SystemExit(f"plan must be one of {list(PLAN_LIMITS)}")
+    if plan not in _STORED_PLANS:
+        raise SystemExit(f"plan must be one of {list(_STORED_PLANS)} (the Data pass is users.pass_expires_at)")
     row = db.query_one(
         "INSERT INTO users (email, plan, subscription_status) "
         "VALUES (%s, %s, 'active') "

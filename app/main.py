@@ -5,9 +5,9 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import (account, admin, agri, amcs, auth, billing, calendar, catalog,
-                     commodities, derived, fixed_income, funds, ports, regional, search, securities,
-                     series, status, trade, usage, webhooks)
+from app.api import (account, admin, agri, amcs, auth, billing, bulk, calendar, catalog, charts,
+                     commodities, derived, downloads, fixed_income, funds, ports, regional, search,
+                     securities, series, status, trade, usage, webhooks)
 
 app = FastAPI(
     title="PakDataHub API",
@@ -27,6 +27,9 @@ app.include_router(ports.router)
 app.include_router(regional.router)
 app.include_router(derived.router)
 app.include_router(series.router)
+app.include_router(charts.router)
+app.include_router(downloads.router)
+app.include_router(bulk.router)
 app.include_router(status.router)
 app.include_router(usage.router)
 app.include_router(billing.router)
@@ -36,6 +39,36 @@ app.include_router(webhooks.router)
 app.include_router(account.router)
 app.include_router(admin.router)
 app.include_router(auth.router)
+
+
+@app.middleware("http")
+async def csv_everywhere(request: Request, call_next):
+    """`?format=csv` on any list endpoint: endpoints with their own CSV (series, mandi, ports) answer
+    it themselves; for the rest the JSON `data` rows become CSV here (nested fields as dotted columns)."""
+    response = await call_next(request)
+    if (request.method != "GET" or request.query_params.get("format") != "csv"
+            or not request.url.path.startswith("/v1/") or response.status_code != 200
+            or not response.headers.get("content-type", "").startswith("application/json")):
+        return response
+    import json as _json
+
+    from fastapi.responses import Response as _Response
+
+    from app.services.tabular import rows_to_csv
+
+    body = b"".join([chunk async for chunk in response.body_iterator])
+    try:
+        payload = _json.loads(body)
+    except ValueError:
+        payload = None
+    rows = payload.get("data") if isinstance(payload, dict) else None
+    headers = {k: v for k, v in response.headers.items()
+               if k.lower() not in ("content-length", "content-type")}
+    if not isinstance(rows, list):
+        return JSONResponse(status_code=422, headers=headers, content={
+            "success": False, "error": {"code": "invalid_params",
+                                        "message": "format=csv isn't available for this endpoint (it has no rows)"}})
+    return _Response(rows_to_csv(rows), media_type="text/csv; charset=utf-8", headers=headers)
 
 
 @app.middleware("http")
@@ -61,6 +94,14 @@ async def ratelimit_headers(request: Request, call_next):
         response.headers["X-RateLimit-Limit"] = str(
             getattr(request.state, "ratelimit_limit", "")
         )
+        # The day's allowance (1 call = 1 request; resets 00:00 UTC).
+        response.headers["X-RateLimit-Day-Limit"] = str(getattr(request.state, "ratelimit_day_limit", ""))
+        response.headers["X-RateLimit-Day-Remaining"] = str(
+            getattr(request.state, "ratelimit_day_remaining", ""))
+    caller = getattr(request.state, "caller", None)
+    if caller is not None and path.startswith("/v1/"):
+        # Most points one call returns on this plan (1,000 free, 5,000 paid).
+        response.headers["X-Page-Max"] = str(caller.limits.max_page)
     return response
 
 # Map internal detail strings to the PRD error envelope (§6).

@@ -35,6 +35,28 @@ class Settings:
     )
     lemonsqueezy_variant_pro: str = os.getenv("LEMONSQUEEZY_VARIANT_PRO", "")
     lemonsqueezy_variant_business: str = os.getenv("LEMONSQUEEZY_VARIANT_BUSINESS", "")
+    # Annual variants (2 months free). Empty => the plan is sold monthly only.
+    lemonsqueezy_variant_developer_annual: str = os.getenv("LEMONSQUEEZY_VARIANT_DEVELOPER_ANNUAL", "")
+    lemonsqueezy_variant_pro_annual: str = os.getenv("LEMONSQUEEZY_VARIANT_PRO_ANNUAL", "")
+    lemonsqueezy_variant_business_annual: str = os.getenv("LEMONSQUEEZY_VARIANT_BUSINESS_ANNUAL", "")
+    # The one-time Data pass ($9, 30 days). Empty => the pass isn't on sale (checkout answers 503
+    # and /v1/plans marks it unavailable). LS_VARIANT_DATA_PASS is the name in the plan.
+    lemonsqueezy_variant_data_pass: str = os.getenv(
+        "LEMONSQUEEZY_VARIANT_DATA_PASS", os.getenv("LS_VARIANT_DATA_PASS", ""))
+    # Pakistan price: a LemonSqueezy discount code applied at checkout when the visitor is in
+    # Pakistan (the website passes Cloudflare's country). Empty code => no Pakistan price shown.
+    lemonsqueezy_discount_pk: str = os.getenv("LEMONSQUEEZY_DISCOUNT_PK", "")
+    lemonsqueezy_discount_pk_percent: int = int(os.getenv("LEMONSQUEEZY_DISCOUNT_PK_PERCENT", "0") or 0)
+
+    # Signs short-lived download links (app/api/downloads.py). Empty => a random key kept in Redis.
+    download_signing_key: str = os.getenv("DOWNLOAD_SIGNING_KEY", "")
+
+    # Whole-dataset files in Cloudflare R2 (S3 API). The nightly bulk_files job writes them; the
+    # API signs short-lived links (GET /v1/bulk). Empty => bulk files are off.
+    r2_endpoint: str = os.getenv("R2_ENDPOINT", "")
+    r2_access_key_id: str = os.getenv("R2_ACCESS_KEY_ID", "")
+    r2_secret_access_key: str = os.getenv("R2_SECRET_ACCESS_KEY", "")
+    r2_bucket: str = os.getenv("R2_BULK_BUCKET", "pakdatahub-bulk")
 
     # Google sign-in (server-side OAuth auth-code flow). Empty => button hidden.
     google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")

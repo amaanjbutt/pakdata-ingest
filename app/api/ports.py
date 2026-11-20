@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 
 from app import db
-from app.security import Caller, authenticate, history_floor
+from app.security import Caller, authenticate, history_floor, page_limit
 from app.services import cache
 
 router = APIRouter(prefix="/v1/ports", tags=["ports"])
@@ -75,6 +75,7 @@ def vessels(
     format: str = Query("json", pattern="^(json|csv)$"),
     caller: Caller = Depends(authenticate),
 ):
+    limit = page_limit(caller, limit)
     clauses, params = [], {"limit": limit}
     p = port.upper() if port else (None if vessel else "PQA")
     if p:

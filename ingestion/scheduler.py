@@ -541,6 +541,12 @@ def build_scheduler() -> BlockingScheduler:
         sched.add_job(fn, trigger=CronTrigger(**cron, timezone=settings.timezone), id=fn.__name__, name=fn.__name__)
         log.info("scheduled %-22s cron=%s", fn.__name__, label)
 
+    # whole-dataset files (CSV + Excel per dataset) to R2 for the Data pass / Pro / Business — only
+    # datasets whose rows changed are rewritten (scripts/bulk_files.py)
+    sched.add_job(bulk_files_job, trigger=CronTrigger(hour=3, minute=20, timezone=settings.timezone),
+                  id="bulk_files", name="bulk_files")
+    log.info("scheduled %-22s cron=daily 03:20", "bulk_files")
+
     # encrypted off-site copy of the night's verified dump (backup runs 20:00 UTC = 01:00 PKT)
     sched.add_job(offsite_backup_job, trigger=CronTrigger(hour=2, minute=45, timezone=settings.timezone),
                   id="offsite_backup", name="offsite_backup")
@@ -589,6 +595,19 @@ def offsite_backup_job() -> None:
     except Exception as exc:  # noqa: BLE001 — must not kill the scheduler
         log.exception("offsite_backup failed")
         alerting.alert("off-site backup failed", str(exc)[:500])
+
+
+def bulk_files_job() -> None:
+    from app.services import r2
+    from scripts import bulk_files
+    if not r2.configured():
+        log.info("bulk_files: R2 not configured — skipped")
+        return
+    try:
+        bulk_files.run()
+    except Exception as exc:  # noqa: BLE001 — must not kill the scheduler
+        log.exception("bulk_files failed")
+        alerting.alert("bulk_files failed", str(exc)[:500])
 
 
 def search_entities_refresh() -> None:

@@ -25,7 +25,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app import db
-from app.security import Caller, authenticate, history_floor
+from app.security import Caller, authenticate, history_floor, page_limit
 from app.services import cache, series_repo
 from ingestion.trade_names import heading_text, short_title, slugify
 
@@ -50,6 +50,7 @@ def trade(
     caller: Caller = Depends(authenticate),
 ):
     """Monthly export/import by commodity. Values: PKR million, USD thousand."""
+    limit = page_limit(caller, limit)
     if flow is not None and flow not in _FLOWS:
         raise HTTPException(status_code=422, detail="flow must be 'export' or 'import'")
     floor = history_floor(caller)
@@ -182,6 +183,7 @@ def hs_flows(flow: str = Query("export", pattern=_HS_FLOWS),
              caller: Caller = Depends(authenticate)):
     """Yearly exports/imports for a product (or code prefix), by partner country. Value in Rs
     thousand as published, plus US$ thousand at the fiscal-year average exchange rate."""
+    limit = page_limit(caller, limit)
     if not code and not country:
         raise HTTPException(status_code=422, detail="give a product code (or prefix*) or a country")
     params: dict = {"flow": flow, "limit": limit, "all": _ALL}
@@ -219,6 +221,7 @@ def hs_partners(flow: str = Query("export", pattern=_HS_FLOWS),
                 code: str | None = Query(None, description="Restrict to a product code or prefix*"),
                 limit: int = Query(50, ge=1, le=500), caller: Caller = Depends(authenticate)):
     """Partner countries ranked by value for a fiscal year: all products, or one product / prefix."""
+    limit = page_limit(caller, limit)
     _check_fy(caller, fy)
     rows = _rank_partners(flow, fy, code, limit)
     return {"success": True, "fy": fy, "fiscal_year": _fy_label(fy), "data": rows, "count": len(rows)}
@@ -277,6 +280,7 @@ def hs_partner_products(country: str = Query(...), flow: str = Query("export", p
                         fy: int = Query(..., ge=1991, le=2100), limit: int = Query(50, ge=1, le=500),
                         caller: Caller = Depends(authenticate)):
     """A partner country's products ranked by value for a fiscal year."""
+    limit = page_limit(caller, limit)
     _check_fy(caller, fy)
     rows = _partner_products(flow, fy, _canon_country(flow, country), limit)
     return {"success": True, "fy": fy, "fiscal_year": _fy_label(fy), "country": country, "data": rows,
@@ -742,6 +746,7 @@ def valuations(code: str | None = Query(None, description="8-digit PCT code or a
     later ruling supersedes it (`superseded_on`). Values are per `unit` in `currency` (US$), C&F
     unless `basis` says otherwise. Only rows that passed the parser's checks are served; the PDF is
     linked on every row."""
+    limit = page_limit(caller, limit)
     if not (code or q or origin):
         raise HTTPException(status_code=422, detail="give a code, q or origin")
     floor = history_floor(caller)
@@ -761,6 +766,7 @@ def valuation_rulings(q: str | None = Query(None, description="Words in the titl
     """Every valuation ruling FBR lists (2015 on): number, title, goods, issue date, the rulings it
     supersedes and the one that superseded it, the PDF, and how many values were read from it
     (`parse_status`: parsed / partial / no_values / unreadable — no values read yet / missing)."""
+    limit = page_limit(caller, limit)
     params: dict = {"limit": limit}
     where = ""
     if q:

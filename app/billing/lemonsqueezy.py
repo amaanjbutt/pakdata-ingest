@@ -43,12 +43,15 @@ def verify_signature(payload: bytes, signature: str | None, secret: str | None =
 
 
 # Paid plans that map to a LemonSqueezy variant. Free is provisioned without
-# checkout, so it has no variant.
-def _variant_map() -> dict[str, str]:
+# checkout, so it has no variant. Annual variants (2 months free) map to the same plan.
+def _variant_map() -> dict[tuple[str, str], str]:
     return {
-        "developer": settings.lemonsqueezy_variant_developer,
-        "pro": settings.lemonsqueezy_variant_pro,
-        "business": settings.lemonsqueezy_variant_business,
+        ("developer", "month"): settings.lemonsqueezy_variant_developer,
+        ("pro", "month"): settings.lemonsqueezy_variant_pro,
+        ("business", "month"): settings.lemonsqueezy_variant_business,
+        ("developer", "year"): settings.lemonsqueezy_variant_developer_annual,
+        ("pro", "year"): settings.lemonsqueezy_variant_pro_annual,
+        ("business", "year"): settings.lemonsqueezy_variant_business_annual,
     }
 
 
@@ -58,14 +61,38 @@ def plan_for_variant(variant_id: str | None) -> str | None:
     if variant_id is None:
         return None
     vid = str(variant_id)
-    for plan, variant in _variant_map().items():
+    for (plan, _billing), variant in _variant_map().items():
         if variant and vid == str(variant):
             return plan
     return None
 
 
-def variant_for_plan(plan: str) -> str | None:
-    return _variant_map().get(plan) or None
+def billing_for_variant(variant_id: str | None) -> str | None:
+    vid = str(variant_id or "")
+    for (_plan, billing), variant in _variant_map().items():
+        if variant and vid == str(variant):
+            return billing
+    return None
+
+
+def is_data_pass_variant(variant_id) -> bool:
+    v = settings.lemonsqueezy_variant_data_pass
+    return bool(v) and str(variant_id or "") == str(v)
+
+
+def variant_for_plan(plan: str, billing: str = "month") -> str | None:
+    if plan == "pass":
+        return settings.lemonsqueezy_variant_data_pass or None
+    return _variant_map().get((plan, billing)) or None
+
+
+def pk_discount() -> dict | None:
+    """The Pakistan price (a LemonSqueezy discount code), or None until the owner sets one."""
+    code = settings.lemonsqueezy_discount_pk
+    pct = settings.lemonsqueezy_discount_pk_percent
+    if not code or not (0 < pct < 100):
+        return None
+    return {"code": code, "percent": pct}
 
 
 def _headers() -> dict:
@@ -76,23 +103,35 @@ def _headers() -> dict:
     }
 
 
-def create_checkout(plan: str, signup_token: str, email: str | None = None) -> str:
+def create_checkout(plan: str, signup_token: str, email: str | None = None, *, billing: str = "month",
+                    country: str | None = None, user_id: str | None = None) -> str:
     """Create a hosted checkout for `plan` and return its URL.
 
     `signup_token` is threaded through `custom_data` (so the webhook can bind the
     resulting subscription to this signup) and the success redirect (so the buyer
-    can claim their key). Requires store id + the plan's variant id configured."""
-    variant = variant_for_plan(plan)
+    can claim their key). The Data pass (`plan="pass"`) is bought by a signed-in account:
+    `user_id` rides in custom_data and the buyer returns to the dashboard. A visitor in
+    Pakistan (`country="PK"`) gets the Pakistan discount code when one is set.
+    Requires store id + the plan's variant id configured."""
+    variant = variant_for_plan(plan, billing)
     if not (settings.lemonsqueezy_api_key and settings.lemonsqueezy_store_id and variant):
         raise RuntimeError("billing not configured (api key / store / variant)")
 
-    redirect = f"{settings.public_base_url}/welcome?token={signup_token}"
+    if plan == "pass":
+        redirect = f"{settings.public_base_url}/dashboard?pass=1"
+        custom = {"user_id": user_id or "", "product": "data_pass"}
+    else:
+        redirect = f"{settings.public_base_url}/welcome?token={signup_token}"
+        custom = {"signup_token": signup_token}
     attributes: dict = {
-        "checkout_data": {"custom": {"signup_token": signup_token}},
+        "checkout_data": {"custom": custom},
         "product_options": {"redirect_url": redirect},
     }
     if email:
         attributes["checkout_data"]["email"] = email
+    disc = pk_discount()
+    if disc and (country or "").upper() == "PK":
+        attributes["checkout_data"]["discount_code"] = disc["code"]
     body = {
         "data": {
             "type": "checkouts",

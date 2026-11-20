@@ -1,14 +1,16 @@
-"""Credit-metered free tier (2026-08-20; monthly allowance since 2026-10-04).
+"""Free-plan metering (2026-11-20): 20 API calls a day, reset at 00:00 UTC.
 
-Free accounts get a monthly request allowance consumed per API request, refilled
-on the first request of a new calendar month; paid plans are not credit-metered. Skipped automatically when no
-database is reachable (like test_api_integration), so `pytest` still runs offline.
+Free keys that used more than 20 calls a day before the switch are grandfathered for 60 days at the
+old allowance — 500 calls a month (users.legacy_free_until), refilled on the first request of a new
+calendar month. Paid plans are never credit-metered. Skipped automatically when no database is
+reachable (like test_api_integration), so `pytest` still runs offline.
 
     docker compose exec api python -m pytest tests/test_credits.py
 """
 from __future__ import annotations
 
 import uuid
+from datetime import date, timedelta
 
 import pytest
 
@@ -35,9 +37,9 @@ def client():
     return fastapi_testclient.TestClient(app)
 
 
-def _make_user(plan: str, credits: int | None):
-    """Create a user (+ one key) on `plan`, optionally seeding credits. Returns
-    (plaintext_key, cleanup_fn)."""
+def _make_user(plan: str, credits: int | None, *, legacy: bool = False):
+    """Create a user (+ one key) on `plan`, optionally grandfathered at the old free allowance and
+    seeded with credits. Returns (plaintext_key, cleanup_fn)."""
     from app import db
     from app.security import generate_key
 
@@ -47,6 +49,9 @@ def _make_user(plan: str, credits: int | None):
         "VALUES (%s,%s,'active') RETURNING id",
         (f"pytest-credits-{plan}-{uuid.uuid4().hex[:12]}@pakdata.local", plan),
     )
+    if legacy:
+        db.execute("UPDATE users SET legacy_free_until = %s WHERE id = %s",
+                   (date.today() + timedelta(days=60), row["id"]))
     if credits is not None:
         db.execute("UPDATE users SET credits_remaining=%s WHERE id=%s", (credits, row["id"]))
     db.execute(
@@ -61,9 +66,38 @@ def _make_user(plan: str, credits: int | None):
     return plaintext, cleanup
 
 
-def test_free_tier_exhausts_credits_then_402(client):
-    """A free key with 2 credits serves 2 requests, then 402 credits_exhausted."""
-    key, cleanup = _make_user("free", credits=2)
+def _user_id(key: str) -> str:
+    from app import db
+    from app.security import hash_key
+
+    return str(db.query_one("SELECT user_id FROM api_keys WHERE key_hash=%s", (hash_key(key),))["user_id"])
+
+
+def test_free_plan_stops_after_20_calls_a_day(client):
+    from app.security import _utc_day, get_redis
+
+    key, cleanup = _make_user("free", credits=None)
+    try:
+        h = {"X-API-Key": key}
+        r = client.get("/v1/usage", headers=h)
+        assert r.status_code == 200
+        assert r.headers["X-RateLimit-Day-Limit"] == "20"
+        assert r.headers["X-Page-Max"] == "1000"
+        body = r.json()
+        assert body["limits"]["calls_per_day"] == 20 and body["usage"]["credits_remaining"] is None
+        assert body["limits"]["downloads_per_day"] == 5
+        # spend the rest of the day without tripping the 10/minute limit
+        get_redis().set(f"rl:day:{_user_id(key)}:{_utc_day()}", 20)
+        r = client.get("/v1/usage", headers=h)
+        assert r.status_code == 429
+        assert r.json()["error"]["code"] == "daily_limit"
+        assert int(r.headers["Retry-After"]) > 0
+    finally:
+        cleanup()
+
+
+def test_grandfathered_free_key_exhausts_monthly_credits_then_402(client):
+    key, cleanup = _make_user("free", credits=2, legacy=True)
     try:
         h = {"X-API-Key": key}
         assert client.get("/v1/usage", headers=h).status_code == 200
@@ -75,15 +109,14 @@ def test_free_tier_exhausts_credits_then_402(client):
         cleanup()
 
 
-def test_free_usage_surfaces_remaining_credits(client):
-    key, cleanup = _make_user("free", credits=5)
+def test_grandfathered_usage_surfaces_remaining_credits(client):
+    key, cleanup = _make_user("free", credits=5, legacy=True)
     try:
         body = client.get("/v1/usage", headers={"X-API-Key": key}).json()
-        # limits.credits is the plan's one-time allotment; the per-user balance is
-        # usage.credits_remaining. One credit consumed by this very request -> 4 left.
         from app.security import FREE_CREDITS
         assert body["limits"]["credits"] == FREE_CREDITS
-        assert body["usage"]["credits_remaining"] == 4
+        assert body["usage"]["credits_remaining"] == 4  # this very request spent one
+        assert body["grandfathered"]["free_allowance_until"]
     finally:
         cleanup()
 
@@ -95,27 +128,19 @@ def test_paid_plan_is_not_credit_metered(client):
         h = {"X-API-Key": key}
         for _ in range(3):
             assert client.get("/v1/usage", headers=h).status_code == 200
-        assert client.get("/v1/usage", headers=h).json()["usage"]["credits_remaining"] is None
+        body = client.get("/v1/usage", headers=h).json()
+        assert body["usage"]["credits_remaining"] is None
+        assert body["limits"]["calls_per_day"] == 20_000
     finally:
         cleanup()
 
 
-def test_plans_endpoint_advertises_free_credits(client):
-    plans = {p["plan"]: p for p in client.get("/v1/plans").json()["plans"]}
-    assert plans["free"]["free_credits"] == 500
-    assert plans["pro"]["free_credits"] is None
-
-
-def test_free_allowance_resets_in_a_new_month(client):
-    """A free key that spent last month's allowance is refilled on its first
-    request this month (the refill happens inside the atomic decrement)."""
+def test_grandfathered_allowance_resets_in_a_new_month(client):
     from app import db
-    from app.security import FREE_CREDITS
+    from app.security import FREE_CREDITS, hash_key
 
-    key, cleanup = _make_user("free", credits=0)
+    key, cleanup = _make_user("free", credits=0, legacy=True)
     try:
-        from app.security import hash_key
-
         db.execute(
             "UPDATE users SET credits_period = (date_trunc('month', now()) - interval '1 month')::date "
             "WHERE id = (SELECT user_id FROM api_keys WHERE key_hash = %s)",
@@ -129,11 +154,23 @@ def test_free_allowance_resets_in_a_new_month(client):
         cleanup()
 
 
-def test_plans_endpoint_sells_value_not_volume(client):
-    plans = {p["plan"]: p for p in client.get("/v1/plans").json()["plans"]}
-    assert plans["free"]["free_credits_period"] == "month"
-    assert plans["business"]["usage_rights"] == "display"
-    assert plans["pro"]["usage_rights"] == "internal"
-    assert plans["pro"]["vintages"] is True and plans["developer"]["vintages"] is False
-    assert plans["developer"]["fair_use"] is True and plans["free"]["fair_use"] is False
-    assert plans["business"]["webhooks"] is None
+def test_plans_endpoint_is_truthful(client):
+    body = client.get("/v1/plans").json()
+    plans = {p["plan"]: p for p in body["plans"]}
+    assert list(plans) == ["free", "pass", "developer", "pro", "business"]
+    free = plans["free"]
+    assert free["calls_per_day"] == 20 == free["requests_per_day"]
+    assert free["downloads_per_day"] == 5 and free["max_points_per_call"] == 1000
+    assert free["history"] == "last 5 years"
+    p = plans["pass"]
+    assert p["kind"] == "one_time" and p["price_usd_once"] == 9 and p["pass_days"] == 30
+    assert p["calls_per_day"] == 500 and p["downloads_per_day"] is None and p["whole_dataset_files"]
+    assert plans["developer"]["calls_per_day"] == 2_000 and not plans["developer"]["whole_dataset_files"]
+    assert plans["pro"]["calls_per_day"] == 20_000 and plans["pro"]["vintages_api"] is True
+    assert plans["business"]["calls_per_day"] == 200_000 and plans["business"]["sla"] is True
+    assert plans["developer"]["price_usd_year"] == 190  # 2 months free
+    assert plans["business"]["webhooks"] is None and plans["pro"]["webhooks"] == 50
+    for gone in ("free_credits", "usage_rights", "fair_use"):
+        assert gone not in free
+    assert "internal" not in plans
+    assert body["day_resets"] == "00:00 UTC"

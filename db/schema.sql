@@ -531,6 +531,58 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS period_end TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS name TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS company TEXT;
 
+-- Plans for developers and researchers (2026-11-20, docs/decisions.md):
+-- * pass_expires_at: the one-time $9 Data pass (30 days, no renewal). A free account with a live
+--   pass gets the pass limits; a paid plan with a live pass keeps its plan and gains the pass's
+--   files (whole-dataset files, vintage downloads).
+-- * limits_version: 1 = the limits sold before 2026-11-20 (grandfathered paid subscribers keep
+--   them until they change plan; app.security.LEGACY_LIMITS); 2 = current. New rows are 2.
+-- * legacy_free_until: free keys that used more than 20 calls a day before the switch keep the
+--   old 500-calls-a-month allowance until this date (60 days).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pass_expires_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS limits_version SMALLINT NOT NULL DEFAULT 2;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_free_until DATE;
+
+-- Data pass purchases (LemonSqueezy one-time orders), one row per order: idempotent re-delivery,
+-- refunds, and the history the dashboard shows.
+CREATE TABLE IF NOT EXISTS data_passes (
+    order_id     TEXT PRIMARY KEY,
+    user_id      UUID NOT NULL REFERENCES users(id),
+    days         INT NOT NULL DEFAULT 30,
+    starts_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at   TIMESTAMPTZ NOT NULL,
+    refunded_at  TIMESTAMPTZ,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_data_passes_user ON data_passes(user_id);
+
+-- Site downloads (one series, full history, CSV/XLSX) — the counter that meters the free plan's
+-- 5 a day lives in Redis; this keeps the record (what was downloaded, by whom) for the dashboard
+-- and the owner. One row per issued file link.
+CREATE TABLE IF NOT EXISTS downloads (
+    id          BIGSERIAL PRIMARY KEY,
+    user_id     UUID NOT NULL REFERENCES users(id),
+    kind        TEXT NOT NULL,          -- series | fund | security | agri | bulk
+    subject     TEXT NOT NULL,          -- series id, fund id, security code, commodity/market, dataset
+    format      TEXT NOT NULL,          -- csv | xlsx | parquet
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_downloads_user_time ON downloads(user_id, created_at DESC);
+
+-- Whole-dataset files (every series of a dataset in one file), written nightly to object storage
+-- by the bulk_files job; GET /v1/bulk lists them and signs a short-lived link.
+CREATE TABLE IF NOT EXISTS bulk_files (
+    dataset      TEXT NOT NULL,         -- dataset slug (a module, e.g. rates, fx, remittances)
+    format       TEXT NOT NULL,         -- csv.gz | xlsx | parquet
+    object_key   TEXT NOT NULL,
+    bytes        BIGINT,
+    series_count INT,
+    rows         BIGINT,
+    built_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    fingerprint  TEXT,                  -- rows:series:newest revision — unchanged => not rebuilt
+    PRIMARY KEY (dataset, format)
+);
+
 -- Every processed webhook is recorded so a replay never double-provisions.
 CREATE TABLE IF NOT EXISTS billing_events (
     idempotency_key TEXT PRIMARY KEY,   -- the webhook signature (unique per payload)

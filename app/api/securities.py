@@ -9,7 +9,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.security import Caller, authenticate, history_floor
+from app.security import Caller, authenticate, history_floor, page_limit
 from app.services import cache, series_repo
 
 router = APIRouter(prefix="/v1/securities", tags=["securities"])
@@ -28,6 +28,7 @@ def list_securities(
     limit: int = Query(1000, ge=1, le=MAX_LIMIT),
     caller: Caller = Depends(authenticate),
 ):
+    limit = page_limit(caller, limit)
     if type is not None and type not in _TYPES:
         raise HTTPException(status_code=422, detail=f"type must be one of {sorted(_TYPES)}")
 
@@ -58,6 +59,7 @@ def debt_trades(
     caller: Caller = Depends(authenticate),
 ):
     """Trade-level secondary-market debt transactions (MUFAP daily trading)."""
+    limit = page_limit(caller, limit)
     def build() -> dict:
         rows = series_repo.debt_trades(date_from=date_from, date_to=date_to, issue=issue, limit=limit)
         return {
@@ -85,6 +87,7 @@ def security_prices(
     sort: str = Query("desc", pattern="^(asc|desc)$"),
     caller: Caller = Depends(authenticate),
 ):
+    limit = page_limit(caller, limit)
     if not series_repo.get_security(code):
         raise HTTPException(status_code=404, detail="unknown security")
     floor = history_floor(caller)

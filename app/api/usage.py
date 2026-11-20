@@ -6,16 +6,17 @@ from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Query
 
 from app import db
-from app.security import Caller, authenticate_session_or_key, get_redis
+from app.security import (Caller, authenticate_session_or_key, calls_used_today, charts_used_today,
+                          download_quota, get_redis, pass_active)
 
 router = APIRouter(prefix="/v1", tags=["usage"])
 
 
 @router.get("/usage")
 def usage(caller: Caller = Depends(authenticate_session_or_key)):
-    """Caller's current usage vs. limits (PRD §6 utility)."""
-    r = get_redis()
-    day_used = int(r.get(f"rl:day:{caller.user_id}:{date.today().isoformat()}") or 0)
+    """Caller's usage today vs the plan: API calls (1 call = 1 request), site downloads,
+    full-history charts. Day counters reset at 00:00 UTC."""
+    day_used = calls_used_today(caller.user_id)
     # Persist today's count so the dashboard's 30-day chart accumulates history
     # without adding a DB write to the hot request path. Best-effort.
     try:
@@ -26,15 +27,14 @@ def usage(caller: Caller = Depends(authenticate_session_or_key)):
         )
     except Exception:  # noqa: BLE001
         pass
+    r = get_redis()
     # The rate limiter keeps a sliding 60s window as a sorted set of request
     # timestamps (security._enforce_rate_limit); count the live members.
     try:
         minute_used = int(r.zcount(f"rl:min:{caller.user_id}", time.time() - 60, "+inf"))
     except Exception:  # noqa: BLE001
         minute_used = 0
-    # Credit-metered (free) callers: the real cap is a monthly allowance, not a daily
-    # quota. Surface the remaining balance (a stale period = a fresh allowance) and
-    # when it next resets, so the dashboard can show both.
+    # Grandfathered free keys (users.legacy_free_until) keep the old monthly allowance.
     credits_remaining = None
     credits_reset = None
     if caller.limits.credits is not None:
@@ -48,20 +48,37 @@ def usage(caller: Caller = Depends(authenticate_session_or_key)):
         if crow:
             credits_remaining = int(crow["remaining"])
             credits_reset = crow["resets"].isoformat()
+    legacy = db.query_one("SELECT legacy_free_until, limits_version FROM users WHERE id = %s", (caller.user_id,))
+    lim = caller.limits
     return {
         "success": True,
         "plan": caller.plan,
+        "pass_expires_at": caller.pass_expires_at if pass_active(caller.pass_expires_at) else None,
+        "day_resets": "00:00 UTC",
         "limits": {
-            "per_min": caller.limits.per_min,
-            "per_day": caller.limits.per_day,
-            "history_years": caller.limits.history_years,
-            "credits": caller.limits.credits,
+            "per_min": lim.per_min,
+            "per_day": lim.per_day,
+            "calls_per_day": lim.per_day,
+            "history_years": lim.history_years,
+            "max_points_per_call": lim.max_page,
+            "downloads_per_day": lim.downloads_per_day,
+            "charts_per_day": lim.charts_per_day,
+            "whole_dataset_files": lim.bulk,
+            "vintages_api": lim.vintages,
+            "vintage_downloads": lim.vintage_downloads,
+            "credits": lim.credits,
+        },
+        "grandfathered": {
+            "free_allowance_until": legacy["legacy_free_until"] if legacy and lim.credits is not None else None,
+            "paid_limits": bool(legacy and legacy.get("limits_version") == 1 and caller.plan != "free"),
         },
         "usage": {
             "minute_used": minute_used,
-            "minute_remaining": max(caller.limits.per_min - minute_used, 0),
+            "minute_remaining": max(lim.per_min - minute_used, 0),
             "day_used": day_used,
-            "day_remaining": max(caller.limits.per_day - day_used, 0),
+            "day_remaining": max(lim.per_day - day_used, 0),
+            "downloads": download_quota(caller),
+            "charts_used": charts_used_today(caller.user_id),
             "credits_remaining": credits_remaining,
             "credits_reset": credits_reset,
         },

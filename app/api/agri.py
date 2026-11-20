@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 
 from app import db
-from app.security import Caller, authenticate, history_floor
+from app.security import Caller, authenticate, history_floor, page_limit
 from app.services import cache
 from ingestion.agri_names import SLUG_RENAMES
 
@@ -121,6 +121,7 @@ def prices(
     format: str = Query("json", pattern="^(json|csv)$"),
     caller: Caller = Depends(authenticate),
 ):
+    limit = page_limit(caller, limit)
     c = _resolve("agri_commodities", "commodity", commodity)
     clauses, params = ["p.commodity_id = %(c)s"], {"c": c["commodity_id"], "limit": limit}
     m = None
